@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #define RATE 44100
-#define VOICES 64
+#define VOICES KV_VOICES
+#define SPARE 8   /* voices kept free: below this the quietest voice fades out in 3 ms, so a new note always has a slot */
 /* One recording being read: position and pitch ratio in recording frames, an optional sustain loop. */
 struct Head { KvSampleView s; double pos,ratio,loop_start,loop_end,crossfade; };
 /* bowed: a sustained strings voice — two heads (soft and loud recording of the same note) mixed by the dynamics.
@@ -11,7 +12,7 @@ struct Head { KvSampleView s; double pos,ratio,loop_start,loop_end,crossfade; };
 struct Voice { struct Head head[2]; int heads; float tone[2]; uint64_t age,gate; unsigned attack,release_floor,release,release_total,note_release; float release_level,gain; int midi; unsigned hand; unsigned char stroke; bool active,preview,held,sequenced,bowed,strings,ring; };
 #define CAP KV_PERFORMANCE_CAPACITY
 struct KvMixer { const KvPianoBank *banks[KV_INSTRUMENTS]; struct Voice voices[VOICES]; int sequence[CAP]; uint64_t onset[CAP],gate[CAP]; float gain[CAP],velocity[CAP]; unsigned chord[CAP],hand[CAP]; unsigned short source[CAP]; unsigned char stroke[CAP],event_stroke[CAP],round_robin[128];
-    KvPerformance performance; bool custom,humanize,loop,marking_preview,marking_held; uint32_t random; size_t count,next,stride; uint64_t interval,sequence_start,clock,cycle_end,cycle; int instrument;
+    KvPerformance performance; bool custom,humanize,loop,marking_preview,marking_held,pedal; uint32_t random; size_t count,next,stride; uint64_t interval,sequence_start,clock,cycle_end,cycle; int instrument;
     KvArticulation articulation; float dynamics_target,dynamics_now,expression_target,expression_now; };
 KvMixer *kv_mixer_create(void) {
     KvMixer *m=calloc(1,sizeof(KvMixer));
@@ -34,6 +35,18 @@ static void cut(struct Voice *v,unsigned frames) {
     v->release_level=envelope(v); v->release=v->release_total=frames;
 }
 static void release(struct Voice *v,unsigned frames) { cut(v,frames<v->release_floor?v->release_floor:frames); }   // a bow leaves the string slowly
+/* Make room: the voice that is quietest now fades out in 3 ms. A struck note (piano, short strokes) is taken as decaying
+   over a few seconds, a bowed one as steady, so an old ringing tail goes before a fresh chord. */
+static void steal(KvMixer *m) {
+    struct Voice *quietest=NULL; float lowest=INFINITY;
+    for(int i=0;i<VOICES;i++) { struct Voice *v=&m->voices[i];
+        if(!v->active || (v->release_total && v->release<=132)) continue;
+        float level=v->gain*envelope(v)*(v->bowed?1:expf(-(float)v->age/(3*RATE)));
+        if(level<lowest) { lowest=level; quietest=v; } }
+    if(quietest) cut(quietest,132);
+}
+void kv_mixer_pedal(KvMixer *m,bool down) { if(m) m->pedal=down; }
+unsigned kv_mixer_voices(const KvMixer *m) { unsigned n=0; if(m) for(int i=0;i<VOICES;i++) if(m->voices[i].active) n++; return n; }
 void kv_mixer_stop(KvMixer *m) { if(!m) return; m->loop=false; m->count=m->next=0; for(int i=0;i<VOICES;i++) cut(&m->voices[i],441); }
 static bool open_head(const KvPianoBank *bank,int midi,int layer,struct Head *h) {
     KvSampleView s; if(!kv_piano_layer(bank,midi,layer,&s)) return false;
@@ -70,9 +83,13 @@ static void note_on(KvMixer *m,int midi,uint64_t gate,int instrument,float gain,
         // A tone common to two chords is not bowed again: the voice already holding it goes on.
         for(int i=0;i<VOICES;i++) { struct Voice *v=&m->voices[i];
             if(v->active && v->bowed && v->sequenced && v->midi==midi && !v->release_total && v->gate<=v->age+2646) { v->gate=v->age+gate; return; } }
-    for(int i=0;i<VOICES;i++) if(m->voices[i].active && m->voices[i].midi==midi) cut(&m->voices[i],strings && m->voices[i].bowed?2205:529);
-    struct Voice *slot=NULL; for(int i=0;i<VOICES && !slot;i++) if(!m->voices[i].active) slot=&m->voices[i];
-    if(!slot) return;
+    // The same key again: the previous strike gives way — in 12 ms, a bow in 50 ms, a held key under the pedal in 0.4 s.
+    for(int i=0;i<VOICES;i++) { struct Voice *v=&m->voices[i];
+        if(v->active && v->midi==midi) cut(v,strings && v->bowed?2205:m->pedal && v->held && !strings?17640:529); }
+    struct Voice *slot=NULL; int free=0;
+    for(int i=0;i<VOICES;i++) if(!m->voices[i].active) { if(!slot) slot=&m->voices[i]; free++; }
+    if(free<=SPARE) steal(m);
+    if(!slot) return;   // only if more than SPARE notes start within 3 ms of a full pool
     // Match the hotter electric-piano recordings to the acoustic bank; strings are level-matched per recording.
     static const float bank_gain[KV_INSTRUMENTS]={1,.25f,.28f,1.3f};
     struct Voice v={.gate=gate,.gain=gain*bank_gain[instrument],.note_release=note_release,.midi=midi,.hand=hand,.stroke=(unsigned char)stroke,.active=true,
@@ -264,16 +281,16 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
 bool kv_mixer_running(const KvMixer *m) {
     if(!m) return false;
     if(m->count && (m->loop || m->clock-m->sequence_start<m->cycle_end)) return true;
-    int notes[64]; return kv_mixer_active(m,notes)>0;
+    int notes[KV_ACTIVE_NOTES]; return kv_mixer_active(m,notes)>0;
 }
 bool kv_mixer_busy(const KvMixer *m) { if(!m) return false; if(m->loop || m->next<m->count) return true; for(int i=0;i<VOICES;i++) if(m->voices[i].active) return true; return false; }
 uint64_t kv_mixer_clock(const KvMixer *m) { return m?m->clock:0; }
 uint64_t kv_mixer_start(const KvMixer *m) { return m?m->sequence_start:0; }
-unsigned kv_mixer_active(const KvMixer *m,int notes[64]) {
+unsigned kv_mixer_active(const KvMixer *m,int notes[KV_ACTIVE_NOTES]) {
     unsigned count=0; if(!m || !notes) return 0;
     for(int i=0;i<VOICES;i++) if(m->voices[i].active && !m->voices[i].release_total && m->voices[i].age<m->voices[i].gate) {
         bool duplicate=false; for(unsigned j=0;j<count;j++) if(notes[j]==m->voices[i].midi) duplicate=true;
-        if(!duplicate) notes[count++]=m->voices[i].midi;
+        if(!duplicate && count<KV_ACTIVE_NOTES) notes[count++]=m->voices[i].midi;
     }
     return count;
 }

@@ -61,6 +61,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
         else if(c->type==10) kv_mixer_release(a->mixer,c->notes[0]);
         else if(c->type==11) kv_mixer_articulation(a->mixer,(KvArticulation)c->count);
         else if(c->type==12) kv_mixer_dynamics(a->mixer,c->values[0],c->values[1]);
+        else if(c->type==13) kv_mixer_pedal(a->mixer,c->count!=0);
         else if(kv_mixer_play(a->mixer,c->notes,c->count,c->voices,c->seconds,c->instrument,c->type==2)) {
             a->muted=false; atomic_store(&a->start,kv_mixer_start(a->mixer)); atomic_store(&a->playing,true);
         } else atomic_store(&a->error,1);
@@ -85,7 +86,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
         }
     }
     atomic_store(&a->clock,kv_mixer_clock(a->mixer)); atomic_store(&a->event,kv_mixer_event(a->mixer));
-    int notes[64]; unsigned count=kv_mixer_active(a->mixer,notes); uint64_t low=0,high=0;
+    int notes[KV_ACTIVE_NOTES]; unsigned count=kv_mixer_active(a->mixer,notes); uint64_t low=0,high=0;
     for(unsigned i=0;i<count;i++) { if(notes[i]<64) low|=UINT64_C(1)<<notes[i]; else high|=UINT64_C(1)<<(notes[i]-64); }
     atomic_store(&a->active_low,low); atomic_store(&a->active_high,high);
     buffer->mAudioDataByteSize=FRAMES*8;
@@ -172,6 +173,7 @@ bool kv_audio_performance(KvAudio *a,const KvPerformance *p,double seconds) {
     if(!send(a,command)) { atomic_fetch_sub(&a->pending_plays,1); return false; } return true;
 }
 bool kv_audio_set_articulation(KvAudio *a,KvArticulation articulation) { return a && articulation>=0 && articulation<KV_ARTICULATION_COUNT && send(a,(struct Command){.type=11,.count=(size_t)articulation}); }
+bool kv_audio_set_pedal(KvAudio *a,bool down) { return a && send(a,(struct Command){.type=13,.count=down}); }
 bool kv_audio_set_dynamics(KvAudio *a,double dynamics,double expression) {
     return a && isfinite(dynamics) && isfinite(expression) && send(a,(struct Command){.type=12,.values={(float)fmax(0,fmin(1,dynamics)),(float)fmax(0,fmin(1,expression))}});
 }
@@ -185,7 +187,7 @@ bool kv_audio_playhead(KvAudio *a,double *seconds) {
     uint64_t now=atomic_load(&a->clock),start_frame=atomic_load(&a->start);
     *seconds=now>=start_frame?(double)(now-start_frame)/44100:0; return true;
 }
-unsigned kv_audio_active_notes(KvAudio *a,int notes[64]) {
+unsigned kv_audio_active_notes(KvAudio *a,int notes[KV_ACTIVE_NOTES]) {
     if(!a || !notes || !kv_audio_is_playing(a)) return 0;
     uint64_t low=atomic_load(&a->active_low),high=atomic_load(&a->active_high); unsigned count=0;
     for(int i=21;i<=108 && count<64;i++) if(i<64?(low&(UINT64_C(1)<<i)):(high&(UINT64_C(1)<<(i-64)))) notes[count++]=i;

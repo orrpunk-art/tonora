@@ -1480,7 +1480,7 @@ static NSString *Describe(NSView *view) {
         self.selectedDegree=self.playingDegrees[at].integerValue; self.keyboardMode.selectedSegment=1;
         [self highlightChip:(NSInteger)((at+self.playOffset)%self.playingDegrees.count)]; [self refresh];
     }
-    int active[64]; unsigned count=kv_audio_active_notes(self.audio,active);
+    int active[KV_ACTIVE_NOTES]; unsigned count=kv_audio_active_notes(self.audio,active);
     NSMutableArray<NSNumber *> *notes=[NSMutableArray array]; for(unsigned i=0;i<count;i++) [notes addObject:@(active[i])];
     if(count || time>.025) [self.piano setActiveNotes:notes];
     unsigned char roles[128]={0}; long now[128]; for(int m=0;m<128;m++) now[m]=-1;
@@ -2092,7 +2092,7 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     if(controller==1) [self applyStringDynamics:value/127.0 expression:self.stringExpression];
     else if(controller==11) [self applyStringDynamics:self.stringDynamics expression:value/127.0];
     else if(controller==64) {
-        BOOL down=value>=64; if(down==self.pedalDown) return; self.pedalDown=down;
+        BOOL down=value>=64; if(down==self.pedalDown) return; self.pedalDown=down; if(self.audio) kv_audio_set_pedal(self.audio,down);
         if(!down) for(int m=0;m<128;m++) if(_pedalHeld[m]) { _pedalHeld[m]=NO; if(_soundCount[m]==0 && self.audio) kv_audio_release(self.audio,m); }
     }
 }
@@ -2578,7 +2578,7 @@ static int ComputerKeyOffset(unsigned short code) {
    performance, or the fingered scale or chord. Keys pressed by hand (MIDI or on-screen keyboard) move no fingers. 1 = thumb. */
 - (void)updateHands {
     if(![self.circle handsVisible]) return;
-    int active[64]; unsigned count=kv_audio_active_notes(self.audio,active);
+    int active[KV_ACTIVE_NOTES]; unsigned count=kv_audio_active_notes(self.audio,active);
     int fingers[2][5]; for(int h=0;h<2;h++) for(int f=0;f<5;f++) fingers[h][f]=-1;
     BOOL sounding[128]={NO};
     for(unsigned i=0;i<count;i++) {
@@ -2595,7 +2595,7 @@ static int ComputerKeyOffset(unsigned short code) {
 - (void)updateMidiOut {
     if(!self.midiOutEnabled || !self.midi.available) return;
     BOOL now[2][128]; memset(now,0,sizeof(now));
-    if(kv_audio_is_playing(self.audio)) { int active[64]; unsigned count=kv_audio_active_notes(self.audio,active); for(unsigned i=0;i<count;i++) now[[self handForMidi:active[i]]][active[i]]=YES; }
+    if(kv_audio_is_playing(self.audio)) { int active[KV_ACTIVE_NOTES]; unsigned count=kv_audio_active_notes(self.audio,active); for(unsigned i=0;i<count;i++) now[[self handForMidi:active[i]]][active[i]]=YES; }
     for(int hand=0;hand<2;hand++) for(int midi=21;midi<=108;midi++) {
         if(now[hand][midi] && !_midiSounding[hand][midi]) [self.midi noteOn:midi velocity:[self velocityForMidi:midi] channel:hand];
         else if(!now[hand][midi] && _midiSounding[hand][midi]) [self.midi noteOff:midi channel:hand];
@@ -2855,7 +2855,7 @@ int main(int argc, const char *argv[]) {
                 [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
             }
             [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.1]];
-            int stoppedNotes[64]; KV_CHECK(!kv_audio_is_playing(root.audio) && kv_audio_active_notes(root.audio,stoppedNotes)==0,@"Queued playback cannot resurrect after Stop");
+            int stoppedNotes[KV_ACTIVE_NOTES]; KV_CHECK(!kv_audio_is_playing(root.audio) && kv_audio_active_notes(root.audio,stoppedNotes)==0,@"Queued playback cannot resurrect after Stop");
             KV_CHECK(!kv_audio_play(root.audio,&note,1,0,0.1),@"Reject invalid voices");
             KV_CHECK(!kv_audio_play(root.audio,&note,1,1,NAN),@"Reject invalid duration");
             NSMenuItem *remove=root.progressionButtons[1].menu.itemArray.firstObject;
@@ -3266,7 +3266,7 @@ int main(int argc, const char *argv[]) {
               while(end.timeIntervalSinceNow>0) {
                   [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.0/60]];
                   [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers];
-                  int active[64]; unsigned n=kv_audio_active_notes(root.audio,active); BOOL now[128]={NO},lateNow[128]={NO};
+                  int active[KV_ACTIVE_NOTES]; unsigned n=kv_audio_active_notes(root.audio,active); BOOL now[128]={NO},lateNow[128]={NO};
                   // The audio thread is sampled a moment apart from the screen: one frame of mismatch as a note ends is jitter, two are a bug.
                   for(unsigned i=0;i<n;i++) { int m=active[i]; now[m]=YES; if(before[m] && [root.piano levelOf:m]<.5) { if(late[m]) keysInStep=NO; lateNow[m]=YES; }
                       BOOL fingered=NO; for(int h=0;h<2;h++) for(int f=0;f<5;f++) if([root.circle noteOfFinger:f hand:h]==m) fingered=YES; if(!fingered) fingersInStep=NO; }
@@ -3290,7 +3290,7 @@ int main(int argc, const char *argv[]) {
                 BOOL usedR[5]={NO},all=YES; NSDate *until=[NSDate dateWithTimeIntervalSinceNow:2.5];
                 while(until.timeIntervalSinceNow>0) {
                     [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.0/60]]; [root updatePlaybackVisualization]; [root updateHands];
-                    int active[64]; unsigned n=kv_audio_active_notes(root.audio,active);
+                    int active[KV_ACTIVE_NOTES]; unsigned n=kv_audio_active_notes(root.audio,active);
                     for(unsigned i=0;i<n;i++) { BOOL fingered=NO; for(int h=0;h<2;h++) for(int f=0;f<5;f++) if([root.circle noteOfFinger:f hand:h]==active[i]) fingered=YES; if(!fingered) all=NO; }
                     for(int f=0;f<5;f++) if([root.circle noteOfFinger:f hand:1]>=0) usedR[f]=YES;
                 }

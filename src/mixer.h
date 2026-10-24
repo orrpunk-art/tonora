@@ -7,6 +7,10 @@ typedef struct KvMixer KvMixer;
 /* Instruments: 0 grand piano, 1 CP80, 2 Pianet, 3 bowed strings (slow attack, long release, sustain loop). */
 #define KV_INSTRUMENTS 4
 #define KV_INSTRUMENT_STRINGS 3
+/* Polyphony as on a digital piano: 256 voices; when they run short the quietest one makes room (see steal in mixer.c). */
+#define KV_VOICES 256
+/* Distinct notes sounding at once (every key of the piano fits). */
+#define KV_ACTIVE_NOTES 128
 KvMixer *kv_mixer_create(void);
 void kv_mixer_free(KvMixer *mixer);
 void kv_mixer_bank(KvMixer *mixer,int instrument,const KvPianoBank *bank);
@@ -22,6 +26,10 @@ void kv_mixer_stop(KvMixer *mixer);
    soft↔loud recordings and level) and the expression 0…1 (CC11: level only). */
 void kv_mixer_articulation(KvMixer *mixer,KvArticulation articulation);
 void kv_mixer_dynamics(KvMixer *mixer,float dynamics,float expression);
+/* Sustain pedal (CC64): a key struck again while it is down lets the previous strike ring out under it (0.4 s) instead of 12 ms. */
+void kv_mixer_pedal(KvMixer *mixer,bool down);
+/* Voices in use, fading ones included (tests and diagnostics). */
+unsigned kv_mixer_voices(const KvMixer *mixer);
 void kv_mixer_humanize(KvMixer *mixer,bool enabled);
 void kv_mixer_loop(KvMixer *mixer,bool enabled);
 void kv_mixer_interval(KvMixer *mixer,double seconds);
@@ -31,5 +39,5 @@ bool kv_mixer_running(const KvMixer *mixer);
 bool kv_mixer_busy(const KvMixer *mixer);
 uint64_t kv_mixer_clock(const KvMixer *mixer);
 uint64_t kv_mixer_start(const KvMixer *mixer);
-unsigned kv_mixer_active(const KvMixer *mixer,int notes[64]);
+unsigned kv_mixer_active(const KvMixer *mixer,int notes[KV_ACTIVE_NOTES]);
 #endif

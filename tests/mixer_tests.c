@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <time.h>
 #define CHECK(expr) do { if(!(expr)) { fprintf(stderr,"Mixer check failed at %d: %s\n",__LINE__,#expr); return 1; } } while(0)
 static void advance(KvMixer *m,float *block,unsigned frames) {
     while(frames) { unsigned n=frames>256?256:frames; kv_mixer_render(m,block,n); frames-=n; }
@@ -23,7 +24,7 @@ int main(int argc,char **argv) {
     kv_mixer_render(a,block,1); kv_mixer_render(b,other,1);
     CHECK(fabsf(block[0]-other[0])<1e-6 && fabsf(block[1]-other[1])<1e-6);
     int second=72; CHECK(kv_mixer_play(a,&second,1,1,.65,0,true)); kv_mixer_render(a,block,256);
-    int active[64]; CHECK(kv_mixer_active(a,active)==2);
+    int active[KV_ACTIVE_NOTES]; CHECK(kv_mixer_active(a,active)==2);
     KvLiveEffects *fx=kv_live_effects_create(); CHECK(fx);
     for(int instrument=0;instrument<3;instrument++) {
         double energy=0;
@@ -147,7 +148,7 @@ int main(int argc,char **argv) {
         kv_mixer_stop(a); advance(a,block,2048);
         CHECK(kv_mixer_preview(a,60,.5,0)); advance(a,block,1024);
         CHECK(kv_mixer_preview(a,64,.5,0)); advance(a,block,1024);
-        int active_notes[64]; unsigned n=kv_mixer_active(a,active_notes); CHECK(n==1 && active_notes[0]==64);
+        int active_notes[KV_ACTIVE_NOTES]; unsigned n=kv_mixer_active(a,active_notes); CHECK(n==1 && active_notes[0]==64);
         int g=67; CHECK(kv_mixer_play(a,&g,1,1,.5,0,true)); advance(a,block,256);
         n=kv_mixer_active(a,active_notes); CHECK(n==2); // a played note is not cut by previews
         CHECK(kv_mixer_preview(a,69,.5,0)); advance(a,block,1024);
@@ -159,7 +160,7 @@ int main(int argc,char **argv) {
     {
         kv_mixer_stop(a); advance(a,block,2048);
         CHECK(kv_mixer_hold(a,60,.8f,0)); CHECK(kv_mixer_hold(a,64,.8f,0)); int g=67; CHECK(kv_mixer_play(a,&g,1,1,2,0,true));
-        advance(a,block,44100*3/2); int notes[64]; unsigned n=kv_mixer_active(a,notes);
+        advance(a,block,44100*3/2); int notes[KV_ACTIVE_NOTES]; unsigned n=kv_mixer_active(a,notes);
         bool c=false,e=false; for(unsigned i=0;i<n;i++) { if(notes[i]==60) c=true; if(notes[i]==64) e=true; } CHECK(c && e); // 1.5 s later both keys still sound
         kv_mixer_release(a,60); advance(a,block,4096); n=kv_mixer_active(a,notes);
         c=false; e=false; bool gnote=false; for(unsigned i=0;i<n;i++) { if(notes[i]==60) c=true; if(notes[i]==64) e=true; if(notes[i]==67) gnote=true; }
@@ -238,7 +239,7 @@ int main(int argc,char **argv) {
           if(after<before*.708 || change>own*2) { fprintf(stderr,"legato change: level %.0f%% of before, step %.4f vs %.4f\n",100*after/before,change,own); return 1; }
           // A tone common to two chords goes on without a new bow: C5, C5 legato keeps one voice and its level.
           p.events[1].midi=72; kv_mixer_stop(x); advance(x,block,2048); CHECK(kv_mixer_performance(x,&p,.5,KV_INSTRUMENT_STRINGS)); RENDER(x,1.6);
-          CHECK(POWER(.98,1.28)>POWER(.68,.98)*.8); int sounding[64]; CHECK(kv_mixer_active(x,sounding)==1 && sounding[0]==72);
+          CHECK(POWER(.98,1.28)>POWER(.68,.98)*.8); int sounding[KV_ACTIVE_NOTES]; CHECK(kv_mixer_active(x,sounding)==1 && sounding[0]==72);
           #undef POWER
           #undef STEP
           kv_mixer_free(x); }
@@ -251,7 +252,7 @@ int main(int argc,char **argv) {
           CHECK(memcmp(block,takes[0],sizeof(takes[0]))!=0 && memcmp(block,takes[1],sizeof(takes[0]))!=0);
           kv_mixer_articulation(x,KV_ARTICULATION_PIZZICATO); kv_mixer_stop(x); advance(x,block,4410);
           CHECK(kv_mixer_hold(x,50,.8f,KV_INSTRUMENT_STRINGS)); advance(x,block,2205); kv_mixer_release(x,50); RENDER(x,.4);
-          CHECK(env[25]>.002f); int sounding[64]; CHECK(kv_mixer_active(x,sounding)==0);    /* rings, but the key is no longer shown down */
+          CHECK(env[25]>.002f); int sounding[KV_ACTIVE_NOTES]; CHECK(kv_mixer_active(x,sounding)==0);    /* rings, but the key is no longer shown down */
           kv_mixer_stop(x); advance(x,block,1024); CHECK(!kv_mixer_busy(x));
           kv_mixer_free(x); }
         // The mod wheel: soft to loud raises the level and brightens the sound, smoothly; expression only scales.
@@ -275,6 +276,31 @@ int main(int argc,char **argv) {
         #undef RENDER
         kv_piano_free(strings);
     }
+    // Polyphony as on a digital piano: under the pedal, 300 strikes in 0.3 s never lose a note, the pool stays bounded,
+    // and when it runs short the quietest voice fades (no sample-to-sample jump beyond what the music itself has).
+    { KvMixer *p=kv_mixer_create(); CHECK(p); kv_mixer_bank(p,0,banks[0]); kv_mixer_humanize(p,false); kv_mixer_pedal(p,true);
+      unsigned peak=0; float jump=0,last[2]={0,0},chunk[64*2];
+      for(int i=0;i<300;i++) {
+          int midi=21+(i*7)%88; CHECK(kv_mixer_hold(p,midi,.8f,0));
+          for(int f=0;f<44;f+=4) { kv_mixer_render(p,chunk,4); for(int k=0;k<8;k++) { float d=fabsf(chunk[k]-last[k%2]); if(d>jump) jump=d; last[k%2]=chunk[k]; } }
+          unsigned voices=kv_mixer_voices(p); if(voices>peak) peak=voices;
+          int notes[KV_ACTIVE_NOTES]; unsigned n=kv_mixer_active(p,notes); bool sounding=false; for(unsigned j=0;j<n;j++) if(notes[j]==midi) sounding=true;
+          if(!sounding) { fprintf(stderr,"polyphony: strike %d (midi %d) is silent with %u voices in use\n",i,midi,voices); return 1; }
+      }
+      CHECK(peak>64 && peak<=KV_VOICES); CHECK(jump<.5f);
+      // The pedal: a key struck again rings on its previous strike for a while; without the pedal it gives way at once.
+      kv_mixer_release(p,-1); kv_mixer_stop(p); advance(p,block,44100); CHECK(kv_mixer_voices(p)==0);
+      CHECK(kv_mixer_hold(p,60,.8f,0)); advance(p,block,22050); CHECK(kv_mixer_hold(p,60,.8f,0)); advance(p,block,4410); CHECK(kv_mixer_voices(p)==2);
+      kv_mixer_pedal(p,false); kv_mixer_release(p,-1); kv_mixer_stop(p); advance(p,block,44100);
+      CHECK(kv_mixer_hold(p,60,.8f,0)); advance(p,block,22050); CHECK(kv_mixer_hold(p,60,.8f,0)); advance(p,block,4410); CHECK(kv_mixer_voices(p)==1);
+      // Cost of a full pool: render 1 s with every voice busy, well inside real time even on an older Mac.
+      kv_mixer_release(p,-1); kv_mixer_stop(p); advance(p,block,44100); kv_mixer_pedal(p,true);
+      for(int i=0;i<KV_VOICES;i++) { CHECK(kv_mixer_hold(p,21+i%88,.8f,0)); advance(p,block,16); }
+      CHECK(kv_mixer_voices(p)>=KV_VOICES-8);
+      clock_t start=clock(); advance(p,block,44100); double seconds=(double)(clock()-start)/CLOCKS_PER_SEC;
+      printf("Polyphony: peak %u voices, %.1f%% of one core for a full pool\n",peak,100*seconds);
+      CHECK(seconds<.5);
+      kv_mixer_free(p); }
     kv_live_effects_free(fx); kv_mixer_free(a); kv_mixer_free(b); for(int i=0;i<3;i++) kv_piano_free(banks[i]);
     puts("Three instruments: retrigger continuity, overlapping voices, live FX, audible synced repeats at 80/160 BPM, release and bounded human dynamics passed."); return 0;
 }

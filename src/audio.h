@@ -4,11 +4,12 @@
 #include <stddef.h>
 #include "piano.h"
 #include "performance.h"
+#include "mixer.h"
 typedef struct KvAudio KvAudio;
 KvAudio *kv_audio_create(void);
 bool kv_audio_load_instrument(KvAudio *audio,int instrument,const char *directory);
 bool kv_audio_set_instrument(KvAudio *audio,int instrument);
-unsigned kv_audio_active_notes(KvAudio *audio,int notes[64]);
+unsigned kv_audio_active_notes(KvAudio *audio,int notes[KV_ACTIVE_NOTES]);
 int kv_audio_error(const KvAudio *audio);
 bool kv_audio_set_humanize(KvAudio *audio,bool enabled);
 bool kv_audio_set_loop(KvAudio *audio,bool enabled);
@@ -29,6 +30,8 @@ bool kv_audio_preview(KvAudio *audio,int midi,double seconds);
 /* Bowed strings: articulation (Auto, Legato, Staccato, Pizzicato) and dynamics 0…1 (mod wheel) with expression 0…1 (CC11). */
 bool kv_audio_set_articulation(KvAudio *audio,KvArticulation articulation);
 bool kv_audio_set_dynamics(KvAudio *audio,double dynamics,double expression);
+/* Sustain pedal down or up (CC64): a key struck again under it rings on its previous strike. */
+bool kv_audio_set_pedal(KvAudio *audio,bool down);
 void kv_audio_stop(KvAudio *audio);
 void kv_audio_destroy(KvAudio *audio);
 bool kv_audio_is_playing(const KvAudio *audio);
