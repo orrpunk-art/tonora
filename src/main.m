@@ -254,8 +254,8 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 @property(nonatomic) NSPopUpButton *rhythmChoice;      /* beside it: the click grid and the count-in */
 @property(nonatomic) BOOL metronomeOn,countIn;           /* the metronome starts off at every launch; the count-in is kept */
 @property(nonatomic) KvGrid rhythmGrid;
-@property(nonatomic) NSInteger rhythmBeat;               /* the draft's drums («Ударные»): −1 none, a KvBeat, or KvBeatByStyle */
-@property(nonatomic) NSMenu *drumsMenu;
+@property(nonatomic) NSInteger rhythmBeat;               /* what the metronome plays: −1 the click, a KvBeat, or KvBeatByStyle (drums) */
+@property(nonatomic) NSMenu *drumsMenu;                   /* unused since the metronome holds the drums */
 @property(nonatomic) NSDictionary *lastForm;              /* the form just applied: ⌘R makes another variant until the song is edited otherwise */
 @property(nonatomic) uint32_t formSeed;
 @property(nonatomic) NSInteger tempoPart;                 /* the song's tempo curve while it plays: the part counted, */
@@ -953,24 +953,23 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         _loopButton=IconButton(@"repeat",@"↻",T(@"Повтор · L"),self,@selector(loopChanged:)); [_loopButton setButtonType:NSButtonTypePushOnPushOff]; [self addSubview:_loopButton];
         _metronomeButton=IconButton(@"metronome",@"♩",T(@"Метроном · ⌘K · играйте поверх с MIDI-клавиатуры"),self,@selector(toggleMetronome:)); [_metronomeButton setButtonType:NSButtonTypePushOnPushOff]; [self addSubview:_metronomeButton];
         _rhythmChoice=[[TNPopup alloc] initWithFrame:NSZeroRect pullsDown:YES]; _rhythmChoice.autoenablesItems=NO; [_rhythmChoice addItemWithTitle:@""];
-        { NSMenuItem *header=[[NSMenuItem alloc] initWithTitle:T(@"Метроном · акцент на первую долю") action:NULL keyEquivalent:@""]; header.enabled=NO; header.tag=-1; [_rhythmChoice.menu addItem:header]; }
-        { NSArray *grids=@[T(@"Клик · доли"),T(@"Клик · восьмые"),T(@"Клик · триоли"),T(@"Клик · шестнадцатые")];
-          for(NSInteger i=0;i<KV_GRID_COUNT;i++) { [_rhythmChoice addItemWithTitle:grids[i]]; _rhythmChoice.lastItem.tag=i; } }
-        [_rhythmChoice.menu addItem:NSMenuItem.separatorItem]; _rhythmChoice.lastItem.tag=-1;
-        [_rhythmChoice addItemWithTitle:T(@"Отсчёт такта перед игрой")]; _rhythmChoice.lastItem.tag=100;
-        { // The draft's drums (spec 1.5 §5): not the metronome — they play with the circle's progression, and the click keeps quiet then.
-          NSDictionary *grey=@{NSForegroundColorAttributeName:NSColor.secondaryLabelColor}; NSMenu *list=[[NSMenu alloc] initWithTitle:T(@"Ударные черновика")]; list.autoenablesItems=NO;
+        { // The metronome is a click or drums, never both (feedback on 1.5): drums by the style or one beat; off, nothing plays.
+          NSMenuItem *(^header)(NSString *)=^NSMenuItem *(NSString *title) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:title action:NULL keyEquivalent:@""]; item.enabled=NO; item.tag=-1; [self->_rhythmChoice.menu addItem:item]; return item; };
+          header(T(@"Метроном: клик"));
+          NSArray *grids=@[T(@"Клик · доли"),T(@"Клик · восьмые"),T(@"Клик · триоли"),T(@"Клик · шестнадцатые")];
+          for(NSInteger i=0;i<KV_GRID_COUNT;i++) { [_rhythmChoice addItemWithTitle:grids[i]]; _rhythmChoice.lastItem.tag=i; }
+          [_rhythmChoice.menu addItem:NSMenuItem.separatorItem]; _rhythmChoice.lastItem.tag=-1; header(T(@"Метроном: барабаны"));
+          [_rhythmChoice addItemWithTitle:T(@"Барабаны по стилю · в песне у каждой секции свои")]; _rhythmChoice.lastItem.tag=300;
+          NSDictionary *grey=@{NSForegroundColorAttributeName:NSColor.secondaryLabelColor};
           NSString *titles[KV_BEAT_COUNT]={T(@"Поп · бочка, малый, хай-хэт"),T(@"Баллада · стик и хай-хэт"),T(@"Босса-нова · стик, шейкер, конги"),T(@"Шаффл · триольный хай-хэт"),T(@"Хип-хоп"),T(@"Трип-хоп · бэкбит на третью"),T(@"Хаус · прямая бочка")};
-          NSMenuItem *(^add)(NSString *,NSInteger)=^NSMenuItem *(NSString *title,NSInteger tag) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:title action:@selector(drumsChanged:) keyEquivalent:@""]; item.target=self; item.tag=tag; [list addItem:item]; return item; };
-          add(T(@"Без ударных"),299); add(T(@"По стилю рисунка"),300); [list addItem:NSMenuItem.separatorItem];
           for(NSNumber *beat in @[@(KV_BEAT_POP),@(KV_BEAT_BALLAD),@(KV_BEAT_BOSSA),@(KV_BEAT_SHUFFLE),@(KV_BEAT_HIPHOP),@(KV_BEAT_TRIPHOP),@(KV_BEAT_HOUSE)]) {
-              int low=0,high=0; kv_beat_tempo((KvBeat)beat.intValue,&low,&high); NSString *title=titles[beat.intValue]; NSMenuItem *item=add(title,200+beat.integerValue);
+              int low=0,high=0; kv_beat_tempo((KvBeat)beat.intValue,&low,&high); NSString *title=titles[beat.intValue]; [_rhythmChoice addItemWithTitle:title]; NSMenuItem *item=_rhythmChoice.lastItem; item.tag=200+beat.integerValue;
               NSMutableAttributedString *text=[[NSMutableAttributedString alloc] initWithString:title attributes:@{NSFontAttributeName:[NSFont menuFontOfSize:0]}];
               [text appendAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"   %d–%d BPM",low,high] attributes:@{NSFontAttributeName:[NSFont menuFontOfSize:0],NSForegroundColorAttributeName:grey[NSForegroundColorAttributeName]}]];
               item.attributedTitle=text; }
           [_rhythmChoice.menu addItem:NSMenuItem.separatorItem]; _rhythmChoice.lastItem.tag=-1;
-          NSMenuItem *drums=[[NSMenuItem alloc] initWithTitle:T(@"Ударные черновика") action:NULL keyEquivalent:@""]; drums.tag=-1; drums.submenu=list; [_rhythmChoice.menu addItem:drums]; _drumsMenu=list; }
-        _rhythmChoice.target=self; _rhythmChoice.action=@selector(rhythmChanged:); _rhythmChoice.toolTip=T(@"Метроном: клик и отсчёт такта; ударные черновика — бит, что звучит с прогрессией (клик тогда молчит)");
+          [_rhythmChoice addItemWithTitle:T(@"Отсчёт такта перед игрой")]; _rhythmChoice.lastItem.tag=100; }
+        _rhythmChoice.target=self; _rhythmChoice.action=@selector(rhythmChanged:); _rhythmChoice.toolTip=T(@"Метроном: клик или барабаны (по стилю или выбранный бит) · отсчёт такта");
         [_rhythmChoice setAccessibilityLabel:T(@"Ритм")]; [self addSubview:_rhythmChoice]; _beatDot=-1;
         _tempoSlider=[TNSlider sliderWithValue:_tempo minValue:50 maxValue:240 target:self action:@selector(tempoChanged:)];
         _tempoSlider.continuous=YES; [_tempoSlider setAccessibilityLabel:T(@"Темп воспроизведения")]; [self addSubview:_tempoSlider];
@@ -1103,7 +1102,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     CGFloat x=m.inspectorX+KvMargin,iw=KvInspectorWidth-2*KvMargin,y=10;
     self.inspectorTabs.frame=NSMakeRect(x,y,iw,24); y+=30;
     BOOL midiTab=self.inspectorTab==2,chromaticTab=self.inspectorTab==1,sectionTab=self.inspectorTab==3,chordTab=!midiTab && !chromaticTab && !sectionTab;
-    [self.inspectorTabs setEnabled:self.viewMode==2 forSegment:3];
+    if(self.inspectorTabs.segmentCount>3) [self.inspectorTabs setEnabled:YES forSegment:3];
     self.arranger.sectionPanel.hidden=!sectionTab; if(sectionTab) self.arranger.sectionPanel.frame=NSMakeRect(x,y+6,iw,m.dockTop-y-16);
     for(NSView *view in @[self.heading,self.signature,self.scaleNames,self.harmonyChoice,self.scaleButton]) view.hidden=!chordTab;
     for(NSButton *button in self.chordButtons) button.hidden=!chordTab; for(NSButton *button in self.addButtons) button.hidden=!chordTab;
@@ -1553,6 +1552,18 @@ static NSString *Describe(NSView *view) {
     if((self.playingPerformance || self.playingDegrees) && !kv_audio_is_playing(self.audio)) {
         self.playingPerformance=NO; self.playingDegrees=nil; self.playingTwoHand=NO; [self highlightChip:-1];
     }
+}
+/* A texture or pattern chosen in the arranger with several sections selected (⌘A, ⇧-click) goes to all of them. */
+- (void)changeTexture:(void(^)(void))change {
+    if(self.viewMode==2 && self.editingSection>=0 && self.arranger.selection.length>1) [self pushSongUndo];   // one ⌘Z brings every section's back
+    [self changeArrangement:change];
+    NSRange range=self.arranger.selection; NSInteger editing=self.editingSection; KvSong *song=self.song;
+    if(self.viewMode!=2 || editing<0 || editing>=(NSInteger)song->count) return;
+    [self storeWorking]; NSUInteger others=0;
+    for(NSUInteger i=range.location;range.length>1 && i<NSMaxRange(range) && i<song->count;i++) if((NSInteger)i!=editing && song->sections[i].kind!=KV_SECTION_TRANSITION) { song->sections[i].arrangement=song->sections[editing].arrangement; others++; }
+    if(others) { self.songPlans=nil; [self.arranger reload]; [self saveState]; }
+    self.status.stringValue=others?[NSString stringWithFormat:T(@"Рисунок «%@» — у выделенных секций: %lu"),[self textureName],(unsigned long)others+1]
+        :[NSString stringWithFormat:T(@"Рисунок только у секции «%@» · ⌘A — выделить все и поменять у всех"),[self arrangerName:editing]];
 }
 /* Any change that alters the notes restarts a running progression from the current chord with the new settings. */
 - (void)changeArrangement:(void(^)(void))change { [self changeArrangement:change remap:nil]; }
@@ -2046,6 +2057,8 @@ static NSString *Describe(NSView *view) {
 }
 /* The «Секция» tab belongs to the arranger: it opens with it and gives way to «Аккорды» elsewhere. */
 - (void)matchInspectorToView {
+    NSInteger segments=self.viewMode==2?4:3;   // «Секция» only where there are sections
+    if(self.inspectorTabs.segmentCount!=segments) { self.inspectorTabs.segmentCount=segments; if(segments==4) [self.inspectorTabs setLabel:T(@"Секция") forSegment:3]; self.needsLayout=YES; }
     NSInteger tab=self.viewMode==2?3:self.inspectorTab==3?0:self.inspectorTab;
     if(tab!=self.inspectorTab || self.inspectorTabs.selectedSegment!=tab) { self.inspectorTabs.selectedSegment=tab; self.inspectorTab=tab; self.needsLayout=YES; self.needsDisplay=YES; }
 }
@@ -2111,7 +2124,7 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     self.undoSequenceButton.enabled=self.sequenceUndo!=nil; self.clearButton.enabled=self.progression.count>0; self.midiExportButton.enabled=self.progression.count>0; self.midiCopyButton.enabled=self.progression.count>0;
     self.loopButton.state=self.loopEnabled?NSControlStateValueOn:NSControlStateValueOff;
     NSString *loopHint=self.loopEnabled?T(@"Повтор включён · L"):T(@"Повтор выключен · L"); if(![((TNButton *)self.loopButton).hint isEqualToString:loopHint]) Hint(self.loopButton,loopHint);
-    NSString *summary=[self arrangementSummary],*drums=[self drumsName]; if(drums && self.editingSection<0) summary=[summary stringByAppendingFormat:@" · %@",drums];
+    NSString *summary=[self arrangementSummary],*drums=self.metronomeOn && self.rhythmBeat>=0?[self drumsName]:nil; if(drums) summary=[summary stringByAppendingFormat:@" · %@",drums];
     if(![self.arrangementInfo.stringValue isEqualToString:summary]) self.arrangementInfo.stringValue=summary;
 }
 /* The frame clock's share of updateTransport: the play button follows a sequence that ends by itself. Everything else that
@@ -2129,14 +2142,16 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
 - (double)rhythmSecondsPerBeat { return 60.0/(self.tempo*(self.playingPerformance?self.speed:1)); }
 /* The draft's drums: the chosen beat, or the one that suits the two hands' style; −1 none. */
 - (NSInteger)resolvedBeat { return self.rhythmBeat==KvBeatByStyle?kv_beat_for_style(self.pianoPattern):self.rhythmBeat; }
-/* The rhythm layer (spec 1.5 §5): a beat while a progression plays with one — the circle's with the draft's drums, a section's
-   (the roll, ⌥Space) with its drums region; else the metronome's click when it is on. The song's parts set the layer themselves. */
+/* The rhythm layer: nothing while the metronome is off; its click, or its drums — the playing section's (the roll, ⌥Space) or
+   the circle's by its style. The song's parts set the layer themselves. */
 - (void)applyRhythm {
     if(!self.songPlaying) {
-        KvHit hits[KV_BEAT_HITS]; size_t count=0; NSInteger beat=-1; BOOL playing=[self isPlayingProgression] && !self.auditioningGhost;
-        if(playing && self.editingSection>=0) { [self rhythmOfSection:self.editingSection hits:hits count:&count]; beat=count?-3:-1; }
-        else if(playing) { beat=[self resolvedBeat]; if(beat>=0) count=kv_beat_bar((KvBeat)beat,self.meter,hits); }
-        if(self.audio && !kv_audio_set_rhythm(self.audio,self.metronomeOn || count>0,self.rhythmGrid,self.meter,[self rhythmSecondsPerBeat],self.rhythmVolume)) self.status.stringValue=T(@"⚠ Не удалось включить метроном");
+        KvHit hits[KV_BEAT_HITS]; size_t count=0; NSInteger beat=-1; BOOL playing=[self isPlayingProgression] && !self.auditioningGhost,on=self.metronomeOn;
+        if(on && self.rhythmBeat>=0) {
+            if(playing && self.editingSection>=0) { on=[self rhythmOfSection:self.editingSection hits:hits count:&count]!=0; beat=count?-3:-1; }
+            else { beat=[self resolvedBeat]; if(beat>=0) count=kv_beat_bar((KvBeat)beat,self.meter,hits); }
+        }
+        if(self.audio && !kv_audio_set_rhythm(self.audio,on,self.rhythmGrid,self.meter,[self rhythmSecondsPerBeat],self.rhythmVolume)) self.status.stringValue=T(@"⚠ Не удалось включить метроном");
         NSData *sent=[NSData dataWithBytes:hits length:count*sizeof(KvHit)];
         if(self.audio && (beat!=self.sentBeat || (beat>=0 && self.meter!=self.sentBeatMeter) || (beat==-3 && ![sent isEqualToData:self.sentHits]))) {
             if(kv_audio_set_beat(self.audio,hits,count,false)) { self.sentBeat=beat; self.sentBeatMeter=self.meter; self.sentHits=sent; }
@@ -2144,15 +2159,17 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     }
     self.metronomeButton.state=self.metronomeOn?NSControlStateValueOn:NSControlStateValueOff;
     for(NSMenuItem *item in self.rhythmChoice.itemArray) {
-        BOOL on=(item.tag==self.rhythmGrid && item.tag>=0 && item.tag<KV_GRID_COUNT) || (item.tag==100 && self.countIn);
-        item.state=on?NSControlStateValueOn:NSControlStateValueOff; }
-    for(NSMenuItem *item in self.drumsMenu.itemArray) {
-        BOOL on=(self.rhythmBeat<0 && item.tag==299) || (self.rhythmBeat==KvBeatByStyle && item.tag==300) || (self.rhythmBeat>=0 && self.rhythmBeat<KV_BEAT_COUNT && item.tag==200+self.rhythmBeat);
+        BOOL on=(self.rhythmBeat<0 && item.tag==self.rhythmGrid && item.tag>=0 && item.tag<KV_GRID_COUNT) || (item.tag==100 && self.countIn)
+              || (self.rhythmBeat==KvBeatByStyle && item.tag==300) || (self.rhythmBeat>=0 && self.rhythmBeat<KV_BEAT_COUNT && item.tag==200+self.rhythmBeat);
         item.state=on?NSControlStateValueOn:NSControlStateValueOff; }
 }
-- (NSString *)rhythmName { NSString *names[KV_GRID_COUNT]={T(@"клик на доли"),T(@"клик восьмыми"),T(@"клик триолями"),T(@"клик шестнадцатыми")}; return names[self.rhythmGrid]; }
+- (NSString *)rhythmName {
+    if(self.rhythmBeat>=0) return [self drumsName];
+    NSString *names[KV_GRID_COUNT]={T(@"клик на доли"),T(@"клик восьмыми"),T(@"клик триолями"),T(@"клик шестнадцатыми")}; return names[self.rhythmGrid];
+}
 - (NSString *)drumsName {
     NSInteger beat=[self resolvedBeat]; if(beat<0) return nil;
+    if(self.rhythmBeat==KvBeatByStyle && self.viewMode==2) return T(@"барабаны по стилю каждой секции");
     return [NSString stringWithFormat:self.rhythmBeat==KvBeatByStyle?T(@"ударные по стилю: %@"):T(@"ударные «%@»"),[S(kv_beat_name((KvBeat)beat)) lowercaseString]];
 }
 - (NSString *)metronomeStatus { return [NSString stringWithFormat:T(@"Метроном · %@%@ · ⌘K — выключить · играйте поверх с MIDI-клавиатуры"),[self rhythmName],self.countIn?T(@" · отсчёт такта"):@""]; }
@@ -2166,23 +2183,20 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     if(self.songQueued>part) { self.songQueued=part; [self queueSongPart:part+1]; }
 }
 - (void)toggleMetronome:(id)sender {
-    (void)sender; self.metronomeOn=!self.metronomeOn; self.beatDot=-1; [self applyRhythm]; [self applySongRhythm]; self.needsDisplay=YES;
+    (void)sender; self.metronomeOn=!self.metronomeOn; self.beatDot=-1; [self applyRhythm]; [self applySongRhythm]; [self.arranger reload]; [self updateTransport]; self.needsDisplay=YES;
     self.status.stringValue=self.metronomeOn?[self metronomeStatus]:T(@"Метроном выключен · ⌘K — включить");
 }
 - (void)rhythmChanged:(NSPopUpButton *)sender {
     NSInteger tag=sender.selectedItem.tag;
     if(tag==100) self.countIn=!self.countIn;
-    else if(tag>=0 && tag<KV_GRID_COUNT) { self.rhythmGrid=(KvGrid)tag; if(!self.metronomeOn) { [self saveState]; [self toggleMetronome:nil]; return; } }   // choosing a click switches it on
+    else if((tag>=0 && tag<KV_GRID_COUNT) || tag==300 || (tag>=200 && tag<200+KV_BEAT_COUNT)) {
+        if(tag<KV_GRID_COUNT) { self.rhythmGrid=(KvGrid)tag; self.rhythmBeat=-1; } else self.rhythmBeat=tag==300?KvBeatByStyle:tag-200;
+        [self.arranger reload];   // the drums track shows what the metronome plays
+        if(!self.metronomeOn) { [self saveState]; [self toggleMetronome:nil]; return; }   // choosing a click or drums switches it on
+    }
     else return;
-    [self applyRhythm]; [self applySongRhythm]; [self saveState];
+    [self applyRhythm]; [self applySongRhythm]; [self saveState]; [self updateTransport];
     self.status.stringValue=self.metronomeOn?[self metronomeStatus]:self.countIn?T(@"Отсчёт такта включён: при игре с метрономом сначала звучит такт клика"):T(@"Отсчёт такта выключен");
-}
-/* «Ударные черновика»: the beat under the circle's progression (and of the sections made from it). */
-- (void)drumsChanged:(NSMenuItem *)sender {
-    NSInteger tag=sender.tag; self.rhythmBeat=tag==300?KvBeatByStyle:tag>=200 && tag<200+KV_BEAT_COUNT?tag-200:-1;
-    [self applyRhythm]; [self saveState]; [self updateTransport];
-    NSString *name=[self drumsName];
-    self.status.stringValue=name?[NSString stringWithFormat:T(@"Черновик: %@ · звучат с прогрессией, клик метронома в это время молчит"),name]:T(@"Черновик без ударных");
 }
 - (void)rhythmVolumeChanged:(NSSlider *)sender {
     self.rhythmVolume=MIN(1,MAX(0,sender.doubleValue/100)); self.rhythmVolumeValue.stringValue=[NSString stringWithFormat:@"%.0f %%",self.rhythmVolume*100];
@@ -2233,34 +2247,34 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     for(NSMenuItem *item in self.performanceChoice.itemArray) if(item.tag==-1 && item!=piano && !item.attributedTitle) item.attributedTitle=[[NSAttributedString alloc] initWithString:item.title attributes:small];
     [self.performanceChoice selectItemWithTag:self.performanceMode];
 }
-- (void)performanceChanged:(NSPopUpButton *)sender { NSInteger mode=sender.selectedTag; if(mode<0) return; [self changeArrangement:^{ self.performanceMode=mode; self.needsLayout=YES; }]; }
-- (void)harmonyChanged:(NSPopUpButton *)sender { NSInteger extension=sender.indexOfSelectedItem; [self changeArrangement:^{ self.chordExtension=extension; }]; }
+- (void)performanceChanged:(NSPopUpButton *)sender { NSInteger mode=sender.selectedTag; if(mode<0) return; [self changeTexture:^{ self.performanceMode=mode; self.needsLayout=YES; }]; }
+- (void)harmonyChanged:(NSPopUpButton *)sender { NSInteger extension=sender.indexOfSelectedItem; [self changeTexture:^{ self.chordExtension=extension; }]; }
 - (void)meterChanged:(NSPopUpButton *)sender { KvMeter meter=(KvMeter)sender.indexOfSelectedItem; [self changeArrangement:^{ self.meter=meter; }]; }
 - (void)lengthChanged:(NSPopUpButton *)sender {
     KvChordLength length=(KvChordLength)sender.indexOfSelectedItem;
-    [self changeArrangement:^{ if(self.performanceMode>=3) self.chordLengthStrings=length; else if(self.performanceMode==1) self.chordLengthHands=length; else if(self.performanceMode==2) self.chordLengthArp=length; else self.chordLengthBlocks=length; }];
+    [self changeTexture:^{ if(self.performanceMode>=3) self.chordLengthStrings=length; else if(self.performanceMode==1) self.chordLengthHands=length; else if(self.performanceMode==2) self.chordLengthArp=length; else self.chordLengthBlocks=length; }];
 }
 - (void)arpeggioChanged:(NSPopUpButton *)sender {
     NSInteger index=sender.indexOfSelectedItem;
-    [self changeArrangement:^{
+    [self changeTexture:^{
         if(index>=0 && index<KV_ARP_COUNT) self.arpeggioPattern=(KvArpeggioPattern)index;
         else if(index==KV_ARP_COUNT+1) self.generatedRhythm=NO;
         else if(index==KV_ARP_COUNT+2) self.generatedRhythm=YES;
     }];
 }
-- (void)arpeggioDivisionChanged:(NSPopUpButton *)sender { KvDivision division=(KvDivision)sender.indexOfSelectedItem; [self changeArrangement:^{ self.division=division; }]; }
-- (void)fillChanged:(NSPopUpButton *)sender { KvFillRate rate=(KvFillRate)sender.indexOfSelectedItem; [self changeArrangement:^{ self.fillRate=rate; }]; }
+- (void)arpeggioDivisionChanged:(NSPopUpButton *)sender { KvDivision division=(KvDivision)sender.indexOfSelectedItem; [self changeTexture:^{ self.division=division; }]; }
+- (void)fillChanged:(NSPopUpButton *)sender { KvFillRate rate=(KvFillRate)sender.indexOfSelectedItem; [self changeTexture:^{ self.fillRate=rate; }]; }
 - (void)regenerateArrangement:(id)sender {
     if(self.viewMode==2 && self.lastForm) { [self arrangerAnotherForm:sender]; return; }   // right after a form: another variant of it
     if(!self.progression.count) return;
-    [self changeArrangement:^{
+    [self changeTexture:^{
         self.arrangementSeed=arc4random_uniform(UINT32_MAX-1)+1; self.generatedRhythm=YES; if(self.performanceMode==0) self.performanceMode=1; self.needsLayout=YES;
     }];
     if(![self isPlayingProgression]) self.status.stringValue=[NSString stringWithFormat:T(@"Вариация №%u готова · аккорды сохранены · Пробел — играть"),self.arrangementSeed%1000];
 }
 - (void)patternChanged:(NSPopUpButton *)sender {
     NSInteger index=sender.indexOfSelectedItem;
-    [self changeArrangement:^{
+    [self changeTexture:^{
         if(index>=0 && index<KV_PATTERN_COUNT) self.pianoPattern=(KvPianoPattern)index; // a style change keeps the variation mode
         else if(index==KV_PATTERN_COUNT+1) self.generatedRhythm=NO;
         else if(index==KV_PATTERN_COUNT+2) self.generatedRhythm=YES;
@@ -3308,8 +3322,10 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
 }
 - (void)arrangerPlayFrom:(double)beat { [self playSongFromBeat:beat]; }
 - (BOOL)arrangerCycles { return self.loopEnabled; }
+- (void)arrangerToggleLoop { [self toggleLoop:nil]; self.arranger.needsDisplay=YES; }
 - (void)arrangerSetCycleFrom:(double)from to:(double)to {
     KvSong *song=self.song; BOOL none=!(to>from+1e-6); song->cycle_from=none?0:MAX(0,from); song->cycle_to=none?0:to;
+    if(!none && !self.loopEnabled) [self toggleLoop:nil];   // a cycle drawn is a cycle that plays, as in Logic
     if(none) self.status.stringValue=T(@"Цикл снят");
     else self.status.stringValue=[NSString stringWithFormat:T(@"Цикл: такты %d–%d · ↻ или L — играть его по кругу · двойной щелчок по циклу — снять"),(int)floor(song->cycle_from/kv_meter_bar(song->meter)+1e-9)+1,MAX(1,(int)ceil(song->cycle_to/kv_meter_bar(song->meter)-1e-9))];
     self.arranger.needsDisplay=YES; [self saveState];
@@ -3330,8 +3346,7 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     KvSong *song=[self liveSong]; KvArrangement texture=[self arrangementForPreview:NO];
     int codes[8]; for(NSUInteger i=0;i<self.progression.count;i++) codes[i]=self.progression[i].intValue;
     KvSection section=kv_section_from_draft(KV_SECTION_VERSE,codes,self.progression.count,texture); section.edited=self.trackEdited;
-    NSInteger drums=self.rhythmBeat; section.beat=drums==KvBeatByStyle?KV_SECTION_BEAT_STYLE:drums>=0?KV_SECTION_BEAT_FIXED:KV_SECTION_BEAT_OFF;   // what was heard on the circle
-    if(drums>=0 && drums<KV_BEAT_COUNT) section.beat_fixed=(KvBeat)drums;
+    section.beat=KV_SECTION_BEAT_SONG;   // drums as the metronome plays them
     uint32_t made=kv_song_insert(song,at,&section);
     if(made && self.trackEdited) self.sectionTracks[@(made)]=[self trackData];
     if(made) [self followSections];
@@ -3445,14 +3460,17 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
 }
 - (void)arrangerRevert:(id)sender { (void)sender; if(self.trackEdited) [self pianoRollResetRequested:self.roll]; [self.arranger reload]; }
 - (void)arrangerTakeDraft:(id)sender { [self sendToArranger:sender]; }
+- (NSString *)arrangerDrumsHint {
+    if(self.metronomeOn && self.rhythmBeat>=0) return nil;
+    return self.metronomeOn?T(@"Метроном щёлкает — барабаны включаются в его меню: «Барабаны по стилю»"):T(@"Барабаны играет метроном: включите его и выберите «Барабаны по стилю»");
+}
 /* The empty song's «Сгенерировать песню»: the circle's chords (made first when there are none) as a verse, its drums by the style
    when none are chosen, then the song in the «Поп» form around it — every track has something to play. */
 - (void)arrangerGenerateSong:(id)sender {
     (void)sender; if(self.song->count) return;
     if(!self.progression.count) [self generateProgression:nil];
     if(!self.progression.count) { self.status.stringValue=T(@"Сначала соберите последовательность на круге"); return; }
-    NSInteger drums=self.rhythmBeat; if(drums<0) self.rhythmBeat=KvBeatByStyle;
-    [self sendToArranger:nil]; self.rhythmBeat=drums; if(!self.song->count) return;
+    [self sendToArranger:nil]; if(!self.song->count) return;
     NSDictionary *form=[self arrangerForms].firstObject; [self applyForm:form again:NO];
     self.arranger.cursorBeat=0; [self.arranger showWholeSong:nil];
     self.status.stringValue=[NSString stringWithFormat:T(@"Песня собрана из аккордов круга: форма «%@», секций %lu · ⌘R — другой вариант · ⌘Z — вернуть · Пробел — слушать"),form[@"name"],(unsigned long)self.song->count];
@@ -3723,25 +3741,27 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
         default: return 0;
     }
 }
-/* What plays under a section: 0 nothing, 1 the rhythm layer with these hits (none: the metronome's click, when it is on).
-   A rise or a break plays its own drums; «as the section before it» takes the nearest earlier section with a beat of its own. */
+/* What plays under a section: 0 nothing, 1 the rhythm layer with these hits (none: the click). Only the metronome makes a rhythm:
+   off, nothing; a click, the click; drums, the section's — «as the metronome» (by the section's style or the metronome's beat),
+   its own beat, quiet, or none; a rise or a break plays its own fill. */
 - (int)beatOfSection:(NSInteger)index hits:(KvHit *)hits count:(size_t *)count {
-    *count=0; const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return 0;
-    int click=self.metronomeOn?1:0; if(!kv_region_audible(song,(size_t)index,KV_TRACK_DRUMS)) return click;
+    *count=0; const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count || !self.metronomeOn) return 0;
+    if(self.rhythmBeat<0) return 1;   // the click
+    if(!kv_region_audible(song,(size_t)index,KV_TRACK_DRUMS)) return 0;
     const KvSection *s=&song->sections[index];
-    if(s->kind==KV_SECTION_TRANSITION && s->beat!=KV_SECTION_BEAT_OFF) { *count=kv_transition_hits(s->transition,self.meter,hits); if(*count) return 1; }   // the roll of a rise, the kick of a break
-    for(NSInteger j=index;s->beat==KV_SECTION_BEAT_SONG && j>0;) {
-        const KvSection *before=&song->sections[--j];
-        if(before->beat==KV_SECTION_BEAT_SONG || (before->kind==KV_SECTION_TRANSITION && kv_transition_hits(before->transition,self.meter,hits))) continue;
-        s=before;
+    if(s->kind==KV_SECTION_TRANSITION && s->beat!=KV_SECTION_BEAT_OFF) *count=kv_transition_hits(s->transition,self.meter,hits);
+    if(!*count) {
+        if(s->beat==KV_SECTION_BEAT_SONG) {
+            const KvArrangement *a=&s->arrangement; KvPianoPattern style=a->blocks || a->arpeggio || a->strings?KV_BALLAD:a->style;
+            NSInteger beat=self.rhythmBeat==KvBeatByStyle?kv_beat_for_style(style):self.rhythmBeat; *count=kv_beat_bar((KvBeat)beat,self.meter,hits);
+        } else *count=[self hitsOfBeat:s into:hits];
     }
-    *count=[self hitsOfBeat:s into:hits];
-    double shift=song->sections[index].regions[KV_TRACK_DRUMS].shift,bar=kv_meter_bar(self.meter);
+    double shift=s->regions[KV_TRACK_DRUMS].shift,bar=kv_meter_bar(self.meter);
     if(*count && fabs(shift)>1e-9) {   // a shifted drums region: the bar's pattern turns by the shift, in order again
         for(size_t i=0;i<*count;i++) { double at=fmod(hits[i].beat+shift,bar); if(at<0) at+=bar; if(at>bar-1e-9) at=0; hits[i].beat=at; }
         for(size_t i=1;i<*count;i++) for(size_t j=i;j>0 && hits[j].beat<hits[j-1].beat;j--) { KvHit t=hits[j]; hits[j]=hits[j-1]; hits[j-1]=t; }
     }
-    return *count?1:click;
+    return *count?1:0;
 }
 - (size_t)chordsOfSection:(NSInteger)section into:(KvChord *)chords codes:(NSMutableArray<NSNumber *> *)codes {
     const KvSong *song=[self songWithWorking]; const KvSection *s=&song->sections[section]; size_t n=0;
@@ -3786,7 +3806,7 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
 - (void)playSongFromBeat:(double)beat {
     [self storeWorking]; const KvSong *song=[self songWithWorking]; if(!song->count || !self.audio) return;
     double total=kv_song_beats(song),end=total,from=0,to=0; beat=MAX(0,MIN(total,beat)); if(beat>=total-1e-6) beat=0;
-    if([self songCycle:&from to:&to]) { end=to; if(beat<from-1e-9 || beat>=to-1e-9) beat=from; }
+    if([self songCycle:&from to:&to] && beat<to-1e-9) end=to;   // from the playhead, always; the cycle catches it when it gets there
     if(kv_audio_is_playing(self.audio)) [self stopPlayback:nil];
     self.songOrder=[NSMutableArray array]; self.songOrderBeats=[NSMutableArray array]; self.songOrderFrom=[NSMutableArray array]; self.songOrderLength=[NSMutableArray array];
     [self appendSongOrderFrom:beat to:end]; if(!self.songOrder.count) return;
@@ -3828,7 +3848,7 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
     if(!song->tempo.count) { self.appliedBpm=self.tempo; return; }   // the slider's tempo (applyTempo sends it)
     if(part<0 || part>=(NSInteger)self.songOrderBeats.count) return;
     double bpm=MAX(20,MIN(300,kv_curve_at(&song->tempo,self.songOrderBeats[part].doubleValue+self.tempoBeats,(float)self.tempo)));
-    if(fabs(bpm-self.appliedBpm)>.05 && kv_audio_set_interval(self.audio,60.0/(bpm*self.speed))) self.appliedBpm=bpm;
+    if(fabs(bpm-self.appliedBpm)>.05 && kv_audio_set_interval(self.audio,60.0/(bpm*self.speed))) { self.appliedBpm=bpm; self.tempoValue.stringValue=[NSString stringWithFormat:T(@"%.0f BPM ⌁"),bpm]; }   // the curve's tempo, shown
 }
 /* The drums' volume curve over a stretch of hits starting at `beat` in the song (the bar's pattern takes the curve at its start). */
 - (size_t)scaleHits:(KvHit *)hits count:(size_t)n at:(double)beat {
@@ -3836,7 +3856,7 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
     for(size_t i=0;i<n;i++) hits[i].velocity=fminf(1,hits[i].velocity*level);
     return n;
 }
-- (void)endSong { self.songPlaying=NO; self.songOrder=nil; self.songOrderBeats=nil; self.songOrderFrom=nil; self.songOrderLength=nil; self.songPart=0; self.songQueued=0; self.sentBeat=-2; [self applyRhythm]; if(self.viewMode==2) self.arranger.needsDisplay=YES; }
+- (void)endSong { self.tempoValue.stringValue=[NSString stringWithFormat:@"%.0f BPM",self.tempo]; self.songPlaying=NO; self.songOrder=nil; self.songOrderBeats=nil; self.songOrderFrom=nil; self.songOrderLength=nil; self.songPart=0; self.songQueued=0; self.sentBeat=-2; [self applyRhythm]; if(self.viewMode==2) self.arranger.needsDisplay=YES; }
 - (void)keyDown:(NSEvent *)event {
     if(self.shortcutsVisible && event.keyCode==48) { KvShortcutsCard *card=(KvShortcutsCard *)self.shortcutsCard; card.tab=!card.tab; card.needsDisplay=YES; return; }   // Tab
     if(self.shortcutsVisible && (event.keyCode==53 || (event.keyCode==44 && (event.modifierFlags&NSEventModifierFlagCommand)))) { [self toggleShortcuts:nil]; return; }
@@ -4981,35 +5001,31 @@ int main(int argc, const char *argv[]) {
               KvRoot *again=[[KvRoot alloc] initWithFrame:root.frame]; KV_CHECK(again.countIn && again.rhythmGrid==KV_GRID_EIGHTHS && !again.metronomeOn,@"Metronome: grid and count-in survive a restart, the metronome itself starts off"); [again stopPlayback:nil];
               [root.rhythmChoice selectItemAtIndex:[root.rhythmChoice indexOfItemWithTag:100]]; [root rhythmChanged:root.rhythmChoice];
               root.rhythmGrid=KV_GRID_BEATS; [root applyRhythm]; [root saveState]; [root applyTempo:savedTempo]; }
-            // Drums of the draft (spec 1.5 §5), not the metronome: chosen in «Ударные черновика» they play with the circle's
-            // progression and the click keeps quiet; with nothing playing the metronome clicks alone; «По стилю» follows the style;
-            // a new meter sends its bar again; the level in FX and its default; everything survives a restart.
+            // The metronome (feedback on 1.5): a click or drums, never both; drums by the style or one beat; off, nothing plays at all;
+            // «По стилю» follows the style; a new meter sends its bar again; the level in FX and its default; all survive a restart.
             { [root stopPlayback:nil]; KV_CHECK(root.drumsAvailable || getenv("TONORA_NO_STRINGS"),@"Percussion recordings are bundled");
-              KvPianoPattern savedPattern=root.pianoPattern; NSMenuItem *(^drum)(NSInteger)=^NSMenuItem *(NSInteger tag) { return [root.drumsMenu itemWithTag:tag]; };
+              KvPianoPattern savedPattern=root.pianoPattern; NSInteger (^tagged)(NSInteger)=^NSInteger(NSInteger tag) { return [root.rhythmChoice indexOfItemWithTag:tag]; };
               if(root.metronomeOn) [root toggleMetronome:nil];
-              KV_CHECK([root.rhythmChoice indexOfItemWithTag:200+KV_BEAT_POP]<0 && drum(200+KV_BEAT_POP) && drum(300) && drum(299),@"Metronome: its menu has the click and the count-in; the beats are the draft's drums");
-              [root drumsChanged:drum(200+KV_BEAT_POP)];
-              KV_CHECK(!root.metronomeOn && root.rhythmBeat==KV_BEAT_POP && drum(200+KV_BEAT_POP).state==NSControlStateValueOn && [root.status.stringValue containsString:@"поп"] && root.sentBeat!=KV_BEAT_POP,@"Drums: choosing Pop sets the draft's drums; the metronome stays off, nothing plays yet");
-              [root playProgression:nil]; KV_CHECK([root isPlayingProgression] && root.sentBeat==KV_BEAT_POP,@"Drums: they come in with the circle's progression");
-              [root stopPlayback:nil]; KV_CHECK(root.sentBeat==-1,@"Drums: and stop with it");
-              [root toggleMetronome:nil]; KV_CHECK(root.metronomeOn && root.sentBeat==-1,@"Drums: the metronome alone clicks");
-              [root playProgression:nil]; KV_CHECK(root.sentBeat==KV_BEAT_POP,@"Drums: under the progression the beat plays, the click keeps quiet"); [root stopPlayback:nil];
-              [root drumsChanged:drum(300)]; root.pianoPattern=KV_TRIP_HOP; [root refresh]; [root playProgression:nil];
-              KV_CHECK(root.rhythmBeat==KvBeatByStyle && root.sentBeat==KV_BEAT_TRIPHOP,@"Drums: «По стилю» plays trip-hop under the trip-hop style");
-              root.pianoPattern=KV_POP; [root refresh]; if(![root isPlayingProgression]) [root playProgression:nil]; KV_CHECK(root.sentBeat==KV_BEAT_POP,@"Drums: and follow a new style");
-              [root.meterChoice selectItemAtIndex:KV_METER_3_4]; [root meterChanged:root.meterChoice]; if(![root isPlayingProgression]) [root playProgression:nil];
-              KV_CHECK(root.sentBeatMeter==KV_METER_3_4,@"Drums: a new meter sends its bar again");
-              [root.meterChoice selectItemAtIndex:KV_METER_4_4]; [root meterChanged:root.meterChoice]; [root stopPlayback:nil];
+              root.rhythmBeat=KV_BEAT_POP; [root playProgression:nil]; [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.2]];
+              KV_CHECK(kv_audio_rhythm_beat(root.audio)<0,@"Metronome: off, nothing but the progression plays (no drums, no click)"); [root stopPlayback:nil];
+              [root.rhythmChoice selectItemAtIndex:tagged(200+KV_BEAT_POP)]; [root rhythmChanged:root.rhythmChoice];
+              KV_CHECK(root.metronomeOn && root.rhythmBeat==KV_BEAT_POP && root.sentBeat==KV_BEAT_POP && [root.rhythmChoice itemAtIndex:tagged(200+KV_BEAT_POP)].state==NSControlStateValueOn && [root.rhythmChoice itemAtIndex:tagged(KV_GRID_BEATS)].state==NSControlStateValueOff,@"Metronome: choosing Pop drums switches it on with the drums, not the click");
+              KV_CHECK([root.status.stringValue containsString:@"поп"],@"Metronome: the status names the drums");
+              [root.rhythmChoice selectItemAtIndex:tagged(300)]; [root rhythmChanged:root.rhythmChoice];
+              root.pianoPattern=KV_TRIP_HOP; [root refresh]; KV_CHECK(root.rhythmBeat==KvBeatByStyle && root.sentBeat==KV_BEAT_TRIPHOP,@"Metronome: drums by the style play trip-hop under the trip-hop style");
+              root.pianoPattern=KV_POP; [root refresh]; KV_CHECK(root.sentBeat==KV_BEAT_POP,@"Metronome: and follow a new style");
+              [root.meterChoice selectItemAtIndex:KV_METER_3_4]; [root meterChanged:root.meterChoice]; KV_CHECK(root.sentBeatMeter==KV_METER_3_4,@"Metronome: a new meter sends its bar again");
+              [root.meterChoice selectItemAtIndex:KV_METER_4_4]; [root meterChanged:root.meterChoice];
               [root showSoundSettings:nil]; root.rhythmVolumeSlider.doubleValue=35; [root rhythmVolumeChanged:(NSSlider *)root.rhythmVolumeSlider];
-              KV_CHECK(fabs(root.rhythmVolume-.35)<1e-9 && [root.rhythmVolumeValue.stringValue isEqualToString:@"35 %"],@"Drums: FX sets the rhythm's level");
-              KvRoot *again=[[KvRoot alloc] initWithFrame:root.frame]; KV_CHECK(again.rhythmBeat==KvBeatByStyle && fabs(again.rhythmVolume-.35)<1e-9 && !again.metronomeOn,@"Drums: the choice and the level survive a restart"); [again stopPlayback:nil];
-              [root defaultSound:nil]; KV_CHECK(fabs(root.rhythmVolume-.6)<1e-9,@"Drums: «По умолчанию» puts the rhythm back to 60 %");
+              KV_CHECK(fabs(root.rhythmVolume-.35)<1e-9 && [root.rhythmVolumeValue.stringValue isEqualToString:@"35 %"],@"Metronome: FX sets its level");
+              KvRoot *again=[[KvRoot alloc] initWithFrame:root.frame]; KV_CHECK(again.rhythmBeat==KvBeatByStyle && fabs(again.rhythmVolume-.35)<1e-9 && !again.metronomeOn,@"Metronome: the choice and the level survive a restart, it starts off"); [again stopPlayback:nil];
+              [root defaultSound:nil]; KV_CHECK(fabs(root.rhythmVolume-.6)<1e-9,@"Metronome: «По умолчанию» puts its level back to 60 %");
               [root closeSound:nil];
-              [root drumsChanged:drum(299)]; KV_CHECK(root.rhythmBeat==-1 && drum(299).state==NSControlStateValueOn,@"Drums: «Без ударных» turns them off");
+              [root.rhythmChoice selectItemAtIndex:tagged(KV_GRID_BEATS)]; [root rhythmChanged:root.rhythmChoice]; KV_CHECK(root.rhythmBeat==-1 && root.sentBeat==-1,@"Metronome: choosing a click leaves the drums");
               [root toggleMetronome:nil]; root.pianoPattern=savedPattern; [root refresh]; [root saveState]; }
             // Arranger (spec 1.4): ⇧⌘A turns the circle's progression into a section; the row edits the selected section, never the
             // draft; repeats, cuts, moves, copies, removal and undo; edited notes stay with their section; the song plays part after part.
-            { [root stopPlayback:nil]; [root showView:0]; root.loopEnabled=NO;
+            { [root stopPlayback:nil]; [root showView:0]; root.loopEnabled=NO; root.rhythmBeat=KvBeatByStyle; if(!root.metronomeOn) [root toggleMetronome:nil];   // drums by the style: the drums track plays
               kv_song_reset(root.song); [root.sectionTracks removeAllObjects]; [root.songUndo removeAllObjects]; [root.songRedo removeAllObjects];
               [root selectIndex:0 minor:NO]; [root clearProgression:nil]; for(NSNumber *degree in @[@0,@5,@3,@4]) [root addChord:root.addButtons[degree.integerValue]];
               [root.performanceChoice selectItemWithTag:1]; [root performanceChanged:root.performanceChoice];
@@ -5017,7 +5033,7 @@ int main(int argc, const char *argv[]) {
               NSArray *draft=[root.progression copy];
               [root sendToArranger:nil];
               KV_CHECK(root.viewMode==2 && !root.arranger.hidden && root.circle.hidden && root.roll.hidden && root.song->count==1 && root.editingSection==0 && root.arranger.selected==0,@"Arranger: ⇧⌘A makes the progression a section and shows it");
-              KV_CHECK(root.song->sections[0].beat==KV_SECTION_BEAT_OFF,@"Arranger: a section from a draft without drums has no beat");
+              KV_CHECK(root.song->sections[0].beat==KV_SECTION_BEAT_SONG,@"Arranger: a section from the circle plays the drums as the metronome does");
               KV_CHECK([root.progression isEqualToArray:draft] && root.song->sections[0].kind==KV_SECTION_VERSE && root.song->sections[0].count==4,@"Arranger: the row shows the section's chords");
               KV_CHECK(root.window.firstResponder==root.arranger || !root.window,@"Arranger: it takes the keys");
               [root showView:0]; [root sendToArranger:nil]; KV_CHECK(root.song->count==1 && root.viewMode==2,@"Arranger: the same progression again selects its section");
@@ -5109,10 +5125,10 @@ int main(int argc, const char *argv[]) {
                 KV_CHECK([root loadSongPlist:now] && root.song->count==kept->count,@"Arranger: and the current one comes back"); free(kept); [root reloadEditing:0]; }
               [root showView:0]; KV_CHECK(root.editingSection==-1 && [root.progression isEqualToArray:second],@"Arranger: the circle has the draft back");
               KV_CHECK(root.inspectorTab==0 && root.arranger.sectionPanel.hidden && !root.piano.hidden && ![root.inspectorTabs isEnabledForSegment:3],@"Arranger: the circle has its keyboard and «Аккорды» back");
-              [root showView:1]; KV_CHECK(root.roll.sectionChoice.hidden && ![root pianoRollSections:root.roll] && [root pianoRollFirstBar:root.roll]==1,@"Arranger: the draft's roll has no section list"); [root showView:0]; }
+              [root showView:1]; KV_CHECK(root.roll.sectionChoice.hidden && ![root pianoRollSections:root.roll] && [root pianoRollFirstBar:root.roll]==1,@"Arranger: the draft's roll has no section list"); [root showView:0]; if(root.metronomeOn) [root toggleMetronome:nil]; root.rhythmBeat=-1; }
             // Arranger suggestions: ghosts under the hovered section, kept while the mouse moves onto them, with an explanation;
             // a click inserts the chorus led in by a rise; a seam takes a transition; other choruses differ; a ghost can be heard.
-            { [root stopPlayback:nil]; [root showView:0];
+            { [root stopPlayback:nil]; [root showView:0]; root.rhythmBeat=KvBeatByStyle; if(!root.metronomeOn) [root toggleMetronome:nil];
               NSWindow *hoverWindow=root.window?nil:[[NSWindow alloc] initWithContentRect:root.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:YES]; if(hoverWindow) hoverWindow.contentView=root;
               kv_song_reset(root.song); [root.sectionTracks removeAllObjects]; [root.songUndo removeAllObjects];
               [root clearProgression:nil]; for(NSNumber *degree in @[@0,@5,@3,@4]) [root addChord:root.addButtons[degree.integerValue]];
@@ -5190,27 +5206,33 @@ int main(int argc, const char *argv[]) {
                   BOOL inverse=YES; for(double b=0;b<kv_song_beats(root.song);b+=.5) if(fabs([arr beatAtX:[arr xOfBeat:b]]-b)>1e-6) inverse=NO;
                   KV_CHECK(root.song->sections[1].kind==KV_SECTION_TRANSITION && arr.scale*bar<28 && NSWidth(rise)+2>=28-1e-6 && inverse,@"Zoom: a one-bar transition stays 28 pt wide in a long song, beats and points still map both ways");
                   [root undoSong]; [arr showWholeSong:nil]; }
-                // The ruler: a click puts the playhead on the bar, Space plays from it, a click while playing goes on from there.
+                // The ruler: a click puts the playhead on the bar and nothing starts; Space plays from exactly there; Space stops and the
+                // playhead stays; a click while playing goes on from there; a double click plays from there; a drag moves the playhead.
+                rulerY=48; CGFloat cycleY=34;
                 click(NSMakePoint([arr xOfBeat:2*bar+.3],rulerY),1,0);
-                KV_CHECK(fabs(arr.cursorBeat-2*bar)<1e-9 && root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-2*bar)<1e-9 && [root arrangerPlayheadBeat]>=2*bar-.01,@"Ruler: a click plays the song from that bar");
+                KV_CHECK(fabs(arr.cursorBeat-2*bar)<1e-9 && !root.songPlaying,@"Ruler: a click puts the playhead on the bar, nothing starts");
+                [root togglePlayback:nil]; KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-2*bar)<1e-9 && [root arrangerPlayheadBeat]>=2*bar-.01 && [root arrangerPlayheadBeat]<2*bar+1,@"Ruler: Space plays from exactly the playhead");
                 [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.3]]; [root togglePlayback:nil];
                 KV_CHECK(!root.songPlaying && arr.cursorBeat>2*bar,@"Ruler: Space stops it and the playhead stays where it stopped");
                 [root togglePlayback:nil]; KV_CHECK(root.songPlaying && root.songOrderBeats[0].doubleValue>2*bar,@"Ruler: Space goes on from there");
                 click(NSMakePoint([arr xOfBeat:bar],rulerY),1,0); KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-bar)<1e-9,@"Ruler: a click while it plays goes on from there");
-                { NSPoint from=NSMakePoint([arr xOfBeat:bar],rulerY),to=NSMakePoint([arr xOfBeat:3*bar+.2],rulerY);
-                  [arr mouseDown:mouse(NSEventTypeLeftMouseDown,from,1,0)]; [arr mouseDragged:mouse(NSEventTypeLeftMouseDragged,to,1,0)];
-                  KV_CHECK(fabs(arr.cursorBeat-3*bar)<1e-9 && root.song->cycle_to==0,@"Ruler: a drag moves the playhead with the mouse, no cycle");
-                  [arr mouseUp:mouse(NSEventTypeLeftMouseUp,to,1,0)]; KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-3*bar)<1e-9,@"Ruler: and the song plays from where it is let go"); }
+                [root stopPlayback:nil]; click(NSMakePoint([arr xOfBeat:3*bar],rulerY),1,0); click(NSMakePoint([arr xOfBeat:3*bar],rulerY),2,0);
+                KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-3*bar)<1e-9,@"Ruler: a double click plays from there");
                 [root stopPlayback:nil];
-                // The cycle: drawn by ⇧-drag on the ruler; with ↻ the song plays it round; a double click clears it.
-                NSPoint a=NSMakePoint([arr xOfBeat:bar+.2],rulerY),b=NSMakePoint([arr xOfBeat:3*bar-.2],rulerY);
-                double kept=arr.cursorBeat; NSEventModifierFlags shift=NSEventModifierFlagShift;
-                [arr mouseDown:mouse(NSEventTypeLeftMouseDown,a,1,shift)]; [arr mouseDragged:mouse(NSEventTypeLeftMouseDragged,b,1,shift)]; [arr mouseUp:mouse(NSEventTypeLeftMouseUp,b,1,shift)];
-                KV_CHECK(fabs(root.song->cycle_from-bar)<1e-9 && fabs(root.song->cycle_to-3*bar)<1e-9 && fabs(arr.cursorBeat-kept)<1e-9 && !root.songPlaying,@"Cycle: ⇧-drag on the ruler draws it on bars, the playhead stays, nothing starts");
-                root.loopButton.state=NSControlStateValueOn; [root loopChanged:root.loopButton]; arr.cursorBeat=0; [root togglePlayback:nil];
-                double sum=0; NSUInteger k=0; while(k<root.songOrder.count && (k==0 || root.songOrderBeats[k].doubleValue>root.songOrderBeats[k-1].doubleValue)) sum+=root.songOrderLength[k++].doubleValue;
-                KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-bar)<1e-9 && fabs(sum-2*bar)<1e-9,@"Cycle: with ↻ the song plays the cycle, from its start when the playhead is outside");
-                [root queueSongPart:(NSInteger)root.songOrder.count]; KV_CHECK(root.songOrder.count>k && fabs(root.songOrderBeats[k].doubleValue-bar)<1e-9,@"Cycle: and comes round to its start again");
+                { NSPoint from=NSMakePoint([arr xOfBeat:bar],rulerY),to=NSMakePoint([arr xOfBeat:2*bar+.2],rulerY);
+                  [arr mouseDown:mouse(NSEventTypeLeftMouseDown,from,1,0)]; [arr mouseDragged:mouse(NSEventTypeLeftMouseDragged,to,1,0)]; [arr mouseUp:mouse(NSEventTypeLeftMouseUp,to,1,0)];
+                  KV_CHECK(fabs(arr.cursorBeat-2*bar)<1e-9 && root.song->cycle_to==0 && !root.songPlaying,@"Ruler: a drag moves the playhead, no cycle, nothing starts"); }
+                // The cycle: drawn in the strip over the numbers, which switches ↻ on; a click on it switches ↻; the song still starts at the
+                // playhead and comes round to the cycle's start at its end.
+                NSPoint a=NSMakePoint([arr xOfBeat:bar+.2],cycleY),b=NSMakePoint([arr xOfBeat:3*bar-.2],cycleY); double kept=arr.cursorBeat;
+                [arr mouseDown:mouse(NSEventTypeLeftMouseDown,a,1,0)]; [arr mouseDragged:mouse(NSEventTypeLeftMouseDragged,b,1,0)]; [arr mouseUp:mouse(NSEventTypeLeftMouseUp,b,1,0)];
+                KV_CHECK(fabs(root.song->cycle_from-bar)<1e-9 && fabs(root.song->cycle_to-3*bar)<1e-9 && fabs(arr.cursorBeat-kept)<1e-9 && !root.songPlaying && root.loopEnabled,@"Cycle: a drag in the strip draws it on bars and switches ↻ on, the playhead stays");
+                click(NSMakePoint([arr xOfBeat:2*bar],cycleY),1,0); KV_CHECK(!root.loopEnabled,@"Cycle: a click on it switches ↻ off");
+                click(NSMakePoint([arr xOfBeat:2*bar],cycleY),1,0); KV_CHECK(root.loopEnabled,@"Cycle: and on");
+                arr.cursorBeat=0; [root togglePlayback:nil];
+                NSUInteger k=0; while(k<root.songOrder.count && root.songOrderBeats[k].doubleValue+root.songOrderLength[k].doubleValue<3*bar-1e-9) k++; k++;   // the part that ends at the cycle's end, then the next
+                KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue)<1e-9 && k<=root.songOrder.count && fabs(root.songOrderBeats[k-1].doubleValue+root.songOrderLength[k-1].doubleValue-3*bar)<1e-9,@"Cycle: with ↻ the song plays from the playhead up to the cycle's end");
+                [root queueSongPart:(NSInteger)root.songOrder.count]; KV_CHECK(root.songOrder.count>k && fabs(root.songOrderBeats[k].doubleValue-bar)<1e-9,@"Cycle: and comes round to its start");
                 [root stopPlayback:nil]; root.loopButton.state=NSControlStateValueOff; [root loopChanged:root.loopButton];
                 [arr clearCycle:nil]; KV_CHECK(root.song->cycle_to==0,@"Cycle: «Снять цикл» clears it");
                 // Scissors: the tool or ⌘ with the pointer; ⌘T at the playhead.
@@ -5253,7 +5275,9 @@ int main(int argc, const char *argv[]) {
                 KV_CHECK(arr.hoverRegion==2 && arr.hoverTrack==KV_TRACK_MELODY && buttons.count==4,@"Buttons: the region under the pointer shows ✎ ✂ ⧉ ✕");
                 click(centre(2),1,0); KV_CHECK(root.song->count==count+1 && root.song->sections[3].kind==root.song->sections[2].kind && root.editingSection==3,@"Buttons: ⧉ duplicates the section after itself");
                 [root undoSong]; click(centre(3),1,0); KV_CHECK(root.song->count==count-1,@"Buttons: ✕ removes it");
-                [root undoSong]; arr.cursorBeat=kv_section_start(root.song,2)+bar; click(centre(1),1,0); KV_CHECK(root.song->count==count+1 && fabs(kv_section_beats(root.song,2)-bar)<1e-9,@"Buttons: ✂ cuts at the playhead inside the section");
+                [root undoSong]; click(centre(1),1,0); KV_CHECK(arr.tool==KvToolScissors && root.song->count==count,@"Buttons: ✂ takes the scissors, nothing is cut yet");
+                click(NSMakePoint([arr xOfBeat:kv_section_start(root.song,2)+bar+.3],NSMidY([arr rectOfRegion:2 track:KV_TRACK_BASS])),1,0);
+                KV_CHECK(root.song->count==count+1 && fabs(kv_section_beats(root.song,2)-bar)<1e-9 && arr.tool==KvToolPointer,@"Buttons: then a click cuts where it is, on the bar, and the pointer is back");
                 [root undoSong]; arr.cursorBeat=0; click(centre(0),1,0); KV_CHECK(root.viewMode==1 && root.editingSection==2,@"Buttons: ✎ opens it in the roll"); [root showView:2]; [root.window makeFirstResponder:arr];
                 // Selection: ⇧-click a range, ⌫ removes it, ⌘A all, ⌘D copies them, Esc one; a drag moves the range; a drop on a section swaps.
                 uint32_t ids[4]; for(int k=0;k<4;k++) ids[k]=root.song->sections[k].id;
@@ -5283,6 +5307,11 @@ int main(int argc, const char *argv[]) {
                   [expect sortUsingSelector:@selector(compare:)];
                   KV_CHECK(turned.length==plain.length && expect.count>0 && [expect isEqualToArray:got],@"Shift: a shifted drums region turns the bar's pattern by the shift");
                   [root undoSong]; [root undoSong]; arr.snap=KvSnapSmart; }
+                // A texture chosen with all the sections selected goes to them all (a transition keeps its own).
+                { [arr keyDown:key(0,NSEventModifierFlagCommand)]; NSInteger mode=root.performanceMode==2?1:2; [root.performanceChoice selectItemWithTag:mode]; [root performanceChanged:root.performanceChoice];
+                  BOOL all=YES; for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind!=KV_SECTION_TRANSITION && root.song->sections[i].arrangement.arpeggio!=(mode==2)) all=NO;
+                  KV_CHECK(all && [root.status.stringValue containsString:@"выделенных"],@"Selection: a texture chosen with all selected goes to every section");
+                  [root undoSong]; [arr keyDown:key(53,0)]; }
                 // The right-click menu.
                 NSMenu *menu=[arr menuForSection:2 track:KV_TRACK_BASS beat:kv_section_start(root.song,2)+bar]; NSMenuItem *mute=nil;
                 for(NSMenuItem *item in menu.itemArray) if([item.title containsString:T(@"Бас")]) mute=item;
@@ -5368,7 +5397,7 @@ int main(int argc, const char *argv[]) {
                 [arr.generateButton performClick:nil]; BOOL melody=NO,bass=NO,drums=NO;
                 for(NSInteger i=0;i<(NSInteger)root.song->count;i++) { NSData *d=[root arrangerNotes:i]; const KvPianoEvent *e=d.bytes; for(size_t k=0;k<d.length/sizeof(*e);k++) { if(e[k].hand) melody=YES; else bass=YES; } if([root arrangerHits:i].length) drums=YES; }
                 KV_CHECK(root.song->count>=8 && melody && bass && drums && arr.generateButton.hidden,@"Empty song: one click makes a whole song, every track plays");
-                [root arrangerSetTrack:KV_TRACK_DRUMS mute:1 solo:-1 level:-1]; if(!root.metronomeOn) [root toggleMetronome:nil];
+                root.rhythmBeat=-1; if(!root.metronomeOn) [root toggleMetronome:nil];   // the click
                 [root playSongFromBeat:0]; [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.3]];
                 double clicking=kv_audio_rhythm_beat(root.audio); [root toggleMetronome:nil]; [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.2]];
                 KV_CHECK(clicking>=0 && kv_audio_rhythm_beat(root.audio)<0 && root.songPlaying,@"Metronome: switched off while the song plays, the click stops at once");
@@ -5386,7 +5415,7 @@ int main(int argc, const char *argv[]) {
                   [root stopPlayback:nil]; NSMenu *menu=[arr menuForEvent:at(NSEventTypeRightMouseDown,x,1)]; NSMenuItem *clear=[menu itemAtIndex:0];
                   [NSApp sendAction:clear.action to:clear.target from:clear]; KV_CHECK(root.song->cycle_to==0,@"Ruler: its menu clears the cycle"); }
                 memcpy(root.song,kept,sizeof(KvSong)); free(kept); root.sectionTracks=tracks; root.songPlans=nil; [root reloadEditing:0]; }
-              root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
+              if(root.metronomeOn) [root toggleMetronome:nil]; root.rhythmBeat=-1; root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
               [root showView:0]; }
             // Silence rests the output queue; the next sound starts it again and is heard.
             { [root stopPlayback:nil]; if(root.metronomeOn) [root toggleMetronome:nil];

@@ -16,6 +16,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (BOOL)arrangerEdited:(NSInteger)index;           /* the section plays the user's notes */
 - (NSData *)arrangerNotes:(NSInteger)index;        /* KvPianoEvent of the whole section as it sounds, beats from its start */
 - (NSData *)arrangerHits:(NSInteger)index;         /* KvHit of its beat, beats from its start; empty when no beat plays */
+- (NSString *)arrangerDrumsHint;                   /* why the drums track is silent (the metronome is off or a click), nil when it plays */
 - (double)arrangerPlayheadBeat;                    /* in the song, −1 when it does not play */
 - (void)arrangerSelect:(NSInteger)index;
 - (void)arrangerOpenInRoll:(NSInteger)index;
@@ -48,6 +49,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerPlayFrom:(double)beat;              /* a click on the ruler while the song plays: on from there */
 - (void)arrangerSetCycleFrom:(double)from to:(double)to;   /* a drag on the ruler; from == to: no cycle */
 - (BOOL)arrangerCycles;                             /* ↻ is on: the cycle (or the song) repeats */
+- (void)arrangerToggleLoop;                         /* a click on the cycle: ↻ on or off */
 - (void)arrangerDrawAt:(NSInteger)index;            /* pencil: the circle's progression becomes a section at index */
 /* Song forms (spec 1.5 §6): the built-in ones, then the user's: @"name", @"letters" («И–К–Пр…»), @"slots" (NSNumber), @"user". */
 - (NSArray<NSDictionary *> *)arrangerForms;

@@ -25,6 +25,7 @@ bool kv_audio_performance(KvAudio *audio,const KvPerformance *performance,double
 bool kv_audio_queue(KvAudio *audio,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count,double phase);
 /* The next kv_audio_performance begins `beats` past a downbeat (see kv_mixer_phase). */
 bool kv_audio_phase(KvAudio *audio,double beats);
+/* The song part playing and the seconds into it; 0 and 0 until a newly started performance is under way. */
 unsigned kv_audio_part(KvAudio *audio,double *seconds);
 bool kv_audio_play(KvAudio *audio, const int *notes, size_t note_count, size_t voices, double seconds_per_event);
 /* One note on top of whatever is playing: never cancels a scheduled performance or moves the playhead. */

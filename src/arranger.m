@@ -2,7 +2,7 @@
 #import "controls.h"
 
 /* Rows from the top (flipped): a line for the summary, the ruler, the arrangement track, three tracks, the overview. */
-static const CGFloat KvRulerTop=30,KvRulerHeight=18,KvMarkerTop=52,KvMarkerHeight=22,KvTracksTop=80,KvTrackGap=6,KvOverviewHeight=14,KvHeaderWidth=118,KvInset=8,KvGhostHeight=34,KvTransitionWidth=28,KvTempoHeight=36,KvCurveHeight=40;
+static const CGFloat KvRulerTop=30,KvRulerHeight=27,KvCycleHeight=10,KvMarkerTop=61,KvMarkerHeight=22,KvTracksTop=89,KvTrackGap=6,KvOverviewHeight=14,KvHeaderWidth=118,KvInset=8,KvGhostHeight=34,KvTransitionWidth=28,KvTempoHeight=36,KvCurveHeight=40;
 static const CGFloat KvLaneX=KvHeaderWidth+12;
 static NSString *Translated(const char *text) { return T([NSString stringWithUTF8String:text]); }
 /* The colour of a section's kind: verses the accent, choruses orange, breakdowns teal, transitions purple, bridges lilac, intro and outro grey. */
@@ -30,6 +30,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
 @interface KvTrackToggle : TNButton
 @property(nonatomic) NSColor *lit;
 @property(nonatomic,copy) NSString *symbol,*letter;
+@property(nonatomic) BOOL marked;   /* a dot: there is something behind it (a curve with its lane closed) */
 @end
 @implementation KvTrackToggle
 - (void)drawRect:(NSRect)dirtyRect {
@@ -40,7 +41,9 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     NSColor *ink=on?(self.lit==NSColor.systemYellowColor?NSColor.blackColor:NSColor.whiteColor):NSColor.secondaryLabelColor;
     NSImage *image=self.symbol?TNIcon(self.symbol,11):nil;
     if(image) image=[image imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
-    if(image) { NSSize size=image.size; [image drawInRect:NSMakeRect(round(NSMidX(r)-size.width/2),round(NSMidY(r)-size.height/2),size.width,size.height) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil]; return; }
+    if(image) { NSSize size=image.size; [image drawInRect:NSMakeRect(round(NSMidX(r)-size.width/2),round(NSMidY(r)-size.height/2),size.width,size.height) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil];
+        if(self.marked) { [self.lit setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMaxX(r)-6,NSMinY(r)+1,5,5)] fill]; } return; }
+    if(self.marked) { [self.lit setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMaxX(r)-6,NSMinY(r)+1,5,5)] fill]; }
     NSDictionary *a=@{NSFontAttributeName:[NSFont systemFontOfSize:11 weight:NSFontWeightBold],NSForegroundColorAttributeName:ink}; NSSize size=[self.letter sizeWithAttributes:a];
     [self.letter drawAtPoint:NSMakePoint(round(NSMidX(r)-size.width/2),round(NSMidY(r)-size.height/2)) withAttributes:a];
 }
@@ -100,7 +103,8 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
 @interface KvArranger ()
 @property(nonatomic) NSTrackingArea *tracking;
 @property(nonatomic) NSInteger pressed;            /* section under the mouse at mouseDown, −1 none */
-@property(nonatomic) BOOL dragging,copying,scrolling,onRuler,cycling,collapse,shiftedRuler;
+@property(nonatomic) BOOL dragging,copying,scrolling,onRuler,cycling,collapse,shiftedRuler,oneCut;
+@property(nonatomic) NSInteger rulerClicks;
 @property(nonatomic) int corner;                   /* the corner being dragged: 1 loop (repeats), 2 length, 3 start; 0 none */
 @property(nonatomic) double cornerValue;           /* what it points at: repeats, beats of length, beats trimmed from the start */
 @property(nonatomic) NSInteger swapTarget,anchor;  /* the section a drag would swap with; where a ⇧-click range starts */
@@ -202,9 +206,9 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     self.repeatsChoice=Popup(repeats,self,@selector(fieldChanged:),T(@"Сколько раз прогрессия звучит подряд · или потяните правый край секции"));
     NSMutableArray *levels=[NSMutableArray array]; for(int l=50;l<=120;l+=10) [levels addObject:@[[NSString stringWithFormat:T(@"Громкость %d %%"),l],[NSString stringWithFormat:@"%d %%",l]]];
     self.levelChoice=Popup(levels,self,@selector(fieldChanged:),T(@"Громкость секции: сила удара всех нот"));
-    NSMutableArray *beats=[@[@[T(@"Бит секции перед ней · продолжается"),T(@"Как перед ней")],@[T(@"Без бита"),T(@"Без бита")],@[T(@"Тихий бит: хай-хэт и шейкер"),T(@"Тихий")],@[T(@"Бит по стилю рисунка"),T(@"По стилю")]] mutableCopy];
+    NSMutableArray *beats=[@[@[T(@"Барабаны как в метрономе · по стилю секции"),T(@"Как в метрономе")],@[T(@"Без бита"),T(@"Без бита")],@[T(@"Тихий бит: хай-хэт и шейкер"),T(@"Тихий")],@[T(@"Бит по стилю рисунка"),T(@"По стилю")]] mutableCopy];
     for(int b=0;b<KV_BEAT_COUNT;b++) [beats addObject:@[[NSString stringWithFormat:T(@"Бит «%@»"),Translated(kv_beat_name((KvBeat)b))],Translated(kv_beat_name((KvBeat)b))]];
-    self.beatChoice=Popup(beats,self,@selector(fieldChanged:),T(@"Бит секции на дорожке «Ударные» · клик метронома под битом молчит"));
+    self.beatChoice=Popup(beats,self,@selector(fieldChanged:),T(@"Барабаны секции · звучат, когда метроном в режиме «Барабаны»"));
     self.liftChoice=Popup(@[@[T(@"Регистр как на круге"),T(@"Как на круге")],@[T(@"Правая рука на октаву выше"),T(@"Правая выше")],@[T(@"Обе руки на октаву ниже"),T(@"Обе ниже")]],self,@selector(fieldChanged:),T(@"Регистр секции"));
     NSMutableArray *ways=[NSMutableArray array]; for(int t=0;t<KV_TRANSITION_KINDS;t++) [ways addObject:@[Translated(kv_transition_name((KvTransitionKind)t))]];
     self.transitionChoice=Popup(ways,self,@selector(fieldChanged:),T(@"Как переход ведёт в следующую секцию"));
@@ -301,9 +305,9 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
 - (BOOL)showsVolume:(int)track { return track>=0 && track<KV_TRACKS && (self.volumeLanes&(1u<<track)); }
 - (void)setShowsVolume:(BOOL)shown track:(int)track {
     if(track<0 || track>=KV_TRACKS) return; self.volumeLanes=shown?self.volumeLanes|(1u<<track):self.volumeLanes&~(1u<<track);
-    self.volumeButtons[track].state=shown?NSControlStateValueOn:NSControlStateValueOff; self.needsLayout=YES; self.needsDisplay=YES;
+    self.volumeButtons[track].state=shown?NSControlStateValueOn:NSControlStateValueOff; const KvSong *s=[self song]; ((KvTrackToggle *)self.volumeButtons[track]).marked=s && s->volume[track].count && !shown; self.needsLayout=YES; self.needsDisplay=YES;
 }
-- (void)setShowTempo:(BOOL)showTempo { _showTempo=showTempo; self.tempoButton.state=showTempo?NSControlStateValueOn:NSControlStateValueOff; self.needsLayout=YES; self.needsDisplay=YES; }
+- (void)setShowTempo:(BOOL)showTempo { _showTempo=showTempo; self.tempoButton.state=showTempo?NSControlStateValueOn:NSControlStateValueOff; const KvSong *s=[self song]; ((KvTrackToggle *)self.tempoButton).marked=s && s->tempo.count && !showTempo; self.needsLayout=YES; self.needsDisplay=YES; }
 - (CGFloat)curvesHeight { CGFloat h=0; for(int t=0;t<KV_TRACKS;t++) if([self showsVolume:t]) h+=KvCurveHeight+4; return h; }
 - (CGFloat)trackHeight { return MAX(40,floor(([self overviewTop]-8-[self tracksTop]-2*KvTrackGap-[self curvesHeight])/KV_TRACKS)); }
 - (NSRect)laneRect:(int)track {
@@ -407,9 +411,9 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     self.takeButton.hidden=!empty; self.exportButton.hidden=empty;
     for(NSArray *group in @[self.trackNames,self.trackKinds,self.trackMutes,self.trackSolos,self.trackLevels,@[self.toolChoice,self.snapChoice,self.zoomOutButton,self.zoomInButton,self.wholeSongButton,self.structureChoice,self.tempoButton],self.volumeButtons]) for(NSView *view in group) view.hidden=empty;
     for(NSArray *group in @[self.trackNames,self.trackKinds]) for(NSView *view in group) view.hidden=NO;   // an empty song still shows its three tracks
-    if(!empty && !self.curvesSeen) {   // a song that comes with automation shows its lanes once
-        self.curvesSeen=YES; if(s->tempo.count) self.showTempo=YES;
-        for(int t=0;t<KV_TRACKS;t++) if(s->volume[t].count) [self setShowsVolume:YES track:t];
+    if(!empty) {   // lanes open only on request; a closed lane with a curve shows a dot on its button
+        ((KvTrackToggle *)self.tempoButton).marked=s->tempo.count && !self.showTempo; self.tempoButton.needsDisplay=YES;
+        for(int t=0;t<KV_TRACKS;t++) { ((KvTrackToggle *)self.volumeButtons[t]).marked=s->volume[t].count && ![self showsVolume:t]; self.volumeButtons[t].needsDisplay=YES; }
     }
     if(self.editCurve>=-1 && !self.draggingPoint) { const KvCurve *c=[self curve:self.editCurve]; if(!c || self.selectedPoint>=(NSInteger)c->count) self.selectedPoint=-1; }
     self.snapLabel.hidden=empty || self.snapChoice.itemArray.firstObject.image!=nil;
@@ -632,12 +636,14 @@ static const CGFloat KvLeadWidth=24;
     [NSGraphicsContext saveGraphicsState]; NSRectClip(NSMakeRect(KvLaneX-2,KvRulerTop,w-KvLaneX-KvInset+4,NSHeight(self.bounds)-KvRulerTop));
     // The cycle: an orange band on the ruler (grey while ↻ is off), or the one being drawn.
     double cycleFrom=self.cycling?self.cycleFrom:s->cycle_from,cycleTo=self.cycling?self.cycleTo:s->cycle_to;
+    // The cycle strip over the bar numbers (as Logic's upper ruler): drag there to draw the cycle, click it to switch ↻.
+    [[NSColor.labelColor colorWithAlphaComponent:.05] setFill]; Fill(NSMakeRect(KvLaneX,KvRulerTop,w-KvLaneX-KvInset,KvCycleHeight));
     if(cycleTo>cycleFrom+1e-9) {
-        NSRect band=NSMakeRect([self xOfBeat:cycleFrom],KvRulerTop,[self xOfBeat:cycleTo]-[self xOfBeat:cycleFrom],KvRulerHeight);
+        NSRect band=NSMakeRect([self xOfBeat:cycleFrom],KvRulerTop,[self xOfBeat:cycleTo]-[self xOfBeat:cycleFrom],KvCycleHeight);
         NSColor *tint=[self.owner arrangerCycles] || self.cycling?NSColor.systemOrangeColor:NSColor.systemGrayColor;
-        [[tint colorWithAlphaComponent:.35] setFill]; [[NSBezierPath bezierPathWithRoundedRect:band xRadius:4 yRadius:4] fill];
-        [tint setFill]; Fill(NSMakeRect(NSMinX(band),NSMaxY(band)-3,NSWidth(band),3));
-    }
+        [[tint colorWithAlphaComponent:.8] setFill]; [[NSBezierPath bezierPathWithRoundedRect:band xRadius:3 yRadius:3] fill];
+        [[tint colorWithAlphaComponent:.10] setFill]; Fill(NSMakeRect(NSMinX(band),KvRulerTop+KvCycleHeight,NSWidth(band),KvRulerHeight-KvCycleHeight));
+    } else Text(T(@"↻ цикл: протяните здесь"),NSMakeRect([self xOfBeat:self.scrollBeat]+4,KvRulerTop-1,200,11),8,NSFontWeightMedium,NSColor.tertiaryLabelColor,NO);
     // Ruler: bars, then beats and eighths as the zoom allows; a number at each section start and every 1, 2, 4… bars as they fit.
     [[NSColor.separatorColor colorWithAlphaComponent:.8] setFill]; Fill(NSMakeRect(KvLaneX,KvRulerTop+KvRulerHeight,w-KvLaneX-KvInset,1));
     int every=1; while(every*bar*k<30 && every<64) every*=2;
@@ -652,7 +658,7 @@ static const CGFloat KvLeadWidth=24;
             [[NSColor.separatorColor colorWithAlphaComponent:beat?.8:.5] setFill]; Fill(NSMakeRect(mx,KvRulerTop+KvRulerHeight-(beat?3:2),1,beat?3:2));
             if(beat && k>=14) { [[NSColor.separatorColor colorWithAlphaComponent:.08] setFill]; Fill(NSMakeRect(mx,[self tracksTop],1,[self tracksBottom]-[self tracksTop])); }
         }
-        if(([labelled containsIndex:(NSUInteger)b] || b%every==0) && x-lastLabel>22) { Text([NSString stringWithFormat:@"%d",b+1],NSMakeRect(x+2,KvRulerTop+1,40,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NO); lastLabel=x; }
+        if(([labelled containsIndex:(NSUInteger)b] || b%every==0) && x-lastLabel>22) { Text([NSString stringWithFormat:@"%d",b+1],NSMakeRect(x+2,KvRulerTop+KvCycleHeight+1,40,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NO); lastLabel=x; }
     }
     // Sections: a marker on the arrangement track, a region on each track.
     for(NSInteger i=0;i<(NSInteger)s->count;i++) {
@@ -676,6 +682,8 @@ static const CGFloat KvLeadWidth=24;
             if(t==KV_TRACK_MELODY && NSWidth(r)>=60) Text([self.owner arrangerChords:i],NSMakeRect(NSMinX(r)+6,NSMinY(r)+2,NSWidth(r)-10,14),10,NSFontWeightMedium,NSColor.labelColor,YES);
             [self drawThumbnails:i track:t inRect:r color:color];
             double shift=x->regions[t].shift;
+            if(t==KV_TRACK_DRUMS && i==0 && [self.owner arrangerDrumsHint]) { NSRect lane=[self laneRect:KV_TRACK_DRUMS];   // where the drums come from
+                Text([self.owner arrangerDrumsHint],NSMakeRect(KvLaneX+12,NSMidY(lane)-8,NSWidth(lane)-24,16),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NO); }
             if(fabs(shift)>1e-9 && NSWidth(r)>=60) Text([NSString stringWithFormat:@"↦ %@",[self shiftText:shift]],NSMakeRect(NSMinX(r)+6,NSMaxY(r)-16,NSWidth(r)-10,14),10,NSFontWeightSemibold,NSColor.labelColor,NO);
         }
         if(NSLocationInRange((NSUInteger)i,self.selection) || i==self.selected) {   // the one in the inspector a little bolder
@@ -786,6 +794,7 @@ static const CGFloat KvLeadWidth=24;
     [self addTrackingArea:self.tracking];
 }
 - (BOOL)onRulerPoint:(NSPoint)p { return p.x>=KvLaneX && p.y>=KvRulerTop-2 && p.y<KvRulerTop+KvRulerHeight+3; }
+- (BOOL)onCycleStrip:(NSPoint)p { return [self onRulerPoint:p] && p.y<KvRulerTop+KvCycleHeight; }
 - (NSString *)lengthText:(double)beats { return TNBarCount(beats/[self beatsPerBar]); }
 /* A shift: whole bars as bars, else beats («+1,5 доли»). */
 - (NSString *)shiftText:(double)beats {
@@ -943,10 +952,9 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
         self.selectedPoint=hit; _draft=*curve; self.needsDisplay=YES; return;
     }
     if(self.editCurve>=-1) { self.editCurve=-2; self.selectedPoint=-1; self.needsDisplay=YES; }
-    if([self onRulerPoint:p]) {   // the ruler: a click moves the playhead, a drag draws the cycle, a double click on the cycle clears it
-        double beat=[self beatAtX:p.x];
-        (void)beat;   // a double click plays from there too; the cycle is cleared from the ruler's menu
-        self.onRuler=YES; self.rulerBeat=[self rulerBeatAt:p.x flags:flags]; self.cycling=NO; self.shiftedRuler=(flags&NSEventModifierFlagShift)!=0;
+    if([self onRulerPoint:p]) {   // the cycle strip draws the cycle; below it a click puts the playhead, a double click plays from there
+        self.onRuler=YES; self.rulerBeat=[self rulerBeatAt:p.x flags:flags]; self.cycling=NO; self.rulerClicks=event.clickCount;
+        self.shiftedRuler=[self onCycleStrip:p] || (flags&NSEventModifierFlagShift)!=0;
         if(!self.shiftedRuler) { self.cursorBeat=self.rulerBeat; [self updatePlayhead]; }
         return;
     }
@@ -973,7 +981,9 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     if(self.tool==KvToolPointer && self.hoverRegion>=0 && self.hoverButton>=0) {   // ✎ ✂ ⧉ ✕ (♩ on the drums: its beat)
         NSInteger i=self.hoverRegion,button=self.hoverButton; int track=self.hoverTrack; self.hoverRegion=self.hoverButton=-1; TNHintHide(self);
         if(button==0 && track==KV_TRACK_DRUMS) { if(i!=self.selected) [self.owner arrangerSelect:i]; [[self beatMenuFor:i] popUpMenuPositioningItem:nil atLocation:p inView:self]; }
-        else if(button==0) [self openSection:i]; else if(button==1) [self cutSectionNearPlayhead:i]; else if(button==2) [self duplicateSection:i]; else [self removeSection:i];
+        else if(button==0) [self openSection:i];
+        else if(button==1) { self.tool=KvToolScissors; self.oneCut=YES; [self updateScissorsAt:p flags:flags]; [self updateCursorAt:p flags:flags]; }   // ✂: click where to cut
+        else if(button==2) [self duplicateSection:i]; else [self removeSection:i];
         return;
     }
     NSInteger i=[self sectionAtPoint:p];
@@ -993,6 +1003,7 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
         self.cutBeat=-1; self.cutSection=-1; self.pressed=-1; self.needsDisplay=YES;
         if(section>=0) [self.owner arrangerCut:section atBeat:cut-kv_section_start(s,(size_t)section)];
         else [self.owner arrangerCut:i atBeat:[self beatAtX:p.x]-kv_section_start(s,(size_t)i)];   // too near an edge: the owner says why it refuses
+        if(self.oneCut) { self.oneCut=NO; self.tool=KvToolPointer; }   // the ✂ button's scissors make one cut
         return;
     }
     if(event.clickCount==2) {   // the roll; on the drums, the section's beat
@@ -1055,8 +1066,13 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     if(self.onCurve) { self.onCurve=NO; if(self.draggingPoint) { KvCurve moved=_draft; [self.owner arrangerSetCurve:self.editCurve to:&moved]; self.draggingPoint=NO; } self.needsDisplay=YES; return; }
     if(self.onRuler) {
         self.onRuler=NO;
-        if(self.shiftedRuler) { if(self.cycling && self.cycleTo>self.cycleFrom+1e-9) [self.owner arrangerSetCycleFrom:self.cycleFrom to:self.cycleTo]; self.cycling=NO; self.needsDisplay=YES; return; }
-        [self.owner arrangerPlayFrom:self.cursorBeat];   // as asked: a click on the ruler plays from there (or goes on from there)
+        if(self.shiftedRuler) {
+            if(self.cycling && self.cycleTo>self.cycleFrom+1e-9) [self.owner arrangerSetCycleFrom:self.cycleFrom to:self.cycleTo];   // it switches ↻ on
+            else if(!self.cycling && s && s->cycle_to>s->cycle_from && self.rulerBeat>=s->cycle_from-1e-9 && self.rulerBeat<=s->cycle_to+1e-9) [self.owner arrangerToggleLoop];   // a click on it: ↻
+            self.cycling=NO; self.needsDisplay=YES; return;
+        }
+        // A double click plays from there; while the song plays, a click (or a drag let go) goes on from there; else the playhead waits.
+        if(self.rulerClicks>=2 || [self.owner arrangerPlayheadBeat]>=0) [self.owner arrangerPlayFrom:self.cursorBeat];
         return;
     }
     if(self.shifting) {

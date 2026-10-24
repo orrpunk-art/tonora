@@ -209,6 +209,8 @@ bool kv_audio_queue(KvAudio *a,const KvPerformance *p,int rhythm,const KvHit *hi
 unsigned kv_audio_part(KvAudio *a,double *seconds) {
     if(!a) return 0;
     unsigned part=atomic_load(&a->part); uint64_t now=atomic_load(&a->clock),from=atomic_load(&a->part_start);
+    // Until a new performance is under way the atomics still describe the last one: report its start, not a stale part.
+    if(atomic_load(&a->pending_plays) || from<atomic_load(&a->start)) { if(seconds) *seconds=0; return 0; }
     if(seconds) *seconds=now>=from?(double)(now-from)/44100:0;
     return part;
 }
