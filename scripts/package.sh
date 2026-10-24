@@ -11,5 +11,5 @@ lipo "$app_path/Contents/MacOS/Tonora" -verify_arch arm64 x86_64
 codesign --force --sign - "$app_path"
 codesign --verify --all-architectures --deep --strict --verbose=2 "$app_path"
 mkdir -p dist
-ditto -c -k --sequesterRsrc --keepParent "$app_path" dist/Tonora-1.5.1-universal.zip
-shasum -a 256 dist/Tonora-1.5.1-universal.zip
+ditto -c -k --sequesterRsrc --keepParent "$app_path" dist/Tonora-1.5.2-universal.zip
+shasum -a 256 dist/Tonora-1.5.2-universal.zip

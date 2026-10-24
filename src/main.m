@@ -761,6 +761,7 @@ static NSPanel *Panel(NSString *title,CGFloat width,CGFloat height) {
 @interface KvShortcutsCard : NSView
 @property(nonatomic,weak) KvRoot *owner;
 @property(nonatomic) NSInteger tab;   // 0 shortcuts, 1 the circle of fifths, 2 the arranger
+- (CGFloat)columnsHeight:(CGFloat)column;   /* how tall the tab's columns are at this width */
 @end
 typedef struct { const char *key,*text; } KvShortcut;
 static const KvShortcut KvGeneral[]={
@@ -786,7 +787,7 @@ static const KvShortcut KvComputerKeys[]={
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { (void)event; return YES; }
 - (void)mouseDown:(NSEvent *)event {
     NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
-    for(NSInteger i=0;i<3;i++) if(NSPointInRect(point,[self tabRect:i])) { self.tab=i; self.needsDisplay=YES; return; }
+    for(NSInteger i=0;i<3;i++) if(NSPointInRect(point,[self tabRect:i])) { self.tab=i; self.needsDisplay=YES; return; }   // the card takes the new tab's size on the next draw
     [self.owner toggleShortcuts:nil];
 }
 static NSString *const KvCardTabs[]={@"Сочетания клавиш",@"Квинтовый круг",@"Аранжировщик"};
@@ -799,8 +800,10 @@ static NSString *const KvCardTabs[]={@"Сочетания клавиш",@"Кви
     }
     return NSZeroRect;
 }
+/* The card is as large as its text needs: as wide as the window allows (up to 1320 points), as tall as the longest column once
+   every line has wrapped to its width — nothing is cut off. */
 - (NSRect)cardRect {
-    CGFloat w=MIN(NSWidth(self.bounds)-40,1060),h=MIN(NSHeight(self.bounds)-40,64+24+(self.tab==2?25:21)*18);   // the third column holds the computer keyboard and the song; the arranger's columns run longer
+    CGFloat w=MIN(NSWidth(self.bounds)-40,1320),column=(w-48-2*24)/3,h=MIN(NSHeight(self.bounds)-24,56+[self columnsHeight:column]+28);
     return NSMakeRect(round(NSMidX(self.bounds)-w/2),round(NSMidY(self.bounds)-h/2),w,h);
 }
 static const char *const KvCircleHelp[][2]={
@@ -812,21 +815,41 @@ static const char *const KvArrangerHelp[][2]={
     {"Секции и регионы","Щелчок по маркеру выбирает секцию, по региону — её дорожку; ⇧-щелчок — диапазон, ⌘A — все. Перетаскивание маркера или региона двигает секцию, ⌥ — копирует, бросок на середину другой меняет их местами. Правый край — длина, левый — начало в прогрессии, маленький верхний правый угол региона — повторы. Ножницы (I, ⌘-щелчок или ✂ на регионе) режут там, где щёлкнуть; карандаш (P) ставит последовательность с круга новой секцией. Правый щелчок — меню секции и региона: разрезать, дублировать, удалить, добавить после, вставить переход, цикл по секции, M региона, бит ударных.\nВкладка «Секция» справа: тип, повторы, громкость, регистр, вид перехода, M и громкость регионов, ударные секции («Как у песни», свой бит, тихо, без). Рисунок и фактура внизу окна меняются у всей песни, когда выбрана одна секция, и только у выделенных, когда их несколько."},
     {"Игра, цикл и экспорт","Пробел играет от курсора; щелчок по линейке ставит курсор, двойной — играет отсюда, во время игры щелчок переносит игру. С ↻ и циклом Пробел играет от начала цикла и крутит его. Цикл рисуется протяжкой по полосе над номерами тактов; за середину он переносится, за края растягивается, щелчок по нему включает и выключает ↻, правый щелчок — «Снять цикл». Home — в начало, ⌥Пробел — только выбранная секция.\nМетроном (⌘K) — клик, он щёлкает только пока идёт игра; сетка и отсчёт такта — в его меню. Ударные (⇧⌘K) — своя кнопка и меню: по стилю или один бит; под песней у каждой секции свой. Громкость ритма — в FX (⌘,).\nМасштаб: ⌘+ и ⌘−, ⌘+колесо или щипок, Z — вся песня; привязка — в меню «Умная · такт · доля · 1/8», ⌃ во время жеста — без привязки. ⇧⌘E экспортирует песню в MIDI с ударными и маркерами, кнопка ↓ — одну дорожку. ⌘Z отменяет правки песни."},
 };
+static BOOL KvMeasuring;   /* the card's helpers only measure (cardRect sizes the card to its text) */
+/* Wrapped text: its height at this width; drawn unless measuring. */
+static CGFloat Wrapped(NSString *text,CGFloat x,CGFloat y,CGFloat width,CGFloat size,NSFontWeight weight,NSColor *color) {
+    NSDictionary *a=@{NSFontAttributeName:[NSFont systemFontOfSize:size weight:weight],NSForegroundColorAttributeName:color};
+    CGFloat h=ceil([text boundingRectWithSize:NSMakeSize(width,10000) options:NSStringDrawingUsesLineFragmentOrigin attributes:a].size.height);
+    if(!KvMeasuring) [text drawWithRect:NSMakeRect(x,y,width,h) options:NSStringDrawingUsesLineFragmentOrigin attributes:a];
+    return h;
+}
 static CGFloat DrawParagraphs(NSString *title,NSString *body,CGFloat x,CGFloat y,CGFloat width) {
-    Text(title,NSMakeRect(x,y,width,18),12,NSFontWeightBold,Accent(),NSTextAlignmentLeft); y+=24;
+    if(!KvMeasuring) Text(title,NSMakeRect(x,y,width,18),12,NSFontWeightBold,Accent(),NSTextAlignmentLeft); y+=24;
     NSMutableParagraphStyle *style=[NSMutableParagraphStyle new]; style.lineSpacing=2; style.paragraphSpacing=12;
     NSDictionary *attributes=@{NSFontAttributeName:[NSFont systemFontOfSize:12],NSForegroundColorAttributeName:NSColor.labelColor,NSParagraphStyleAttributeName:style};
     NSRect rect=[body boundingRectWithSize:NSMakeSize(width,10000) options:NSStringDrawingUsesLineFragmentOrigin attributes:attributes];
-    [body drawWithRect:NSMakeRect(x,y,width,ceil(rect.size.height)) options:NSStringDrawingUsesLineFragmentOrigin attributes:attributes];
+    if(!KvMeasuring) [body drawWithRect:NSMakeRect(x,y,width,ceil(rect.size.height)) options:NSStringDrawingUsesLineFragmentOrigin attributes:attributes];
     return y+ceil(rect.size.height);
 }
 static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CGFloat y,CGFloat width) {
-    Text(title,NSMakeRect(x,y,width,18),12,NSFontWeightBold,Accent(),NSTextAlignmentLeft); y+=24;
-    for(int i=0;rows[i].key;i++,y+=18) {
-        Text(T(@(rows[i].key)),NSMakeRect(x,y,width*.47-6,17),11.5,NSFontWeightSemibold,NSColor.labelColor,NSTextAlignmentLeft);
-        Text(T(@(rows[i].text)),NSMakeRect(x+width*.47,y,width*.53,17),11.5,NSFontWeightRegular,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+    if(!KvMeasuring) Text(title,NSMakeRect(x,y,width,18),12,NSFontWeightBold,Accent(),NSTextAlignmentLeft); y+=24;
+    for(int i=0;rows[i].key;i++) {   // a line too long for its column wraps under itself instead of being cut
+        CGFloat k=Wrapped(T(@(rows[i].key)),x,y,width*.42-6,11.5,NSFontWeightSemibold,NSColor.labelColor);
+        CGFloat t=Wrapped(T(@(rows[i].text)),x+width*.42,y,width*.58,11.5,NSFontWeightRegular,NSColor.secondaryLabelColor);
+        y+=MAX(18,MAX(k,t)+3);
     }
     return y;
+}
+- (CGFloat)columnsHeight:(CGFloat)column { KvMeasuring=YES; CGFloat h=[self drawColumnsAtX:0 top:0 column:column]; KvMeasuring=NO; return h; }
+/* The three columns of the tab shown, from `top`; returns how far down the longest one reaches (below `top`). */
+- (CGFloat)drawColumnsAtX:(CGFloat)x top:(CGFloat)top column:(CGFloat)column {
+    CGFloat bottom=top;
+    if(self.tab==1 || self.tab==2) { for(int i=0;i<3;i++) bottom=MAX(bottom,DrawParagraphs(T(@(self.tab==1?KvCircleHelp[i][0]:KvArrangerHelp[i][0])),T(@(self.tab==1?KvCircleHelp[i][1]:KvArrangerHelp[i][1])),x+i*(column+24),top,column)); return bottom-top; }
+    bottom=MAX(bottom,DrawShortcuts(T(@"Везде"),KvGeneral,x,top,column));
+    bottom=MAX(bottom,DrawShortcuts(T(@"Пиано-ролл"),KvRollKeys,x+column+24,top,column));
+    CGFloat below=DrawShortcuts(T(@"Клавиатура компьютера · M"),KvComputerKeys,x+2*(column+24),top,column);
+    bottom=MAX(bottom,DrawShortcuts(T(@"Песня · аранжировщик"),KvSongKeys,x+2*(column+24),below+14,column));
+    return bottom-top;
 }
 - (void)drawRect:(NSRect)dirtyRect {
     (void)dirtyRect; [[NSColor.blackColor colorWithAlphaComponent:.28] setFill]; NSRectFillUsingOperation(self.bounds,NSCompositingOperationSourceOver);
@@ -838,13 +861,8 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         if(i==self.tab) { [Accent() setFill]; NSRectFill(NSMakeRect(tab.origin.x,NSMaxY(tab)-3,tab.size.width,2)); }
     }
     Text(T(@"Tab — вкладка · Esc, ⌘/ или щелчок — закрыть"),NSMakeRect(NSMaxX(card)-344,card.origin.y+20,320,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentRight);
-    CGFloat column=(card.size.width-48-2*24)/3,top=card.origin.y+56,x=card.origin.x+24;
-    if(self.tab==1) { for(int i=0;i<3;i++) DrawParagraphs(T(@(KvCircleHelp[i][0])),T(@(KvCircleHelp[i][1])),x+i*(column+24),top,column); return; }
-    if(self.tab==2) { for(int i=0;i<3;i++) DrawParagraphs(T(@(KvArrangerHelp[i][0])),T(@(KvArrangerHelp[i][1])),x+i*(column+24),top,column); return; }
-    DrawShortcuts(T(@"Везде"),KvGeneral,x,top,column);
-    DrawShortcuts(T(@"Пиано-ролл"),KvRollKeys,x+column+24,top,column);
-    CGFloat below=DrawShortcuts(T(@"Клавиатура компьютера · M"),KvComputerKeys,x+2*(column+24),top,column);
-    DrawShortcuts(T(@"Песня · аранжировщик"),KvSongKeys,x+2*(column+24),below+14,column);
+    CGFloat column=(card.size.width-48-2*24)/3;
+    [self drawColumnsAtX:card.origin.x+24 top:card.origin.y+56 column:column];
 }
 @end
 
@@ -4856,8 +4874,9 @@ int main(int argc, const char *argv[]) {
               for(int i=0;i<5;i++) [root pianoRollUndo:root.roll];
               [roll deselectAll]; w.contentView=[[NSView alloc] init]; root.frame=NSMakeRect(0,0,1240,760); [root layout]; }
             [root stopPlayback:nil]; [root pianoRollResetRequested:root.roll]; root.loopButton.state=NSControlStateValueOn; [root loopChanged:root.loopButton]; [root playProgression:nil];   // afresh and looping: the roll's checks may have outlasted or emptied the sequence
-            [root applyTempo:120]; double normal=root.visualEventSeconds; [root pianoRoll:root.roll speedChanged:.5];
-            KV_CHECK(fabs(root.visualEventSeconds-normal*2)<.001 && [root.arrangementInfo.stringValue containsString:@"×½"],@"Half speed doubles the bar without touching the tempo");
+            [root applyTempo:120]; for(int tries=0;tries<20 && !(root.visualPlayback && root.playingPerformance);tries++) { [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.05]]; if(!(root.visualPlayback && root.playingPerformance)) [root playProgression:nil]; }   // under way before the speed changes
+            double normal=root.visualEventSeconds; NSString *state=[NSString stringWithFormat:@"visual %d performance %d playing %d status «%@»",root.visualPlayback,root.playingPerformance,kv_audio_is_playing(root.audio),root.status.stringValue]; [root pianoRoll:root.roll speedChanged:.5];
+            KV_CHECK(fabs(root.visualEventSeconds-normal*2)<.001 && [root.arrangementInfo.stringValue containsString:@"×½"],([NSString stringWithFormat:@"Half speed doubles the bar without touching the tempo (%@; %.3f → %.3f)",state,normal,root.visualEventSeconds]));
             [root pianoRoll:root.roll speedChanged:1]; [root stopPlayback:nil];
             // Review fixes: quarter speed at 60 BPM starts; auditioning while playing keeps the sequence; no-op edits leave no undo entry.
             [root pianoRollResetRequested:root.roll]; [root applyTempo:60]; [root pianoRoll:root.roll speedChanged:.25]; [root playProgression:nil];   // the track from the pattern: the roll's edits above may have emptied it
