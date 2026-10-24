@@ -35,6 +35,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerSetRegion:(int)track mute:(int)mute level:(double)level;                 /* of the selected section; −1: unchanged */
 - (void)arrangerRevert:(id)sender;                 /* the selected section's notes back to its texture */
 - (void)arrangerTakeDraft:(id)sender;              /* the circle's progression becomes a section */
+- (void)arrangerGenerateSong:(id)sender;           /* the empty song: a whole one from the circle's chords (made first when there are none) */
 - (void)arrangerForwardKey:(NSEvent *)event;
 /* What may come after section `index`, best first, for the ghosts under it: @"title", @"tip", @"beats", @"leadBeats" (a transition
    first, 0 for none), @"kind" (KvSectionKind), @"chorus" (a new chorus: ⌥-click offers others), @"leadKind" (KvTransitionKind of the lead-in). */
@@ -84,6 +85,8 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 @property(nonatomic,readonly) int hoverTrack;
 - (NSArray<NSValue *> *)buttonRectsOf:(NSInteger)index track:(int)track;   /* ✎ ✂ ⧉ ✕ of a hovered region; empty when too small */
 - (NSMenu *)menuForSection:(NSInteger)index track:(int)track beat:(double)beat;   /* the right-click menu; track −1: the marker */
+- (NSRect)endSlotRect;
+- (void)clearCycle:(id)sender;                      /* the ruler's menu: «Снять цикл» */                              /* «+» after the song: hovering it shows what may come next */
 /* The «Секция» tab of the inspector: the owner places it; the arranger fills and updates it. */
 @property(nonatomic,readonly) NSView *sectionPanel;
 @property(nonatomic,readonly) NSSegmentedControl *toolChoice;
@@ -101,6 +104,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 @property(nonatomic,readonly) NSInteger selectedPoint;   /* of the curve last touched, −1 none */
 @property(nonatomic,readonly) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
+@property(nonatomic,readonly) NSButton *generateButton;   /* «✦ Сгенерировать песню» on the empty melody track */
 @property(nonatomic,readonly) NSArray<NSButton *> *trackMutes,*trackSolos,*regionMutes;   /* per track */
 @property(nonatomic,readonly) NSArray<NSSlider *> *trackLevels,*regionLevels;             /* melody, bass (drums: none) */
 @end
