@@ -92,6 +92,7 @@ typedef enum { KV_BEAT_POP, KV_BEAT_BALLAD, KV_BEAT_BOSSA, KV_BEAT_SHUFFLE, KV_B
    4/4 has a pattern per beat; 3/4 is a waltz and 6/8 two groups of three for every beat. */
 size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]);
 KvBeat kv_beat_for_style(KvPianoPattern style);       /* «По стилю рисунка» */
+bool kv_beat_electronic(KvBeat beat);                 /* played on the electronic (808) kit: house, hip-hop, trip-hop */
 const char *kv_beat_name(KvBeat beat);                /* Russian; the app translates */
 void kv_beat_tempo(KvBeat beat,int *low,int *high);  /* the tempo the beat is usually played at */
 #endif

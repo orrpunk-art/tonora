@@ -6,7 +6,11 @@ An interactive circle of fifths for macOS. Pick a key on the circle, hear its ch
 
 Native app for macOS 12 and later, Universal (Apple Silicon and Intel). The music core and the sampler are written in C11, the interface in Objective-C / AppKit. No third-party frameworks, no network access: all instruments are built in.
 
-![Tonora: the circle of fifths, the chords of C major, a C – Am – F – G progression played by two hands](design/screenshots/tonora-en.png)
+![Tonora: the circle of fifths, the chords of C♯ minor and a progression on the strings](design/screenshots/tonora-en.png)
+
+![The arranger: melody, bass and drum tracks with the song's sections, the selected section's piano roll docked below](design/screenshots/arranger-en.png)
+
+![The piano roll: the section's notes by chord, passing notes and anticipations highlighted](design/screenshots/roll-en.png)
 
 ## Features
 
@@ -93,6 +97,7 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 - **Yamaha CP80, Hohner Pianet T** — Greg Sullivan, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [source](https://github.com/sfzinstruments/GregSullivan.E-Pianos)
 - **Strings: VS Chamber Orchestra 2 Community Edition** — Versilian Studios (Sam Gossner, Simon Dalzell), CC0 · [source](https://github.com/sgossner/VSCO-2-CE)
 - **Drums: Big Rusty Drums** — Karoryfer Samples, CC0 · [source](https://github.com/sfzinstruments/karoryfer.big-rusty-drums)
+- **Electronic kit: Roland TR-808** — Michael Fischer (1994), CC0 via Tidal Cycles · [source](https://github.com/tidalcycles/sounds-tr808-fischer)
 - **Percussion: Versilian Community Sample Library** — Versilian Studios, CC0 · [source](https://github.com/sgossner/VCSL)
 - **Reverb: Verblib / Freeverb** — Philip Bennefall, Jezar at Dreampoint, public domain / Unlicense · [source](https://github.com/blastbay/verblib)
 

@@ -48,6 +48,7 @@ bool kv_audio_set_rhythm(KvAudio *audio,bool on,KvGrid grid,KvMeter meter,double
 bool kv_audio_count_in(KvAudio *audio,double beats);
 /* The recorded kit (before the first sound, like an instrument) and the beat played instead of the click (count 0: the click). */
 bool kv_audio_load_drums(KvAudio *audio,const char *directory);
+bool kv_audio_load_drums_electronic(KvAudio *audio,const char *directory);   /* the sampled 808 for the electronic beats */
 bool kv_audio_set_beat(KvAudio *audio,const KvHit *hits,size_t count,bool electronic);
 /* Beats since the rhythm's origin (for the beat dots), −1 while it is off. */
 double kv_audio_rhythm_beat(KvAudio *audio);

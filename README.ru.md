@@ -6,7 +6,11 @@
 
 Нативное приложение для macOS 12 и новее, Universal (Apple Silicon и Intel). Музыкальное ядро и сэмплер написаны на C11, интерфейс — на Objective-C / AppKit. Без сторонних фреймворков и без сети: все инструменты встроены.
 
-![Tonora: квинтовый круг, аккорды до мажора, последовательность C – Am – F – G в две руки](design/screenshots/tonora-ru.png)
+![Tonora: квинтовый круг, аккорды до-диез минора и последовательность на струнных](design/screenshots/tonora-ru.png)
+
+![Аранжировщик: дорожки мелодии, баса и ударных с секциями песни, снизу пиано-ролл выбранной секции](design/screenshots/arranger-ru.png)
+
+![Пиано-ролл: ноты секции по аккордам, проходящие и предвосхищения подсвечены](design/screenshots/roll-ru.png)
 
 ## Возможности
 
@@ -93,6 +97,7 @@ open build-universal/Tonora.app
 - **Yamaha CP80, Hohner Pianet T** — Greg Sullivan, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [источник](https://github.com/sfzinstruments/GregSullivan.E-Pianos)
 - **Струнные: VS Chamber Orchestra 2 Community Edition** — Versilian Studios (Sam Gossner, Simon Dalzell), CC0 · [источник](https://github.com/sgossner/VSCO-2-CE)
 - **Барабаны: Big Rusty Drums** — Karoryfer Samples, CC0 · [источник](https://github.com/sfzinstruments/karoryfer.big-rusty-drums)
+- **Электронный набор: Roland TR-808** — Michael Fischer (1994), CC0 через Tidal Cycles · [источник](https://github.com/tidalcycles/sounds-tr808-fischer)
 - **Перкуссия: Versilian Community Sample Library** — Versilian Studios, CC0 · [источник](https://github.com/sgossner/VCSL)
 - **Реверберация: Verblib / Freeverb** — Philip Bennefall, Jezar at Dreampoint, общественное достояние / Unlicense · [источник](https://github.com/blastbay/verblib)
 

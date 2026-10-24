@@ -1,0 +1,388 @@
+{
+  "sources": {
+    "fischer": {
+      "repository": "tidalcycles/sounds-tr808-fischer",
+      "commit": "85fbecf1bec32553395625ea659e2a56dfd7c0e1"
+    }
+  },
+  "layers": [
+    "soft 1",
+    "soft 2",
+    "loud 1",
+    "loud 2"
+  ],
+  "sounds": {
+    "36": "kick",
+    "37": "side-stick",
+    "38": "snare",
+    "39": "clap",
+    "42": "hihat-closed",
+    "46": "hihat-open",
+    "54": "cowbell",
+    "63": "conga-high",
+    "64": "conga-low",
+    "70": "maracas"
+  },
+  "files": [
+    {
+      "file": "036-kick-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/bd8/BD2525.WAV",
+          "gain": 0.55,
+          "source_sha256": "9a6500e746256c6a7dcbc70f65cde17a6d3713cfc879619e93079e540f06c741",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/bd8/BD2525.WAV"
+        }
+      ],
+      "sha256": "a6ee1e6e875b006987055a297394c0b53537db20e3415d0b1de03a371ce4a475"
+    },
+    {
+      "file": "036-kick-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/bd8/BD2550.WAV",
+          "gain": 0.55,
+          "source_sha256": "7cbfb54d75ced8060a28e5989e03cbc79d60d350d161da2228d4d53872f7d562",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/bd8/BD2550.WAV"
+        }
+      ],
+      "sha256": "a5ff624d517bd8aa74f75c17a5b1ccf784760d7afae616ff31c940f9c2eb719d"
+    },
+    {
+      "file": "036-kick-3.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/bd8/BD2550.WAV",
+          "gain": 1.0,
+          "source_sha256": "7cbfb54d75ced8060a28e5989e03cbc79d60d350d161da2228d4d53872f7d562",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/bd8/BD2550.WAV"
+        }
+      ],
+      "sha256": "44ed01596dcfd472a7ef315737e816345534505dcb17b0d94505aa02eb0de406"
+    },
+    {
+      "file": "036-kick-4.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/bd8/BD2575.WAV",
+          "gain": 1.0,
+          "source_sha256": "023f572ab99c32a2574d9dcbc2a73e398c95ac690ff87f8cd421684e22f8118a",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/bd8/BD2575.WAV"
+        }
+      ],
+      "sha256": "58be90dea2af9d68e43acb5ab906937dd723f0fa509de90f2f8185b2d3b198ef"
+    },
+    {
+      "file": "037-side-stick-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/rs8/RS.WAV",
+          "gain": 0.55,
+          "source_sha256": "20d5cd385c0f8c3a24bbfe78c2e2747776841ede6185bc0fe93f97f0b455b89c",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/rs8/RS.WAV"
+        }
+      ],
+      "sha256": "13d4e387f5a1eb19c530c93bf5d61c9633e82a7574e5d5cd472d53bee53cf8bd"
+    },
+    {
+      "file": "037-side-stick-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/rs8/RS.WAV",
+          "gain": 1.0,
+          "source_sha256": "20d5cd385c0f8c3a24bbfe78c2e2747776841ede6185bc0fe93f97f0b455b89c",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/rs8/RS.WAV"
+        }
+      ],
+      "sha256": "a0b175660b6e4e947fe66dbceae94d0f787a9902ce4c00fdff5228c6713e7802"
+    },
+    {
+      "file": "038-snare-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/sd8/SD5025.WAV",
+          "gain": 0.55,
+          "source_sha256": "89333ed5ee2df7719fe2d3c16f94aeea28228ed9a998431af537a928a564157b",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/sd8/SD5025.WAV"
+        }
+      ],
+      "sha256": "26dc51b5b21074ed84ea2583fcfdf94718c4e4070f95d631a587d155e3dc2a9c"
+    },
+    {
+      "file": "038-snare-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/sd8/SD5050.WAV",
+          "gain": 0.55,
+          "source_sha256": "6dcbf8acd5cee6d6b7955d26c6b57d8ca413f1ae1c7caafaaec780d83f08d712",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/sd8/SD5050.WAV"
+        }
+      ],
+      "sha256": "911a780976fa08fdc8b905f2b32157eecf781a49774dd20415aca9776b8c51eb"
+    },
+    {
+      "file": "038-snare-3.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/sd8/SD5050.WAV",
+          "gain": 1.0,
+          "source_sha256": "6dcbf8acd5cee6d6b7955d26c6b57d8ca413f1ae1c7caafaaec780d83f08d712",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/sd8/SD5050.WAV"
+        }
+      ],
+      "sha256": "389bb604774663a27a9f48f5f81f6f259b6823c39281f6515561284ec3ddf822"
+    },
+    {
+      "file": "038-snare-4.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/sd8/SD7550.WAV",
+          "gain": 1.0,
+          "source_sha256": "df1bbf736f5c0099d0f6d78305a5930353ff5e77a012fedafb7da6c99e68168f",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/sd8/SD7550.WAV"
+        }
+      ],
+      "sha256": "fecbbe21d94a0f872b8765e5071db162e57ce445a03f73606292ad8c97458ecc"
+    },
+    {
+      "file": "039-clap-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/cp8/CP.WAV",
+          "gain": 0.55,
+          "source_sha256": "376429bb81cb48d1f392a11cd066c32ffb7883d445b2488704ea52e46bb08286",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/cp8/CP.WAV"
+        }
+      ],
+      "sha256": "2368af472533db15f58cfb767797399fcf836f1def9328f04cc9dc5dd428d217"
+    },
+    {
+      "file": "039-clap-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/cp8/CP.WAV",
+          "gain": 1.0,
+          "source_sha256": "376429bb81cb48d1f392a11cd066c32ffb7883d445b2488704ea52e46bb08286",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/cp8/CP.WAV"
+        }
+      ],
+      "sha256": "99a75f98f82301db61afd1e7ac72c028e6c432cc3fd94e645dbc4f1461dcdf5d"
+    },
+    {
+      "file": "042-hihat-closed-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/ch8/CH.WAV",
+          "gain": 0.55,
+          "source_sha256": "c9f30ff2b4d73b03f41960e504e03c54e9a59697af666fe4d155bab9cd1ccae6",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/ch8/CH.WAV"
+        }
+      ],
+      "sha256": "581d6e5479a31315f8b5a0bb50ac4e63d181f656213f0528c1925949caab47f4"
+    },
+    {
+      "file": "042-hihat-closed-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/ch8/CH.WAV",
+          "gain": 1.0,
+          "source_sha256": "c9f30ff2b4d73b03f41960e504e03c54e9a59697af666fe4d155bab9cd1ccae6",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/ch8/CH.WAV"
+        }
+      ],
+      "sha256": "7ef25d0c7be5b26eeafa7389cf98214dc45c38d4cccceef4d121e8338ab2bd3b"
+    },
+    {
+      "file": "046-hihat-open-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/oh8/OH25.WAV",
+          "gain": 0.55,
+          "source_sha256": "2674962ca376c0d08ce802423eb696be86b516450fe23707ac69f3878b35f12b",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/oh8/OH25.WAV"
+        }
+      ],
+      "sha256": "bd06c4b94b00c704d82a57c13379c6cf6ea5c8cf2ea5bd584ec0ee0ef7ccacff"
+    },
+    {
+      "file": "046-hihat-open-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/oh8/OH50.WAV",
+          "gain": 0.55,
+          "source_sha256": "84ae3220fab2396380fb6ba6032bcec7c55a6d3f621d30a13c11fdeaa099aff7",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/oh8/OH50.WAV"
+        }
+      ],
+      "sha256": "b8640c2da9953af3530267a891516ebcdd565b161d356bb12518ad61c3e2bb32"
+    },
+    {
+      "file": "046-hihat-open-3.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/oh8/OH25.WAV",
+          "gain": 1.0,
+          "source_sha256": "2674962ca376c0d08ce802423eb696be86b516450fe23707ac69f3878b35f12b",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/oh8/OH25.WAV"
+        }
+      ],
+      "sha256": "769fe1eca98f608ce8f9ec016b6336e8dbe1904e95bd7c620138edf80de1da2b"
+    },
+    {
+      "file": "046-hihat-open-4.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/oh8/OH50.WAV",
+          "gain": 1.0,
+          "source_sha256": "84ae3220fab2396380fb6ba6032bcec7c55a6d3f621d30a13c11fdeaa099aff7",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/oh8/OH50.WAV"
+        }
+      ],
+      "sha256": "8d2abe950eb91b157384b918a2f571e80612ca8d7f456d178da26d9dbb25190c"
+    },
+    {
+      "file": "054-cowbell-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/cb8/CB.WAV",
+          "gain": 0.55,
+          "source_sha256": "1468cbd6c75a1f23b50a15968796c256c74893a35aa3824c6663db82c271f28d",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/cb8/CB.WAV"
+        }
+      ],
+      "sha256": "d241fa9cea89a6c19b44ac566b598cc3af113114fa983a9d22e0bd80b846b394"
+    },
+    {
+      "file": "054-cowbell-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/cb8/CB.WAV",
+          "gain": 1.0,
+          "source_sha256": "1468cbd6c75a1f23b50a15968796c256c74893a35aa3824c6663db82c271f28d",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/cb8/CB.WAV"
+        }
+      ],
+      "sha256": "440cc1c0090c5b13ca49e4410afb31eb3007b5137cece149b939a38a4d762472"
+    },
+    {
+      "file": "063-conga-high-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/hc8/HC25.WAV",
+          "gain": 0.55,
+          "source_sha256": "3476e81b5a43031d7dccdf3d15706c0ca4cb0acfc384b8686791f55c253fe6e1",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/hc8/HC25.WAV"
+        }
+      ],
+      "sha256": "3286f8ba952fe8e0f0801058ea194f20534b3c185b61e573d78e7a1b29ee3358"
+    },
+    {
+      "file": "063-conga-high-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/hc8/HC50.WAV",
+          "gain": 0.55,
+          "source_sha256": "ee4354b1fb79126e455a5343161f5c1e78165874df8a74dece78cbb5b6964af9",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/hc8/HC50.WAV"
+        }
+      ],
+      "sha256": "b6e6507b6e9ba48e3e50d1febc18d09281ddf078ef82359904687114e8f452c5"
+    },
+    {
+      "file": "063-conga-high-3.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/hc8/HC25.WAV",
+          "gain": 1.0,
+          "source_sha256": "3476e81b5a43031d7dccdf3d15706c0ca4cb0acfc384b8686791f55c253fe6e1",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/hc8/HC25.WAV"
+        }
+      ],
+      "sha256": "687bf8b53db27d30e6a589aec516f604a1232733de72bfa7741526ab07201424"
+    },
+    {
+      "file": "063-conga-high-4.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/hc8/HC50.WAV",
+          "gain": 1.0,
+          "source_sha256": "ee4354b1fb79126e455a5343161f5c1e78165874df8a74dece78cbb5b6964af9",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/hc8/HC50.WAV"
+        }
+      ],
+      "sha256": "9fa3f632bbfc03a2579ac9ec1b61deb4b69cda54f4c06c087505ca0dceb2b39a"
+    },
+    {
+      "file": "064-conga-low-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/lc8/LC25.WAV",
+          "gain": 0.55,
+          "source_sha256": "fd6593c88a75de8aee97b547f2c4af1d5e048fa8024de0a2e2c1fe89b4963b09",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/lc8/LC25.WAV"
+        }
+      ],
+      "sha256": "79bfeb4db19f9d0af320394e506e525547c55821b4905fbbd5e2f03fce41c71c"
+    },
+    {
+      "file": "064-conga-low-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/lc8/LC50.WAV",
+          "gain": 0.55,
+          "source_sha256": "6591f57bbbdb891819a0ce6ce5b3bfd12d24da9f7f413243ef37b2593d1a7393",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/lc8/LC50.WAV"
+        }
+      ],
+      "sha256": "128d712ae4ef84108dcd188e9ab8754ce992e12b33edb34327201a8af6cb1327"
+    },
+    {
+      "file": "064-conga-low-3.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/lc8/LC25.WAV",
+          "gain": 1.0,
+          "source_sha256": "fd6593c88a75de8aee97b547f2c4af1d5e048fa8024de0a2e2c1fe89b4963b09",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/lc8/LC25.WAV"
+        }
+      ],
+      "sha256": "88a5c3d20e183cbc412f04e2979c16bc17d898909c89e55ab1f70105f9cb21eb"
+    },
+    {
+      "file": "064-conga-low-4.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/lc8/LC50.WAV",
+          "gain": 1.0,
+          "source_sha256": "6591f57bbbdb891819a0ce6ce5b3bfd12d24da9f7f413243ef37b2593d1a7393",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/lc8/LC50.WAV"
+        }
+      ],
+      "sha256": "60647117f94b8581742a205fc8ac550480d1476cc749ff8f99238f0c530cfa7c"
+    },
+    {
+      "file": "070-maracas-1.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/ma8/MA.WAV",
+          "gain": 0.55,
+          "source_sha256": "7b17cc2973fe55233c6ece7b341adb4d04a44b12527582102591c8981a586451",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/ma8/MA.WAV"
+        }
+      ],
+      "sha256": "67b9b76224d35f35395af44382f2028e263c047e4c17e56a58b7549a1d490fa7"
+    },
+    {
+      "file": "070-maracas-2.flac",
+      "mix": [
+        {
+          "source": "tidalcycles/sounds-tr808-fischer/ma8/MA.WAV",
+          "gain": 1.0,
+          "source_sha256": "7b17cc2973fe55233c6ece7b341adb4d04a44b12527582102591c8981a586451",
+          "url": "https://raw.githubusercontent.com/tidalcycles/sounds-tr808-fischer/85fbecf1bec32553395625ea659e2a56dfd7c0e1/ma8/MA.WAV"
+        }
+      ],
+      "sha256": "1c56675c3ec8c4fcb7499c3b1c4d401b921a413f0d9ba1eccbe0e474d456cb2c"
+    }
+  ]
+}

@@ -23,7 +23,7 @@ static void advance(KvMixer *m,float *block,unsigned frames) {
     while(frames) { unsigned n=frames>256?256:frames; kv_mixer_render(m,block,n); frames-=n; }
 }
 int main(int argc,char **argv) {
-    CHECK(argc>=4 && argc<=6);   /* pianos, then optionally the strings and the percussion */
+    CHECK(argc>=4 && argc<=7);   /* pianos, then optionally the strings, the percussion and the 808 */
     KvPianoBank *banks[3]={kv_piano_load(argv[1]),kv_piano_load(argv[2]),kv_piano_load(argv[3])};
     CHECK(banks[0] && banks[1] && banks[2]);
     KvMixer *a=kv_mixer_create(),*b=kv_mixer_create(); CHECK(a && b);
@@ -384,10 +384,13 @@ int main(int argc,char **argv) {
       CHECK(n==3 && at[0]<=origin+1 && llabs((long long)at[1]-(long long)(origin+2*26460))<=1 && llabs((long long)at[2]-(long long)(origin+4*26460))<=1 && peak[0]>peak[1]);
       KvHit pop[KV_BEAT_HITS]; size_t np=kv_beat_bar(KV_BEAT_POP,KV_METER_4_4,pop);
       kv_mixer_beat(r,pop,np,false); advance(r,block,26460*2); CHECK(kv_mixer_drum_voices(r)>0);   // no recordings: the synthesized kit plays instead
-      if(argc==6) {
+      if(argc>=6) {
           KvPianoBank *kit=kv_piano_load(argv[5]); CHECK(kit);
           for(int b=0;b<KV_BEAT_COUNT;b++) for(int mt=0;mt<KV_METER_COUNT;mt++) { KvHit h[KV_BEAT_HITS]; size_t k=kv_beat_bar((KvBeat)b,(KvMeter)mt,h);
               for(size_t i=0;i<k;i++) for(int layer=0;layer<4;layer++) { KvSampleView v; CHECK(kv_piano_layer(kit,h[i].drum,layer,&v) && v.midi==h[i].drum && v.frames>441); } }
+          if(argc>=7) { KvPianoBank *kit808=kv_piano_load(argv[6]); CHECK(kit808); KvSampleView v; CHECK(kv_piano_layer(kit808,KV_DRUM_KICK,2,&v) && v.midi==KV_DRUM_KICK && v.frames>441);   // the electronic kit: a sampled 808 on the same notes
+              KvMixer *e=kv_mixer_create(); kv_mixer_humanize(e,false); kv_mixer_drums_electronic(e,kit808); kv_mixer_rhythm(e,false,KV_GRID_BEATS,KV_METER_4_4,.6,.6f); kv_mixer_beat(e,pop,np,true);
+              float sum=0; for(int i=0;i<40;i++) { advance(e,block,2646); const float *dry=kv_mixer_dry(e); for(int f=0;f<256;f++) sum+=dry[f*2]*dry[f*2]; } CHECK(sum>.01f); kv_mixer_free(e); kv_piano_free(kit808); }
           kv_mixer_drums(r,kit); kv_mixer_beat(r,pop,np,false); float energy=0;
           for(int i=0;i<40;i++) { advance(r,block,2646); const float *dry=kv_mixer_dry(r); for(int f=0;f<256;f++) energy+=dry[f*2]*dry[f*2]; }
           CHECK(energy>.01f);

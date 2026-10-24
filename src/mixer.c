@@ -29,7 +29,7 @@ struct KvMixer { const KvPianoBank *banks[KV_INSTRUMENTS]; struct Voice voices[V
     bool rhythm,click; KvGrid grid;   /* rhythm: the grid runs (the click or a beat is on); click: the click sounds */ double bar,pulse,step,beat_frames,origin,lead_beats,phase; uint64_t hit; float rhythm_volume;
     struct Click clicks[4]; float click_wave[CLICKS][CLICK_FRAMES]; float dry[KV_DRY_FRAMES*2];
     /* beat: one bar of hits, the next one due (bar, hit), the kit; counting: a count-in is under way */
-    const KvPianoBank *drums; KvHit beat[KV_BEAT_HITS]; size_t beat_count,beat_hit; uint64_t beat_bar; bool electronic,counting;
+    const KvPianoBank *drums,*drums_electronic; KvHit beat[KV_BEAT_HITS]; size_t beat_count,beat_hit; uint64_t beat_bar; bool electronic,counting;
     unsigned char take[128]; struct Drum drum_voices[DRUM_VOICES]; float synth[SYNTHS][SYNTH_FRAMES]; size_t synth_frames[SYNTHS];
     /* the queued part (kv_mixer_queue): its plan, its rhythm (−1 as is, 0 off, 1 on) and hits, and parts started so far */
     KvPerformance queued; bool has_queued; int queued_rhythm; KvHit queued_hits[KV_BEAT_HITS]; size_t queued_hit_count; double queued_phase; unsigned part; };
@@ -151,6 +151,7 @@ void kv_mixer_phase(KvMixer *m,double beats) { if(m && isfinite(beats) && beats>
 double kv_mixer_rhythm_beat(const KvMixer *m) { return m && m->rhythm?((double)m->clock-m->origin)/m->beat_frames:-1; }
 const float *kv_mixer_dry(const KvMixer *m) { return m?m->dry:NULL; }
 void kv_mixer_drums(KvMixer *m,const KvPianoBank *bank) { if(m) m->drums=bank; }
+void kv_mixer_drums_electronic(KvMixer *m,const KvPianoBank *bank) { if(m) m->drums_electronic=bank; }
 void kv_mixer_beat(KvMixer *m,const KvHit *hits,size_t count,bool electronic) {
     if(!m || (count && !hits)) return;
     if(count>KV_BEAT_HITS) count=KV_BEAT_HITS;
@@ -163,10 +164,11 @@ unsigned kv_mixer_drum_voices(const KvMixer *m) { unsigned n=0; if(m) for(int i=
    up to 4 ms late and ±6 % in level; a closed hi-hat chokes an open one. */
 static void strike(KvMixer *m,int drum,float velocity) {
     const float *pcm=NULL; size_t frames=0; unsigned channels=1;
-    if(m->electronic || !m->drums) { int s=synth_of(drum); if(s<0) return; pcm=m->synth[s]; frames=m->synth_frames[s]; }
+    const KvPianoBank *kit=m->electronic?m->drums_electronic:m->drums;
+    if(!kit) { int s=synth_of(drum); if(s<0) return; pcm=m->synth[s]; frames=m->synth_frames[s]; }
     else {
         int layer=(velocity>=.62f?2:0)+(m->take[drum&127]^=1); KvSampleView v;
-        if(!kv_piano_layer(m->drums,drum,layer,&v) || v.midi!=drum) return;
+        if(!kv_piano_layer(kit,drum,layer,&v) || v.midi!=drum) return;
         pcm=v.pcm; frames=v.frames; channels=2;
     }
     if(drum==KV_DRUM_HAT) for(int i=0;i<DRUM_VOICES;i++) { struct Drum *d=&m->drum_voices[i]; if(d->active && d->drum==KV_DRUM_HAT_OPEN && !d->fade_total) d->fade=d->fade_total=441; }
@@ -376,7 +378,7 @@ bool kv_mixer_performance(KvMixer *m,const KvPerformance *p,double seconds,int i
     m->phase=0; schedule(m); for(int i=0;i<VOICES;i++) release(&m->voices[i],1323); return true;
 }
 bool kv_mixer_queue(KvMixer *m,const KvPerformance *p,int rhythm,const KvHit *hits,size_t count,double phase) {
-    if(!m || !m->custom || !kv_performance_playable(p) || rhythm<-1 || rhythm>1 || count>KV_BEAT_HITS || (count && !hits) || !isfinite(phase) || phase<0 || phase>16) return false;
+    if(!m || !m->custom || !kv_performance_playable(p) || rhythm<-1 || rhythm>2 || count>KV_BEAT_HITS || (count && !hits) || !isfinite(phase) || phase<0 || phase>16) return false;
     m->queued=*p; m->queued_rhythm=rhythm; m->queued_phase=phase; m->queued_hit_count=count; if(count) memcpy(m->queued_hits,hits,count*sizeof *hits);
     m->has_queued=true; return true;
 }
@@ -385,9 +387,9 @@ unsigned kv_mixer_part(const KvMixer *m) { return m?m->part:0; }
 static void start_queued(KvMixer *m) {
     m->sequence_start+=m->cycle_end; m->performance=m->queued; m->count=m->queued.count; m->next=0; m->cycle=0; m->has_queued=false; m->part++;
     schedule(m);
-    if(m->queued_rhythm>=0) {   // the part's drums; the click stays as it is
-        if(m->queued_rhythm==1 && m->queued_hit_count) memcpy(m->beat,m->queued_hits,m->queued_hit_count*sizeof *m->beat);
-        m->beat_count=m->queued_rhythm==1?m->queued_hit_count:0; m->beat_frames=(double)m->interval; m->rhythm=m->click || m->beat_count>0;
+    if(m->queued_rhythm>=0) {   // the part's drums and their kit; the click stays as it is
+        if(m->queued_rhythm>=1 && m->queued_hit_count) memcpy(m->beat,m->queued_hits,m->queued_hit_count*sizeof *m->beat);
+        m->beat_count=m->queued_rhythm>=1?m->queued_hit_count:0; m->electronic=m->queued_rhythm==2; m->beat_frames=(double)m->interval; m->rhythm=m->click || m->beat_count>0;
     }
     if(m->rhythm) rhythm_align(m,(double)m->sequence_start-m->queued_phase*(double)m->interval);   // the part's place in the bar
 }

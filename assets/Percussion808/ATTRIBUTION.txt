@@ -1,0 +1,6 @@
+Electronic kit — Roland TR-808 Sound Sample Set 1.0.0 (1994), recorded by Michael Fischer (Technopolis), free to use;
+published CC0 1.0 Universal (public domain) by the Tidal Cycles project: https://creativecommons.org/publicdomain/zero/1.0/
+https://github.com/tidalcycles/sounds-tr808-fischer
+Pinned commit: 85fbecf1bec32553395625ea659e2a56dfd7c0e1
+Bass drum, rim shot, snare, hand clap, closed and open hi-hat, cowbell, hi and low conga, maracas.
+Every hit cut at its attack, shortened with a fade, converted to FLAC and level-matched; the soft layers are the same hits at a lower level. No author endorsement implied.

@@ -380,6 +380,7 @@ size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]) {
 KvBeat kv_beat_for_style(KvPianoPattern style) {
     return style==KV_POP?KV_BEAT_POP:style==KV_DARK_JAZZ?KV_BEAT_SHUFFLE:style==KV_TRIP_HOP?KV_BEAT_TRIPHOP:KV_BEAT_BALLAD;   // the waltz becomes one in 3/4
 }
+bool kv_beat_electronic(KvBeat beat) { return beat==KV_BEAT_HOUSE || beat==KV_BEAT_HIPHOP || beat==KV_BEAT_TRIPHOP; }
 const char *kv_beat_name(KvBeat beat) {
     static const char *names[KV_BEAT_COUNT]={"Поп","Баллада","Босса-нова","Шаффл","Хип-хоп","Трип-хоп","Хаус"};
     return beat>=0 && beat<KV_BEAT_COUNT?names[beat]:"";

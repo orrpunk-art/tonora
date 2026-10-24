@@ -13,7 +13,7 @@
 struct Command { unsigned epoch; int type,instrument,rhythm; size_t count,voices; double seconds; float values[2]; KvEffects effects; int notes[256]; KvPerformance performance; KvHit hits[KV_BEAT_HITS]; };
 struct KvAudio {
     AudioQueueRef queue; AudioQueueBufferRef buffers[3];
-    KvMixer *mixer; KvLiveEffects *fx; KvPianoBank *banks[KV_INSTRUMENTS],*drums;
+    KvMixer *mixer; KvLiveEffects *fx; KvPianoBank *banks[KV_INSTRUMENTS],*drums,*drums_electronic;
     struct Command commands[COMMANDS]; atomic_uint read,write,stop_epoch; unsigned applied_stop;
     atomic_bool closing,playing,stop_requested; atomic_uint pending_plays; bool muted; float output_gain; atomic_int error,event;
     atomic_uint_fast64_t clock,start,active_low,active_high,part_start,silent; atomic_uint part; _Atomic double rhythm_beat;
@@ -135,6 +135,11 @@ bool kv_audio_load_drums(KvAudio *a,const char *directory) {
     KvPianoBank *bank=kv_piano_load(directory); if(!bank) return false;
     a->drums=bank; kv_mixer_drums(a->mixer,bank); return true;
 }
+bool kv_audio_load_drums_electronic(KvAudio *a,const char *directory) {
+    if(!a || a->started || a->drums_electronic) return false;
+    KvPianoBank *bank=kv_piano_load(directory); if(!bank) return false;
+    a->drums_electronic=bank; kv_mixer_drums_electronic(a->mixer,bank); return true;
+}
 static bool start(KvAudio *a) {
     if(a->started) return true;
     if(!a->banks[0]) return false;
@@ -203,7 +208,7 @@ bool kv_audio_performance(KvAudio *a,const KvPerformance *p,double seconds) {
     if(!send(a,command)) { atomic_fetch_sub(&a->pending_plays,1); return false; } return true;
 }
 bool kv_audio_queue(KvAudio *a,const KvPerformance *p,int rhythm,const KvHit *hits,size_t count,double phase) {
-    if(!a || !kv_performance_playable(p) || rhythm<-1 || rhythm>1 || count>KV_BEAT_HITS || (count && !hits) || !isfinite(phase) || phase<0 || phase>16) return false;
+    if(!a || !kv_performance_playable(p) || rhythm<-1 || rhythm>2 || count>KV_BEAT_HITS || (count && !hits) || !isfinite(phase) || phase<0 || phase>16) return false;
     struct Command command={.type=17,.rhythm=rhythm,.count=count,.seconds=phase,.performance=*p}; if(count) memcpy(command.hits,hits,count*sizeof *hits);
     return send(a,command);
 }
@@ -223,6 +228,7 @@ bool kv_audio_set_rhythm(KvAudio *a,bool on,KvGrid grid,KvMeter meter,double sec
 }
 bool kv_audio_set_beat(KvAudio *a,const KvHit *hits,size_t count,bool electronic) {
     if(!a || count>KV_BEAT_HITS || (count && !hits)) return false;
+    if(count && !start(a)) return false;   // the drums alone (no click, nothing playing) still need the output running
     struct Command command={.type=16,.count=count,.voices=electronic}; if(count) memcpy(command.hits,hits,count*sizeof *hits);
     return send(a,command);
 }
@@ -258,5 +264,5 @@ void kv_audio_destroy(KvAudio *a) {
         if(result!=noErr) fprintf(stderr,"AudioQueueDispose: %d\n",(int)result);
     }
     kv_live_effects_free(a->fx); kv_mixer_free(a->mixer);
-    for(int i=0;i<KV_INSTRUMENTS;i++) kv_piano_free(a->banks[i]); kv_piano_free(a->drums); free(a);
+    for(int i=0;i<KV_INSTRUMENTS;i++) kv_piano_free(a->banks[i]); kv_piano_free(a->drums); kv_piano_free(a->drums_electronic); free(a);
 }

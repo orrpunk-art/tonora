@@ -46,6 +46,8 @@ double kv_mixer_rhythm_beat(const KvMixer *mixer);
 void kv_mixer_beat(KvMixer *mixer,const KvHit *hits,size_t count,bool electronic);
 /* The recorded kit: a bank on General MIDI drum notes, layers 0-1 soft and 2-3 loud takes. Without it every beat is electronic. */
 void kv_mixer_drums(KvMixer *mixer,const KvPianoBank *bank);
+/* The electronic kit (a sampled 808) for beats marked electronic; without it the built-in synthesized one plays. */
+void kv_mixer_drums_electronic(KvMixer *mixer,const KvPianoBank *bank);
 /* Drum voices sounding now (tests and diagnostics). */
 unsigned kv_mixer_drum_voices(const KvMixer *mixer);
 #define KV_DRY_FRAMES 4096
@@ -53,7 +55,7 @@ unsigned kv_mixer_drum_voices(const KvMixer *mixer);
 const float *kv_mixer_dry(const KvMixer *mixer);
 /* The part after the playing performance (a song's next section): it starts on the frame the current one ends, without a gap,
    while the current voices ring on; humanizing, tempo and instrument stay. rhythm: −1 leaves the drums as they are, 0 switches
-   them off, 1 plays `hits` (the click is untouched); the layer restarts at `phase` beats into its bar on the part's first frame. One part waits at a time: a new
+   them off, 1 plays `hits` on the acoustic kit, 2 on the electronic one (the click is untouched); the layer restarts at `phase` beats into its bar on the part's first frame. One part waits at a time: a new
    call replaces it. kv_mixer_part counts the parts started since the last kv_mixer_performance (0 while the first plays). */
 bool kv_mixer_queue(KvMixer *mixer,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count,double phase);
 /* Where in the bar the next kv_mixer_performance begins, in beats past a downbeat (a song played from inside a bar); the queued
