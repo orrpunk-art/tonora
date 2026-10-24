@@ -1569,15 +1569,18 @@ static NSString *Describe(NSView *view) {
 }
 /* A texture or pattern chosen in the arranger with several sections selected (⌘A, ⇧-click) goes to all of them. */
 - (void)changeTexture:(void(^)(void))change {
-    if(self.viewMode==2 && self.editingSection>=0 && self.arranger.selection.length>1) [self pushSongUndo];   // one ⌘Z brings every section's back
+    if(self.viewMode==2 && self.editingSection>=0) [self pushSongUndo];   // one ⌘Z brings every section's back
     [self changeArrangement:change];
     NSRange range=self.arranger.selection; NSInteger editing=self.editingSection; KvSong *song=self.song;
     if(self.viewMode!=2 || editing<0 || editing>=(NSInteger)song->count) return;
-    [self storeWorking]; NSUInteger others=0;
-    for(NSUInteger i=range.location;range.length>1 && i<NSMaxRange(range) && i<song->count;i++) if((NSInteger)i!=editing && song->sections[i].kind!=KV_SECTION_TRANSITION) { double was=kv_section_pass_beats(song,&song->sections[i]); song->sections[i].arrangement=song->sections[editing].arrangement; kv_section_keep_passes(song,&song->sections[i],was); others++; }
-    if(others) { self.songPlans=nil; [self.arranger reload]; [self saveState]; }
-    self.status.stringValue=others?[NSString stringWithFormat:T(@"Рисунок «%@» — у выделенных секций: %lu"),[self textureName],(unsigned long)others+1]
-        :[NSString stringWithFormat:T(@"Рисунок только у секции «%@» · ⌘A — выделить все и поменять у всех"),[self arrangerName:editing]];
+    [self storeWorking]; NSUInteger others=0; BOOL whole=range.length<=1;   // one section selected: the texture is the song's; a range: theirs alone
+    if(whole) range=NSMakeRange(0,song->count);
+    for(NSUInteger i=range.location;i<NSMaxRange(range) && i<song->count;i++) if((NSInteger)i!=editing && song->sections[i].kind!=KV_SECTION_TRANSITION) {
+        double was=kv_section_pass_beats(song,&song->sections[i]); KvArrangement a=song->sections[editing].arrangement; a.seed=song->sections[i].arrangement.seed; a.generated=song->sections[i].arrangement.generated;   // each keeps its own variation
+        song->sections[i].arrangement=a; kv_section_keep_passes(song,&song->sections[i],was); others++; }
+    if(others) { kv_song_refresh_transitions(song); self.songPlans=nil; [self.arranger reload]; [self saveState]; }
+    self.status.stringValue=whole?[NSString stringWithFormat:T(@"Рисунок «%@» — у всей песни · выделите несколько секций, чтобы поменять только у них"),[self textureName]]
+        :[NSString stringWithFormat:T(@"Рисунок «%@» — у выделенных секций: %lu"),[self textureName],(unsigned long)others+1];
 }
 /* Any change that alters the notes restarts a running progression from the current chord with the new settings. */
 - (void)changeArrangement:(void(^)(void))change { [self changeArrangement:change remap:nil]; }
@@ -3440,7 +3443,7 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     size_t at=0; for(size_t i=0;i<work->count;i++) if(work->sections[i].id==verseId) at=i;
     uint32_t copy_of[KV_SONG_SECTIONS]; self.formSeed=self.formSeed*1103515245u+12345u;
     if(!kv_song_apply_form(work,slots,count,at,self.formSeed,copy_of)) { free(work); [self.songUndo removeLastObject]; self.status.stringValue=T(@"⚠ Форма не собралась"); return; }
-    *song=*work; free(work);
+    *song=*work; free(work); song->cycle_from=song->cycle_to=0;   // the cycle was drawn on the old row
     NSMutableDictionary *tracks=[NSMutableDictionary dictionary];   // edited notes: the kept sections keep theirs, the repeats take their source's
     for(size_t i=0;i<song->count;i++) { NSData *track=self.sectionTracks[@(copy_of[i]?copy_of[i]:song->sections[i].id)]; if(track && song->sections[i].edited) tracks[@(song->sections[i].id)]=track; else song->sections[i].edited=NO; }
     self.sectionTracks=tracks; self.songPlans=nil; if(self.editingSection>=0) self.editingSection=-2;   // the snapshot holds the working state
@@ -5118,7 +5121,7 @@ int main(int argc, const char *argv[]) {
               { double pass=kv_section_pass_beats(root.song,&root.song->sections[0]); [root arrangerSetLength:0 beats:pass]; KvChordLength was=root.chordLength;   // a stretched or cut section keeps its share of passes when the chord length changes
                 [root.lengthChoice selectItemAtIndex:KV_LENGTH_TWO_BARS]; [root lengthChanged:root.lengthChoice]; [root storeWorking];
                 KV_CHECK(fabs(kv_section_beats(root.song,0)-kv_section_pass_beats(root.song,&root.song->sections[0]))<1e-9 && kv_section_pass_beats(root.song,&root.song->sections[0])>pass,@"Arranger: a section of one pass stays one pass with a longer chord length, not a loop of the old one");
-                [root.lengthChoice selectItemAtIndex:was]; [root lengthChanged:root.lengthChoice]; [root storeWorking]; [root undoSong]; }
+                [root.lengthChoice selectItemAtIndex:was]; [root lengthChanged:root.lengthChoice]; [root storeWorking]; for(int k=0;k<3;k++) [root undoSong]; }   // the length and the two texture changes
               [root arrangerCut:0 atBeat:20]; KV_CHECK(root.song->count==3 && root.song->sections[0].repeats==1 && root.song->sections[1].repeats==1 && fabs(kv_song_beats(root.song)-56)<1e-9 && root.editingSection==1,@"Arranger: a cut between passes splits the repeats");
               [root arrangerCut:0 atBeat:9]; KV_CHECK(root.song->count==4 && fabs(kv_section_beats(root.song,0)-9)<1e-9 && fabs(root.song->sections[1].start-9)<1e-9,@"Arranger: a cut anywhere, inside a chord too");
               [root undoSequence:nil]; KV_CHECK(root.song->count==3,@"Arranger: ⌘Z joins it again");
@@ -5391,9 +5394,11 @@ int main(int argc, const char *argv[]) {
                   KV_CHECK(turned.length==plain.length && expect.count>0 && [expect isEqualToArray:got],@"Shift: a shifted drums region turns the bar's pattern by the shift");
                   [root undoSong]; [root undoSong]; arr.snap=KvSnapSmart; }
                 // A texture chosen with all the sections selected goes to them all (a transition keeps its own).
-                { [arr keyDown:key(0,NSEventModifierFlagCommand)]; NSInteger mode=root.performanceMode==2?1:2; [root.performanceChoice selectItemWithTag:mode]; [root performanceChanged:root.performanceChoice];
+                { [arr keyDown:key(53,0)]; NSInteger mode=root.performanceMode==2?1:2; uint32_t seed1=root.song->sections[1].arrangement.seed; [root.performanceChoice selectItemWithTag:mode]; [root performanceChanged:root.performanceChoice];
                   BOOL all=YES; for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind!=KV_SECTION_TRANSITION && root.song->sections[i].arrangement.arpeggio!=(mode==2)) all=NO;
-                  KV_CHECK(all && [root.status.stringValue containsString:@"выделенных"],@"Selection: a texture chosen with all selected goes to every section");
+                  KV_CHECK(all && root.song->sections[1].arrangement.seed==seed1 && [root.status.stringValue containsString:@"всей песни"],@"Texture: chosen with one section selected it is the song's, every section takes it and keeps its own variation");
+                  [root undoSong]; click(bassMid(0),1,0); click(bassMid(1),1,NSEventModifierFlagShift); [root.performanceChoice selectItemWithTag:mode]; [root performanceChanged:root.performanceChoice];
+                  KV_CHECK(root.song->sections[0].arrangement.arpeggio==(mode==2) && root.song->sections[1].arrangement.arpeggio==(mode==2) && root.song->sections[3].arrangement.arpeggio!=(mode==2) && [root.status.stringValue containsString:@"выделенных"],@"Texture: with a range selected it goes to the range alone");
                   [root undoSong]; [arr keyDown:key(53,0)]; }
                 // The right-click menu.
                 NSMenu *menu=[arr menuForSection:2 track:KV_TRACK_BASS beat:kv_section_start(root.song,2)+bar]; NSMenuItem *mute=nil;

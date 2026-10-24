@@ -151,7 +151,7 @@ int main(void) {
             KvSection chorus=kv_section_chorus(&song,&song.sections[0],seed);
             bool same=true; for(int k=0;k<4;k++) if(kv_code_base(chorus.codes[k])!=verses[v][k]) same=false;
             int first=kv_code_base(chorus.codes[0]);
-            CHECK(!same && chorus.count==8 && kv_code_base(chorus.codes[7])==0 && chorus.kind==KV_SECTION_CHORUS);
+            CHECK(!same && chorus.count==4 && chorus.repeats==2 && chorus.kind==KV_SECTION_CHORUS);   // one turn, ×2
             CHECK(minor?(first==0 || first==5):(first==0 || first==3 || first==5));
             CHECK(first!=kv_code_base(verses[v][3]));
             CHECK(chorus.level>1.1f && chorus.lift==12 && chorus.arrangement.style==KV_BALLAD && chorus.beat==KV_SECTION_BEAT_STYLE);

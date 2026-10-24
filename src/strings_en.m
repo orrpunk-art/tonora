@@ -713,7 +713,7 @@ NSDictionary<NSString *,NSString *> *TNEnglishTable(void) {
         @"⚠ Сохранённая песня повреждена и не открыта":@"⚠ The saved song is damaged and was not opened",
         @"✂ такт %d":@"✂ bar %d",
         @"Рисунок «%@» — у выделенных секций: %lu":@"Texture «%@» — on the selected sections: %lu",
-        @"Рисунок только у секции «%@» · ⌘A — выделить все и поменять у всех":@"The texture only of «%@» · ⌘A — select all to change them all",
+        @"Рисунок «%@» — у всей песни · выделите несколько секций, чтобы поменять только у них":@"Pattern «%@» — the whole song's · select several sections to change theirs alone",
         @"↻ цикл: протяните здесь":@"↻ cycle: drag here",
         @"Барабаны играет метроном: включите его и выберите «Барабаны по стилю»":@"The metronome plays the drums: switch it on and choose «Drums by style»",
         @"Барабаны как в метрономе · по стилю секции":@"Drums as the metronome · by the section's style",
