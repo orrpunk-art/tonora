@@ -208,6 +208,13 @@ int main(void) {
         KvSection chorus=g[0].section; kv_song_insert(&song,1,&chorus); n=kv_song_suggest(&song,0,7,g);
         CHECK(g[0].section.kind==KV_SECTION_CHORUS && g[0].copy_of==song.sections[1].id);
         n=kv_song_suggest(&song,1,7,g); CHECK(n>=3 && g[0].section.kind==KV_SECTION_PIT && g[1].section.kind==KV_SECTION_VERSE && g[1].lead_in && g[1].transition.transition==KV_TRANSITION_BREAK);
+        CHECK(n==4 && g[2].section.kind==KV_SECTION_BRIDGE && g[3].section.kind==KV_SECTION_OUTRO);   // the first chorus, last: the bridge third, the outro last
+        // After the second chorus the bridge comes first; after the bridge, the chorus led in by a rise; with a bridge in the song, no other.
+        KvSection again=song.sections[1]; kv_song_insert(&song,2,&verse); kv_song_insert(&song,3,&again); n=kv_song_suggest(&song,3,7,g);
+        CHECK(n>=3 && g[0].section.kind==KV_SECTION_BRIDGE && !g[0].lead_in && g[0].section.count==4);
+        KvSection bridge=g[0].section; kv_song_insert(&song,4,&bridge); n=kv_song_suggest(&song,4,7,g);
+        CHECK(n>=2 && g[0].section.kind==KV_SECTION_CHORUS && g[0].lead_in && g[0].transition.transition==KV_TRANSITION_RISE && g[0].copy_of==song.sections[1].id);
+        n=kv_song_suggest(&song,3,7,g); for(size_t i=0;i<n;i++) CHECK(g[i].section.kind!=KV_SECTION_BRIDGE);
     }
     { // Bridge: four bars away from the tonic, back to the dominant, in every key and chord length.
         for(int index=0;index<12;index++) for(int minor=0;minor<2;minor++) for(int l=0;l<KV_LENGTH_COUNT;l++) {

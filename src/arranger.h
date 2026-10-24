@@ -45,6 +45,12 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerSetCycleFrom:(double)from to:(double)to;   /* a drag on the ruler; from == to: no cycle */
 - (BOOL)arrangerCycles;                             /* ↻ is on: the cycle (or the song) repeats */
 - (void)arrangerDrawAt:(NSInteger)index;            /* pencil: the circle's progression becomes a section at index */
+/* Song forms (spec 1.5 §6): the built-in ones, then the user's: @"name", @"letters" («И–К–Пр…»), @"slots" (NSNumber), @"user". */
+- (NSArray<NSDictionary *> *)arrangerForms;
+- (void)arrangerApplyForm:(NSDictionary *)form;
+- (void)arrangerAnotherForm:(id)sender;             /* ⌘R after a form: another variant of it */
+- (void)arrangerSaveForm:(id)sender;                /* asks for a name */
+- (void)arrangerDeleteForm:(NSString *)name;
 @end
 /* Tracks of the song (spec 1.5 §2): a ruler, the arrangement track of section markers, the melody, bass and drum tracks with
    their headers and regions, and an overview of the whole song. */
@@ -80,6 +86,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 @property(nonatomic,readonly) NSSegmentedControl *toolChoice;
 @property(nonatomic,readonly) NSPopUpButton *snapChoice;
 @property(nonatomic,readonly) NSButton *zoomOutButton,*zoomInButton,*wholeSongButton;
+@property(nonatomic,readonly) NSPopUpButton *structureChoice;   /* «Структура ▾»: forms, «Сохранить форму…», another variant */
 @property(nonatomic,readonly) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @property(nonatomic,readonly) NSArray<NSButton *> *trackMutes,*trackSolos,*regionMutes;   /* per track */

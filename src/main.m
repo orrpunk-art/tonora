@@ -255,7 +255,9 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 @property(nonatomic) BOOL metronomeOn,countIn;           /* the metronome starts off at every launch; the count-in is kept */
 @property(nonatomic) KvGrid rhythmGrid;
 @property(nonatomic) NSInteger rhythmBeat;               /* the draft's drums («Ударные»): −1 none, a KvBeat, or KvBeatByStyle */
-@property(nonatomic) NSMenu *drumsMenu;                   /* «Ударные черновика» in the metronome's menu */
+@property(nonatomic) NSMenu *drumsMenu;
+@property(nonatomic) NSDictionary *lastForm;              /* the form just applied: ⌘R makes another variant until the song is edited otherwise */
+@property(nonatomic) uint32_t formSeed;                   /* «Ударные черновика» in the metronome's menu */
 @property(nonatomic) NSData *sentHits;                    /* a section's hits the engine plays now */
 @property(nonatomic) NSInteger sentBeat,sentBeatMeter;   /* what the engine plays now, to send a new bar only when it changes */
 @property(nonatomic) double rhythmVolume;                /* 0…1, FX «Ритм · громкость» */
@@ -1302,8 +1304,9 @@ static NSString *Describe(NSView *view) {
         for(NSUInteger i=0;i<views.count;i++) for(NSUInteger j=i+1;j<views.count;j++)
             if(NSIntersectsRect(NSInsetRect(views[i].frame,.5,.5),NSInsetRect(views[j].frame,.5,.5))) return [NSString stringWithFormat:@"Arranger overlap: %@ / %@",Describe(views[i]),Describe(views[j])];
         for(NSView *view in views) if([view isKindOfClass:NSPopUpButton.class]) for(NSMenuItem *item in [(NSPopUpButton *)view itemArray]) {
+            if(item.isSeparatorItem || [(NSPopUpButton *)view pullsDown]) continue;   // a pull-down shows its own title only
             NSString *title=[item.representedObject isKindOfClass:NSString.class]?item.representedObject:item.title;
-            if([title sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightMedium]}].width>NSWidth(view.frame)-44) return [NSString stringWithFormat:@"Popup title truncated: «%@» in %@",title,Describe(view)];
+            if([title sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightMedium]}].width>NSWidth(view.frame)-44-(item.image?22:0)) return [NSString stringWithFormat:@"Popup title truncated: «%@» in %@",title,Describe(view)];
         }
     }
     const KvSong *song=[self songWithWorking]; NSRect marker=[self.arranger rectOfSection:0];
@@ -2231,7 +2234,8 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
 - (void)arpeggioDivisionChanged:(NSPopUpButton *)sender { KvDivision division=(KvDivision)sender.indexOfSelectedItem; [self changeArrangement:^{ self.division=division; }]; }
 - (void)fillChanged:(NSPopUpButton *)sender { KvFillRate rate=(KvFillRate)sender.indexOfSelectedItem; [self changeArrangement:^{ self.fillRate=rate; }]; }
 - (void)regenerateArrangement:(id)sender {
-    (void)sender; if(!self.progression.count) return;
+    if(self.viewMode==2 && self.lastForm) { [self arrangerAnotherForm:sender]; return; }   // right after a form: another variant of it
+    if(!self.progression.count) return;
     [self changeArrangement:^{
         self.arrangementSeed=arc4random_uniform(UINT32_MAX-1)+1; self.generatedRhythm=YES; if(self.performanceMode==0) self.performanceMode=1; self.needsLayout=YES;
     }];
@@ -3030,7 +3034,7 @@ static BOOL SameTexture(KvArrangement a,KvArrangement b) {
 }
 // ---- undo of the song: snapshots of the sections and the tracks ----
 - (NSDictionary *)songSnapshot { [self storeWorking]; return @{@"song":[NSData dataWithBytes:self.song length:sizeof(KvSong)],@"tracks":[self.sectionTracks copy],@"editing":@(self.editingSection)}; }
-- (void)pushSongUndo { [self.songUndo addObject:[self songSnapshot]]; if(self.songUndo.count>60) [self.songUndo removeObjectAtIndex:0]; [self.songRedo removeAllObjects]; }
+- (void)pushSongUndo { self.lastForm=nil; [self.songUndo addObject:[self songSnapshot]]; if(self.songUndo.count>60) [self.songUndo removeObjectAtIndex:0]; [self.songRedo removeAllObjects]; }
 - (void)applySongSnapshot:(NSDictionary *)snapshot {
     if([self isPlayingProgression]) [self stopPlayback:nil];
     memcpy(self.song,[snapshot[@"song"] bytes],sizeof(KvSong)); self.sectionTracks=[snapshot[@"tracks"] mutableCopy]; self.songPlans=nil;
@@ -3279,6 +3283,80 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     if(made && self.trackEdited) self.sectionTracks[@(made)]=[self trackData];
     self.songPlans=nil; return made;
 }
+// ---- song forms (spec 1.5 §6) ----
+static NSString *FormLetters(NSArray<NSNumber *> *slots) {
+    NSMutableArray *letters=[NSMutableArray array];
+    for(NSNumber *slot in slots) { int x=slot.intValue; NSString *letter=nil;
+        switch(x) { case KV_SECTION_INTRO: letter=T(@"И"); break; case KV_SECTION_VERSE: letter=T(@"К"); break; case KV_SECTION_CHORUS: letter=T(@"Пр"); break;
+            case KV_SECTION_PIT: letter=T(@"Я"); break; case KV_SECTION_BRIDGE: letter=T(@"Б"); break; case KV_SECTION_OUTRO: letter=T(@"Кц"); break;
+            case KV_FORM_BUILD: letter=T(@"Билд"); break; case KV_FORM_DROP: letter=T(@"Дроп"); break; default: break; }   // transitions: the form puts them itself
+        if(letter) [letters addObject:letter]; }
+    return [letters componentsJoinedByString:@"–"];
+}
+- (NSArray<NSDictionary *> *)arrangerForms {
+    NSMutableArray *list=[NSMutableArray array]; const KvForm *forms; size_t n=kv_song_forms(&forms);
+    for(size_t i=0;i<n;i++) { NSMutableArray *slots=[NSMutableArray array]; for(size_t k=0;k<forms[i].count;k++) [slots addObject:@(forms[i].slots[k])];
+        [list addObject:@{@"name":S(kv_form_name(i)),@"letters":FormLetters(slots),@"slots":slots,@"user":@NO}]; }
+    for(NSDictionary *form in [Defaults() arrayForKey:@"userForms"]) {   // the user's, from the settings: kept only when whole
+        if(![form isKindOfClass:NSDictionary.class] || ![form[@"name"] isKindOfClass:NSString.class] || ![form[@"slots"] isKindOfClass:NSArray.class]) continue;
+        NSArray *slots=form[@"slots"]; BOOL ok=slots.count>0 && slots.count<=KV_FORM_SLOTS;
+        for(id slot in slots) if(![slot isKindOfClass:NSNumber.class] || !kv_form_slot_valid([slot intValue])) ok=NO;
+        if(ok) [list addObject:@{@"name":form[@"name"],@"letters":FormLetters(slots),@"slots":slots,@"user":@YES}];
+    }
+    return list;
+}
+/* The song in a form around its verse: the selected section when it is a verse, else the song's first verse (or the selected one).
+   Again (⌘R): the generated sections go first, so the chorus, bridge and the rest come anew from another seed. */
+- (void)applyForm:(NSDictionary *)form again:(BOOL)again {
+    NSArray<NSNumber *> *list=form[@"slots"]; if(!self.song->count || !list.count) return;
+    int slots[KV_FORM_SLOTS]; size_t count=MIN(list.count,(NSUInteger)KV_FORM_SLOTS); for(size_t k=0;k<count;k++) slots[k]=list[k].intValue;
+    [self pushSongUndo]; KvSong *song=[self liveSong]; NSInteger editing=self.editingSection; size_t verse=0; BOOL found=NO;
+    if(editing>=0 && editing<(NSInteger)song->count && song->sections[editing].kind==KV_SECTION_VERSE) { verse=(size_t)editing; found=YES; }
+    for(size_t i=0;!found && i<song->count;i++) if(song->sections[i].kind==KV_SECTION_VERSE) { verse=i; found=YES; }
+    if(!found) verse=(size_t)MAX(0,MIN((NSInteger)song->count-1,editing));
+    KvSong *work=malloc(sizeof(KvSong)); if(!work) { [self.songUndo removeLastObject]; return; }
+    *work=*song; uint32_t verseId=song->sections[verse].id;
+    if(again) { work->count=0; for(size_t i=0;i<song->count;i++) if(song->sections[i].id==verseId || song->sections[i].edited) work->sections[work->count++]=song->sections[i]; }
+    size_t at=0; for(size_t i=0;i<work->count;i++) if(work->sections[i].id==verseId) at=i;
+    uint32_t copy_of[KV_SONG_SECTIONS]; self.formSeed=self.formSeed*1103515245u+12345u;
+    if(!kv_song_apply_form(work,slots,count,at,self.formSeed,copy_of)) { free(work); [self.songUndo removeLastObject]; self.status.stringValue=T(@"⚠ Форма не собралась"); return; }
+    *song=*work; free(work);
+    NSMutableDictionary *tracks=[NSMutableDictionary dictionary];   // edited notes: the kept sections keep theirs, the repeats take their source's
+    for(size_t i=0;i<song->count;i++) { NSData *track=self.sectionTracks[@(copy_of[i]?copy_of[i]:song->sections[i].id)]; if(track && song->sections[i].edited) tracks[@(song->sections[i].id)]=track; else song->sections[i].edited=NO; }
+    self.sectionTracks=tracks; self.songPlans=nil; if(self.editingSection>=0) self.editingSection=-2;   // the snapshot holds the working state
+    NSInteger first=0; for(size_t i=0;i<song->count;i++) if(song->sections[i].kind==KV_SECTION_VERSE) { first=(NSInteger)i; break; }
+    [self reloadEditing:first]; [self saveState]; self.lastForm=form;
+    self.status.stringValue=[NSString stringWithFormat:T(@"Форма «%@»: секций %lu · ⌘R — другой вариант · ⌘Z — вернуть"),form[@"name"],(unsigned long)song->count];
+}
+- (void)arrangerApplyForm:(NSDictionary *)form { [self applyForm:form again:NO]; }
+- (void)arrangerAnotherForm:(id)sender { (void)sender; if(self.lastForm) [self applyForm:self.lastForm again:YES]; else self.status.stringValue=T(@"Сначала выберите форму в меню «Структура»"); }
+/* The current song's kinds as a form of the user's, under a name (the same name replaces it); NO when the song is empty. */
+- (BOOL)saveFormNamed:(NSString *)name {
+    name=[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]; const KvSong *song=[self songWithWorking]; if(!name.length || !song->count) return NO;
+    NSMutableArray *slots=[NSMutableArray array];
+    for(size_t i=0;i<song->count && slots.count<KV_FORM_SLOTS;i++) { const KvSection *x=&song->sections[i]; int slot=x->kind;
+        if(x->kind==KV_SECTION_TRANSITION) slot=!strcmp(x->name,kv_form_label(KV_FORM_BUILD))?KV_FORM_BUILD:KV_FORM_TRANSITION+x->transition;
+        else if(x->kind==KV_SECTION_CHORUS && !strcmp(x->name,kv_form_label(KV_FORM_DROP))) slot=KV_FORM_DROP;
+        [slots addObject:@(slot)]; }
+    NSMutableArray *forms=[NSMutableArray array];
+    for(NSDictionary *form in [Defaults() arrayForKey:@"userForms"]) if([form isKindOfClass:NSDictionary.class] && ![form[@"name"] isEqual:name]) [forms addObject:form];
+    [forms addObject:@{@"name":name,@"slots":slots}]; [Defaults() setObject:forms forKey:@"userForms"];
+    [self.arranger reload]; self.status.stringValue=[NSString stringWithFormat:T(@"Форма «%@» сохранена: %@ · есть в меню «Структура» во всех песнях"),name,FormLetters(slots)];
+    return YES;
+}
+- (void)arrangerSaveForm:(id)sender {
+    (void)sender; if(!self.song->count || !self.window) return;
+    NSAlert *alert=[NSAlert new]; alert.messageText=T(@"Сохранить форму этой песни"); alert.informativeText=T(@"Типы секций по порядку станут формой в меню «Структура» — для всех песен.");
+    NSTextField *field=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,240,24)]; field.stringValue=T(@"Моя форма"); alert.accessoryView=field;
+    [alert addButtonWithTitle:T(@"Сохранить")]; [alert addButtonWithTitle:T(@"Отмена")]; alert.window.initialFirstResponder=field;
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) { if(response==NSAlertFirstButtonReturn) [self saveFormNamed:field.stringValue]; }];
+}
+- (void)arrangerDeleteForm:(NSString *)name {
+    NSMutableArray *forms=[NSMutableArray array];
+    for(NSDictionary *form in [Defaults() arrayForKey:@"userForms"]) if([form isKindOfClass:NSDictionary.class] && ![form[@"name"] isEqual:name]) [forms addObject:form];
+    [Defaults() setObject:forms forKey:@"userForms"]; [self.arranger reload];
+    self.status.stringValue=[NSString stringWithFormat:T(@"Форма «%@» удалена"),name];
+}
 - (void)arrangerSetTrack:(int)track mute:(int)mute solo:(int)solo level:(double)level {
     if(track<0 || track>=KV_TRACKS) return;
     [self pushSongUndo]; KvSong *song=self.song;
@@ -3386,7 +3464,7 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
 - (NSArray<NSDictionary *> *)arrangerSuggestions:(NSInteger)index {
     KvSuggestion g[4]; size_t n=[self suggestionsAfter:index into:g]; const KvSong *song=[self songWithWorking]; NSMutableArray *ghosts=[NSMutableArray array];
     for(size_t i=0;i<n;i++) {
-        const KvSection *s=&g[i].section; double beats=kv_section_pass_beats(song,s)*s->repeats,bar=kv_meter_bar(song->meter);
+        const KvSection *s=&g[i].section; double beats=s->length>0?s->length:kv_section_pass_beats(song,s)*s->repeats,bar=kv_meter_bar(song->meter);
         NSString *kind=s->kind==KV_SECTION_TRANSITION?[NSString stringWithFormat:T(@"Переход: %@"),[S(kv_transition_name(s->transition)) lowercaseString]]:S(kv_section_kind_name(s->kind));
         NSString *title=[NSString stringWithFormat:g[i].before?T(@"+ %@ в начало · %@"):g[i].copy_of?T(@"+ %@ ещё раз · %@"):T(@"+ %@ · %@"),kind,TNBarCount(beats/bar)];
         NSMutableString *tip=[NSMutableString string];
@@ -4537,6 +4615,7 @@ int main(int argc, const char *argv[]) {
               KV_CHECK(visible>0 && roll.selectedCount==visible,@"Roll: a box drag selects the notes it covers");
               for(int i=0;i<5;i++) [root pianoRollUndo:root.roll];
               [roll deselectAll]; w.contentView=[[NSView alloc] init]; root.frame=NSMakeRect(0,0,1240,760); [root layout]; }
+            if(!(root.visualPlayback && root.playingPerformance)) [root playProgression:nil];   // the roll's checks may outlast the sequence
             [root applyTempo:120]; double normal=root.visualEventSeconds; [root pianoRoll:root.roll speedChanged:.5];
             KV_CHECK(fabs(root.visualEventSeconds-normal*2)<.001 && [root.arrangementInfo.stringValue containsString:@"×½"],@"Half speed doubles the bar without touching the tempo");
             [root pianoRoll:root.roll speedChanged:1]; [root stopPlayback:nil];
@@ -5071,6 +5150,36 @@ int main(int argc, const char *argv[]) {
                 NSMenu *drums=[arr menuForSection:2 track:KV_TRACK_DRUMS beat:0]; NSMenuItem *beats=nil; for(NSMenuItem *item in drums.itemArray) if(item.submenu) beats=item;
                 KV_CHECK(beats.submenu.numberOfItems==arr.beatChoice.numberOfItems,@"Menu: on the drums, the beat list");
                 arr.snap=KvSnapSmart; KV_CHECK(root.song->count==count,@"Selection: the song is back as it was"); }
+              { // Song forms (spec 1.5 §6): five built in; the song rebuilt around its verse, its chorus kept; a section edited by hand
+                // stays (at the end when the form has no place for it); ⌘R another variant; a form saved from the song comes back and goes.
+                NSArray<NSDictionary *> *forms=[root arrangerForms]; NSDictionary *pop=forms.firstObject; size_t before=root.song->count; uint32_t firstId=root.song->sections[0].id;
+                KV_CHECK(forms.count>=5 && [pop[@"letters"] isEqualToString:@"И–К–Пр–К–Пр–Б–Пр–Пр"] && root.arranger.structureChoice.numberOfItems>=(NSInteger)forms.count+3,@"Forms: five built in in «Структура», Pop reads И–К–Пр–К–Пр–Б–Пр–Пр");
+                size_t pit=0; for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind==KV_SECTION_PIT) pit=i;
+                uint32_t pitId=root.song->sections[pit].id; root.song->sections[pit].edited=YES; root.sectionTracks[@(pitId)]=[root trackData];   // as if its notes were edited in the roll
+                const KvSection *oldChorus=NULL; for(size_t i=0;i<root.song->count && !oldChorus;i++) if(root.song->sections[i].kind==KV_SECTION_CHORUS) oldChorus=&root.song->sections[i];
+                int chorusCodes[8]; size_t chorusCount=oldChorus?oldChorus->count:0; for(size_t k=0;k<chorusCount;k++) chorusCodes[k]=oldChorus->codes[k];
+                NSArray *(^kinds)(void)=^NSArray *{ NSMutableArray *list=[NSMutableArray array]; for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind!=KV_SECTION_TRANSITION) [list addObject:@(root.song->sections[i].kind)]; return list; };
+                NSMutableArray *expected=[NSMutableArray array]; for(NSNumber *slot in pop[@"slots"]) if(slot.intValue<KV_FORM_TRANSITION) [expected addObject:slot]; [expected addObject:@(KV_SECTION_PIT)];
+                [root arrangerSelect:0]; [root arrangerApplyForm:pop];
+                const KvSection *last=&root.song->sections[root.song->count-1]; BOOL sameChorus=NO;
+                for(size_t i=0;i<root.song->count && !sameChorus;i++) if(root.song->sections[i].kind==KV_SECTION_CHORUS && root.song->sections[i].count==chorusCount) { sameChorus=YES; for(size_t k=0;k<chorusCount;k++) if(root.song->sections[i].codes[k]!=chorusCodes[k]) sameChorus=NO; }
+                KV_CHECK([kinds() isEqualToArray:expected] && root.song->sections[root.editingSection].kind==KV_SECTION_VERSE && sameChorus,@"Forms: Pop rebuilds the song in its order around the verse, keeping its chorus");
+                KV_CHECK(last->id==pitId && last->edited && root.sectionTracks[@(pitId)] && kv_song_valid(root.song),@"Forms: a section edited by hand stays, at the end when the form has no place for it");
+                BOOL other=NO; int pushes=1;
+                for(int tries=0;tries<4 && !other;tries++) { [root regenerateArrangement:nil]; pushes++;
+                    for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind==KV_SECTION_CHORUS) { for(size_t k=0;k<chorusCount && k<root.song->sections[i].count;k++) if(root.song->sections[i].codes[k]!=chorusCodes[k]) other=YES; break; } }
+                KV_CHECK(other && [kinds() isEqualToArray:expected] && root.song->sections[root.song->count-1].id==pitId,@"Forms: ⌘R makes another variant of the form, the edited section still there");
+                KV_CHECK([root saveFormNamed:@"Тестовая"],@"Forms: the song's form is saved");
+                NSDictionary *mine=[root arrangerForms].lastObject; NSArray *saved=mine[@"slots"];
+                NSString *entry=[NSString stringWithFormat:@"Тестовая · %@",mine[@"letters"]];
+                KV_CHECK([mine[@"name"] isEqualToString:@"Тестовая"] && [mine[@"user"] boolValue] && saved.count==root.song->count && [root.arranger.structureChoice itemWithTitle:entry],@"Forms: it comes back in «Структура» with the song's kinds");
+                NSArray *order=kinds(); [root arrangerApplyForm:mine]; pushes++;
+                KV_CHECK([kinds() isEqualToArray:order] && root.song->sections[root.song->count-1].id==pitId,@"Forms: applied, a saved form gives the same sections (the edited one in its place)");
+                [root arrangerDeleteForm:@"Тестовая"]; BOOL gone=YES; for(NSDictionary *form in [root arrangerForms]) if([form[@"name"] isEqualToString:@"Тестовая"]) gone=NO;
+                KV_CHECK(gone,@"Forms: deleted, it leaves the menu");
+                for(int k=0;k<pushes;k++) [root undoSong];
+                KV_CHECK(root.song->count==before && root.song->sections[0].id==firstId,@"Forms: ⌘Z brings the song back");
+                root.song->sections[pit].edited=NO; [root.sectionTracks removeObjectForKey:@(pitId)]; }
               root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
               [root showView:0]; }
             // Silence rests the output queue; the next sound starts it again and is heard.

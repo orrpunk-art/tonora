@@ -325,11 +325,18 @@ size_t kv_song_suggest(const KvSong *song,size_t after,uint32_t seed,KvSuggestio
             SUGGEST(*x,false,0,x->id);
             if(!last) SUGGEST(kv_section_transition(song,x,&song->sections[after+1],KV_TRANSITION_FILL),false,0,0);
             break;
-        case KV_SECTION_CHORUS:
+        case KV_SECTION_CHORUS: {
+            // The bridge: once the song has had two choruses and none yet, it comes first; else after the breakdown and the verse.
+            size_t choruses=0; for(size_t i=0;i<=after;i++) if(song->sections[i].kind==KV_SECTION_CHORUS) choruses++;
+            bool bridge=!first_of(song,KV_SECTION_BRIDGE);
+            if(bridge && choruses>=2) SUGGEST(kv_section_bridge(song,verse,seed),false,0,0);
             SUGGEST(kv_section_pit(song,verse),false,0,0);
             SUGGEST(*verse,true,KV_TRANSITION_BREAK,verse->id);
-            SUGGEST(*x,false,0,x->id);
+            if(bridge && choruses<2) SUGGEST(kv_section_bridge(song,verse,seed),false,0,0);
+            if(!last) SUGGEST(*x,false,0,x->id);
             break;
+        }
+        case KV_SECTION_BRIDGE:   // back into the chorus, led in by a rise
         case KV_SECTION_PIT:
             SUGGEST(chorus?*chorus:kv_section_chorus(song,verse,seed),true,KV_TRANSITION_RISE,chorus?chorus->id:0);
             SUGGEST(*verse,false,0,verse->id);

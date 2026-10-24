@@ -97,6 +97,7 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
 @property(nonatomic,readwrite) NSSegmentedControl *toolChoice;
 @property(nonatomic,readwrite) NSPopUpButton *snapChoice;
 @property(nonatomic,readwrite) NSButton *zoomOutButton,*zoomInButton,*wholeSongButton;
+@property(nonatomic,readwrite) NSPopUpButton *structureChoice;
 @property(nonatomic) NSTextField *snapLabel;
 @property(nonatomic,readwrite) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readwrite) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
@@ -137,12 +138,14 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
         tools.hints=@[T(@"Указатель · T: выбрать, переставить, растянуть"),T(@"Ножницы · I: щелчок режет секцию · или держите ⌘"),T(@"Карандаш · P: щелчок ставит последовательность с круга новой секцией")];
         tools.selectedSegment=0; [tools setAccessibilityLabel:T(@"Инструмент")]; _toolChoice=tools;
         _snapLabel=Caption(T(@"Привязка"),12,NSFontWeightRegular,NSColor.secondaryLabelColor);
-        _snapChoice=Popup(@[@[T(@"Умная: по масштабу"),T(@"Умная")],@[T(@"К такту"),T(@"Такт")],@[T(@"К доле"),T(@"Доля")],@[T(@"К восьмой"),@"1/8"],@[T(@"Без привязки"),T(@"Без")]],self,@selector(snapChanged:),T(@"Привязка ножниц, линейки и цикла · ⌃ во время жеста — без привязки"));
+        _snapChoice=Popup(@[@[T(@"Привязка умная: по масштабу"),T(@"Умная")],@[T(@"Привязка к такту"),T(@"Такт")],@[T(@"Привязка к доле"),T(@"Доля")],@[T(@"Привязка к восьмой"),@"1/8"],@[T(@"Без привязки"),T(@"Без")]],self,@selector(snapChanged:),T(@"Привязка ножниц, углов, линейки и цикла · ⌃ во время жеста — без привязки"));
+        { NSImage *magnet=TNIcon(@"magnet",12); if(magnet) { for(NSMenuItem *item in _snapChoice.itemArray) item.image=magnet; _snapLabel.hidden=YES; } }   // the icon says «snap»; the word only without it
+        _structureChoice=[[TNPopup alloc] initWithFrame:NSZeroRect pullsDown:YES]; _structureChoice.autoenablesItems=NO; _structureChoice.target=self; _structureChoice.action=@selector(structureChosen:);
+        _structureChoice.toolTip=T(@"Собрать песню по форме вокруг выбранного куплета · правленные вручную секции остаются"); [_structureChoice setAccessibilityLabel:T(@"Структура")];
         _zoomOutButton=Icon(@"minus.magnifyingglass",@"−",T(@"Мельче · ⌘← · ⌘+колесо или щипок"),self,@selector(zoomOut:));
         _zoomInButton=Icon(@"plus.magnifyingglass",@"+",T(@"Крупнее · ⌘→ · ⌘+колесо или щипок"),self,@selector(zoomIn:));
-        _wholeSongButton=[TNButton buttonWithTitle:T(@"Вся песня") target:self action:@selector(showWholeSong:)]; _wholeSongButton.bezelStyle=NSBezelStyleRounded; _wholeSongButton.bordered=NO;
-        ((TNButton *)_wholeSongButton).hint=T(@"Вся песня в окне · Z");
-        for(NSView *view in @[_toolChoice,_snapLabel,_snapChoice,_zoomOutButton,_zoomInButton,_wholeSongButton]) [self addSubview:view];
+        _wholeSongButton=Icon(@"arrow.left.and.right.square",T(@"Вся песня"),T(@"Вся песня в окне · Z"),self,@selector(showWholeSong:));   // the text only without the icon
+        for(NSView *view in @[_toolChoice,_snapLabel,_snapChoice,_zoomOutButton,_zoomInButton,_wholeSongButton,_structureChoice]) [self addSubview:view];
         [self buildPanel];
     }
     return self;
@@ -297,11 +300,14 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     self.exportButton.frame=NSMakeRect(NSWidth(self.bounds)-KvInset-34,0,34,26);
     // Toolbar: tools over the headers; snap and zoom over the tracks; the song's summary after them (drawn).
     self.toolChoice.frame=NSMakeRect(0,0,96,26);
-    CGFloat x=KvLaneX,label=ceil([self.snapLabel.stringValue sizeWithAttributes:@{NSFontAttributeName:self.snapLabel.font}].width)+4;
-    self.snapLabel.frame=NSMakeRect(x,5,label,16); x+=label+2; self.snapChoice.frame=NSMakeRect(x,0,92,26); x+=100;
+    CGFloat x=KvLaneX,label=self.snapLabel.hidden?0:ceil([self.snapLabel.stringValue sizeWithAttributes:@{NSFontAttributeName:self.snapLabel.font}].width)+4;
+    if(label) { self.snapLabel.frame=NSMakeRect(x,5,label,16); x+=label+2; }
+    CGFloat snap=self.snapChoice.itemArray.firstObject.image?106:92; self.snapChoice.frame=NSMakeRect(x,0,snap,26); x+=snap+8;
     self.zoomOutButton.frame=NSMakeRect(x,0,28,26); self.zoomInButton.frame=NSMakeRect(x+30,0,28,26); x+=62;
-    CGFloat whole=ceil([self.wholeSongButton.title sizeWithAttributes:@{NSFontAttributeName:self.wholeSongButton.font?:[NSFont systemFontOfSize:13]}].width)+24;
-    self.wholeSongButton.frame=NSMakeRect(x,0,whole,26);
+    CGFloat whole=self.wholeSongButton.image?28:ceil([self.wholeSongButton.title sizeWithAttributes:@{NSFontAttributeName:self.wholeSongButton.font?:[NSFont systemFontOfSize:13]}].width)+24;
+    self.wholeSongButton.frame=NSMakeRect(x,0,whole,26); x+=whole+8;
+    CGFloat structure=ceil([T(@"Структура") sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightMedium]}].width)+52;
+    self.structureChoice.frame=NSMakeRect(x,0,structure,26);
     [self layoutPanel];
 }
 - (void)updatePlayhead {
@@ -321,7 +327,9 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     if(!has) _selection=NSMakeRange(0,0);
     else if(!NSLocationInRange((NSUInteger)self.selected,_selection) || NSMaxRange(_selection)>s->count) { _selection=NSMakeRange((NSUInteger)self.selected,1); _anchor=self.selected; }
     self.takeButton.hidden=!empty; self.exportButton.hidden=empty;
-    for(NSArray *group in @[self.trackNames,self.trackKinds,self.trackMutes,self.trackSolos,self.trackLevels,@[self.toolChoice,self.snapLabel,self.snapChoice,self.zoomOutButton,self.zoomInButton,self.wholeSongButton]]) for(NSView *view in group) view.hidden=empty;
+    for(NSArray *group in @[self.trackNames,self.trackKinds,self.trackMutes,self.trackSolos,self.trackLevels,@[self.toolChoice,self.snapChoice,self.zoomOutButton,self.zoomInButton,self.wholeSongButton,self.structureChoice]]) for(NSView *view in group) view.hidden=empty;
+    self.snapLabel.hidden=empty || self.snapChoice.itemArray.firstObject.image!=nil;
+    [self rebuildStructureMenu];
     for(NSView *view in self.sectionPanel.subviews) view.hidden=!has;
     if(s) for(int t=0;t<KV_TRACKS;t++) {
         self.trackMutes[t].state=s->track_mute[t]?NSControlStateValueOn:NSControlStateValueOff; self.trackSolos[t].state=s->track_solo[t]?NSControlStateValueOn:NSControlStateValueOff;
@@ -512,8 +520,8 @@ static const CGFloat KvLeadWidth=24;
         return;
     }
     double bar=[self beatsPerBar],total=kv_song_beats(s),bpm=s->bpm,k=[self scale]; int bars=(int)ceil(total/bar-1e-9),seconds=(int)lround(total*60/bpm);
-    NSString *header=[NSString stringWithFormat:T(@"%@ · %@ · %.0f BPM · %@ · %d:%02d"),Translated(kv_key_title(s->key)),Translated(kv_meter_name(s->meter)),bpm,TNBarCount(bars),seconds/60,seconds%60];
-    CGFloat headerX=NSMaxX(self.wholeSongButton.frame)+12; Text(header,NSMakeRect(headerX,5,NSMinX(self.exportButton.frame)-headerX-6,18),12,NSFontWeightSemibold,NSColor.labelColor,NO);
+    NSString *header=[NSString stringWithFormat:@"%@ · %d:%02d · %.0f BPM · %@ · %@",TNBarCount(bars),seconds/60,seconds%60,bpm,Translated(kv_meter_name(s->meter)),Translated(kv_key_title(s->key))];   // the key gives way first
+    CGFloat headerX=NSMaxX(self.structureChoice.frame)+12; Text(header,NSMakeRect(headerX,6,NSMinX(self.exportButton.frame)-headerX-6,18),11,NSFontWeightSemibold,NSColor.labelColor,NO);
     Text(T(@"Аранжировка"),NSMakeRect(KvInset,KvMarkerTop+4,KvHeaderWidth-KvInset,14),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NO);
     // Track lanes and their headers' backgrounds.
     BOOL solo=s->track_solo[0] || s->track_solo[1] || s->track_solo[2];
@@ -896,6 +904,27 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     }
     [self.owner arrangerForwardKey:event];
 }
+// ---- «Структура ▾» ----
+- (void)rebuildStructureMenu {
+    NSPopUpButton *popup=self.structureChoice; [popup removeAllItems]; [popup addItemWithTitle:T(@"Структура")];
+    NSArray<NSDictionary *> *forms=[self.owner arrangerForms]; BOOL mine=NO; NSMenu *remove=[[NSMenu alloc] initWithTitle:T(@"Удалить свою форму")];
+    for(NSUInteger i=0;i<forms.count;i++) {
+        BOOL user=[forms[i][@"user"] boolValue]; if(user && !mine) { [popup.menu addItem:NSMenuItem.separatorItem]; mine=YES; }
+        [popup addItemWithTitle:[NSString stringWithFormat:@"%@ · %@",forms[i][@"name"],forms[i][@"letters"]]]; popup.lastItem.tag=1000+(NSInteger)i; popup.lastItem.representedObject=forms[i];
+        if(user) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:forms[i][@"name"] action:@selector(deleteForm:) keyEquivalent:@""]; item.target=self; item.representedObject=forms[i][@"name"]; [remove addItem:item]; }
+    }
+    [popup.menu addItem:NSMenuItem.separatorItem];
+    [popup addItemWithTitle:T(@"Сохранить форму этой песни…")]; popup.lastItem.tag=2000;
+    if(remove.numberOfItems) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:T(@"Удалить свою форму") action:NULL keyEquivalent:@""]; item.submenu=remove; [popup.menu addItem:item]; }
+    [popup addItemWithTitle:T(@"Другой вариант той же формы · ⌘R")]; popup.lastItem.tag=2001;
+}
+- (void)structureChosen:(NSPopUpButton *)sender {
+    NSMenuItem *item=sender.selectedItem;
+    if(item.tag>=1000 && item.tag<2000) [self.owner arrangerApplyForm:item.representedObject];
+    else if(item.tag==2000) [self.owner arrangerSaveForm:sender];
+    else if(item.tag==2001) [self.owner arrangerAnotherForm:sender];
+}
+- (void)deleteForm:(NSMenuItem *)item { [self.owner arrangerDeleteForm:item.representedObject]; }
 // ---- the panel and the track headers ----
 - (void)fieldChanged:(NSPopUpButton *)sender {
     NSInteger v=sender.indexOfSelectedItem;
