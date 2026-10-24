@@ -1,0 +1,101 @@
+{
+  "commit": "8c3e581acda3594b553948ff0222d4f84a698376",
+  "files": [
+    {
+      "file": "29_F1_P.flac",
+      "midi": 29,
+      "sha256": "58e2da582ef1e73f81240002da0056ec219d8d37c92b0f03f736ee8215063ccc",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/29_F1_P.flac"
+    },
+    {
+      "file": "33_A1_P.flac",
+      "midi": 33,
+      "sha256": "ae915f83bf9b7eceb86fb8e609b28a07f0ec2a20dc15a4dc8fc3b91c74972689",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/33_A1_P.flac"
+    },
+    {
+      "file": "37_C#2_P.flac",
+      "midi": 37,
+      "sha256": "5fe53234fab3a92b790883e1d37cbc9946b77e24f26a5b3180cb7a40dd632a43",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/37_C%232_P.flac"
+    },
+    {
+      "file": "41_F2_P.flac",
+      "midi": 41,
+      "sha256": "6b2fb5ea35ec87487d09e6e829475746ee20a391267cb262c1c534c358f24d2f",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/41_F2_P.flac"
+    },
+    {
+      "file": "45_A2_P.flac",
+      "midi": 45,
+      "sha256": "14ffbde888002ecedd3ead00b8635e794e03a8e761a5a47a9d84ee240b51e237",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/45_A2_P.flac"
+    },
+    {
+      "file": "49_C#3_P.flac",
+      "midi": 49,
+      "sha256": "6ecd204c3c0a38d61199dab228dc534a3dae178d520fecc4219e69882f04b717",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/49_C%233_P.flac"
+    },
+    {
+      "file": "52_E3_P.flac",
+      "midi": 52,
+      "sha256": "f19b50a98139de543bf6eb04ab5442aacd210f82e199e08d4812f077349e7ef7",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/52_E3_P.flac"
+    },
+    {
+      "file": "57_A3_P.flac",
+      "midi": 57,
+      "sha256": "3f371294f35a0f08066f481581f7e34ff15d01fbb45d23b73620d8b0358a0997",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/57_A3_P.flac"
+    },
+    {
+      "file": "61_C#4_P.flac",
+      "midi": 61,
+      "sha256": "bdb7e310227416bfb4fced049f3acfbea1b62d584fdaf5d852d266cc7de90008",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/61_C%234_P.flac"
+    },
+    {
+      "file": "65_F4_P.flac",
+      "midi": 65,
+      "sha256": "b25a38edfe1f366d4428bb085c037ef7f17285b8fd1f25b23616fa07f04dfc95",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/65_F4_P.flac"
+    },
+    {
+      "file": "69_A4_P.flac",
+      "midi": 69,
+      "sha256": "15efd66689001d86d5fa7bdc49b7fff8b88c4b7bcc27f521e9316dbd7757ecce",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/69_A4_P.flac"
+    },
+    {
+      "file": "73_C#5_P.flac",
+      "midi": 73,
+      "sha256": "76fedea95e02cf89d87e864d171f9ae0797b4190f0cdd156acef4baa5d68289d",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/73_C%235_P.flac"
+    },
+    {
+      "file": "77_F5_P.flac",
+      "midi": 77,
+      "sha256": "5ba2de18185ff29f548028f11ae8f08787075a1dec956b7f6e623b2ca83ce131",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/77_F5_P.flac"
+    },
+    {
+      "file": "81_A5_P.flac",
+      "midi": 81,
+      "sha256": "f4c043cb886454ae462fe39ac57ddad67a7ca5d7c16ce3f1a1bd386129884088",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/81_A5_P.flac"
+    },
+    {
+      "file": "85_C#6_P.flac",
+      "midi": 85,
+      "sha256": "d45d07838362dc5f1f5cd28d6fa22ed722e71e2515fb3ebee813e4f99272e6ce",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/85_C%236_P.flac"
+    },
+    {
+      "file": "88_E6_P.flac",
+      "midi": 88,
+      "sha256": "c31a5a14aa82aa4fce41e5a6d3c34244ac54a040a8a3033a406f0802bd2f62e3",
+      "url": "https://raw.githubusercontent.com/sfzinstruments/GregSullivan.E-Pianos/8c3e581acda3594b553948ff0222d4f84a698376/Pianet%20T/Samples/88_E6_P.flac"
+    }
+  ]
+}

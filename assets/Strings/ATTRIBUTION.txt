@@ -1,0 +1,6 @@
+Strings — VS Chamber Orchestra 2: Community Edition, Versilian Studios (Sam Gossner, Simon Dalzell; sample cutting Elan Hickler).
+CC0 1.0 Universal (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+https://github.com/sgossner/VSCO-2-CE
+Pinned commit: 440300901dfe9275fd84e0b7763af1f8443ae62e
+Cello section and violin section: sustain vibrato (soft and loud), spiccato and pizzicato (two dynamics, two takes); converted to FLAC, level-matched, looped and enveloped during playback.
+No author endorsement implied.

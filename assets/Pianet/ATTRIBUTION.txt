@@ -1,0 +1,6 @@
+Hohner Pianet T — Greg Sullivan. CC BY 3.0 Unported.
+https://creativecommons.org/licenses/by/3.0/
+https://github.com/sfzinstruments/GregSullivan.E-Pianos
+Pinned commit: 8c3e581acda3594b553948ff0222d4f84a698376
+Unmodified medium/soft-velocity subset, decoded/resampled and enveloped during playback.
+No author endorsement implied.

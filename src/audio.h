@@ -1,0 +1,36 @@
+#ifndef KVARTA_AUDIO_H
+#define KVARTA_AUDIO_H
+#include <stdbool.h>
+#include <stddef.h>
+#include "piano.h"
+#include "performance.h"
+typedef struct KvAudio KvAudio;
+KvAudio *kv_audio_create(void);
+bool kv_audio_load_instrument(KvAudio *audio,int instrument,const char *directory);
+bool kv_audio_set_instrument(KvAudio *audio,int instrument);
+unsigned kv_audio_active_notes(KvAudio *audio,int notes[64]);
+int kv_audio_error(const KvAudio *audio);
+bool kv_audio_set_humanize(KvAudio *audio,bool enabled);
+bool kv_audio_set_loop(KvAudio *audio,bool enabled);
+bool kv_audio_set_interval(KvAudio *audio,double seconds);
+int kv_audio_event(const KvAudio *audio);
+bool kv_audio_load_piano(KvAudio *audio, const char *directory);
+bool kv_audio_set_effects(KvAudio *audio, KvEffects effects);
+/* Main-thread calls only. Single notes overlap; sequences replace future scheduled events with release tails. */
+bool kv_audio_performance(KvAudio *audio,const KvPerformance *performance,double seconds_per_beat);
+bool kv_audio_play(KvAudio *audio, const int *notes, size_t note_count, size_t voices, double seconds_per_event);
+/* One note on top of whatever is playing: never cancels a scheduled performance or moves the playhead. */
+bool kv_audio_audition(KvAudio *audio,int midi,double seconds);
+/* A key held on a keyboard (MIDI or the computer's): sounds until kv_audio_release; velocity 0…1. midi −1 releases all. */
+bool kv_audio_hold(KvAudio *audio,int midi,double velocity);
+bool kv_audio_release(KvAudio *audio,int midi);
+/* Editor preview: monophonic among previews — each new one releases the previous within ~12 ms. */
+bool kv_audio_preview(KvAudio *audio,int midi,double seconds);
+/* Bowed strings: articulation (Auto, Legato, Staccato, Pizzicato) and dynamics 0…1 (mod wheel) with expression 0…1 (CC11). */
+bool kv_audio_set_articulation(KvAudio *audio,KvArticulation articulation);
+bool kv_audio_set_dynamics(KvAudio *audio,double dynamics,double expression);
+void kv_audio_stop(KvAudio *audio);
+void kv_audio_destroy(KvAudio *audio);
+bool kv_audio_is_playing(const KvAudio *audio);
+bool kv_audio_playhead(KvAudio *audio, double *seconds);
+#endif

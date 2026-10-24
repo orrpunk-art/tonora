@@ -1,0 +1,15 @@
+Salamander Grand Piano V3 — Alexander Holm
+Recordings: https://archive.org/details/SalamanderGrandPianoV3
+Source: https://github.com/sfzinstruments/SalamanderGrandPiano
+Pinned source commit: 3382bf9496bba2486f5ab0de55a264d1dfc38404
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+Full legal text: LICENSE.txt
+
+Tonora bundles 17 unmodified FLAC recordings (velocity layer 8), A2–A6
+at minor-third intervals. This is a compact subset, not the full instrument.
+Tonora decodes the first eight seconds, removes leading recording pre-roll,
+interpolates neighboring pitches, and applies note release, mixing and optional
+reverb/delay at playback. It does not implement the original SFZ mapping,
+velocity switching, release samples or pedal-resonance system.
+No endorsement by the original author is implied.
