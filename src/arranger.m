@@ -156,9 +156,9 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     self.repeatsChoice=Popup(repeats,self,@selector(fieldChanged:),T(@"Сколько раз прогрессия звучит подряд · или потяните правый край секции"));
     NSMutableArray *levels=[NSMutableArray array]; for(int l=50;l<=120;l+=10) [levels addObject:@[[NSString stringWithFormat:T(@"Громкость %d %%"),l],[NSString stringWithFormat:@"%d %%",l]]];
     self.levelChoice=Popup(levels,self,@selector(fieldChanged:),T(@"Громкость секции: сила удара всех нот"));
-    NSMutableArray *beats=[@[@[T(@"Бит как у песни"),T(@"Как у песни")],@[T(@"Без бита"),T(@"Без бита")],@[T(@"Тихий бит: хай-хэт и шейкер"),T(@"Тихий")],@[T(@"Бит по стилю рисунка"),T(@"По стилю")]] mutableCopy];
+    NSMutableArray *beats=[@[@[T(@"Бит секции перед ней · продолжается"),T(@"Как перед ней")],@[T(@"Без бита"),T(@"Без бита")],@[T(@"Тихий бит: хай-хэт и шейкер"),T(@"Тихий")],@[T(@"Бит по стилю рисунка"),T(@"По стилю")]] mutableCopy];
     for(int b=0;b<KV_BEAT_COUNT;b++) [beats addObject:@[[NSString stringWithFormat:T(@"Бит «%@»"),Translated(kv_beat_name((KvBeat)b))],Translated(kv_beat_name((KvBeat)b))]];
-    self.beatChoice=Popup(beats,self,@selector(fieldChanged:),T(@"Бит секции на дорожке «Ударные»"));
+    self.beatChoice=Popup(beats,self,@selector(fieldChanged:),T(@"Бит секции на дорожке «Ударные» · клик метронома под битом молчит"));
     self.liftChoice=Popup(@[@[T(@"Регистр как на круге"),T(@"Как на круге")],@[T(@"Правая рука на октаву выше"),T(@"Правая выше")],@[T(@"Обе руки на октаву ниже"),T(@"Обе ниже")]],self,@selector(fieldChanged:),T(@"Регистр секции"));
     NSMutableArray *ways=[NSMutableArray array]; for(int t=0;t<KV_TRANSITION_KINDS;t++) [ways addObject:@[Translated(kv_transition_name((KvTransitionKind)t))]];
     self.transitionChoice=Popup(ways,self,@selector(fieldChanged:),T(@"Как переход ведёт в следующую секцию"));
