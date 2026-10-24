@@ -16,7 +16,7 @@ struct KvAudio {
     KvMixer *mixer; KvLiveEffects *fx; KvPianoBank *banks[KV_INSTRUMENTS];
     struct Command commands[COMMANDS]; atomic_uint read,write,stop_epoch; unsigned applied_stop;
     atomic_bool closing,playing,stop_requested; atomic_uint pending_plays; bool muted; float output_gain; atomic_int error,event;
-    atomic_uint_fast64_t clock,start,active_low,active_high;
+    atomic_uint_fast64_t clock,start,active_low,active_high; _Atomic double rhythm_beat;
     KvEffects effects; int instrument; bool started; uint64_t tail;
 };
 static bool send(KvAudio *audio,struct Command command) {
@@ -38,7 +38,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
     while(read!=write) {
         struct Command *c=&a->commands[read];
         apply_stop(a);
-        bool stale=c->epoch!=a->applied_stop && (c->type==1 || c->type==2 || c->type==5 || c->type==6 || c->type==7 || c->type==8 || c->type==9);
+        bool stale=c->epoch!=a->applied_stop && (c->type==1 || c->type==2 || c->type==5 || c->type==6 || c->type==7 || c->type==8 || c->type==9 || c->type==15);   // a count-in belongs to its performance
         if(stale) { /* A stop invalidates queued playback and loop commands. */ }
         else if(c->type==0) { kv_mixer_stop(a->mixer); a->muted=true; atomic_store(&a->playing,false); }
         else if(c->type==3) a->effects=c->effects;
@@ -62,6 +62,8 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
         else if(c->type==11) kv_mixer_articulation(a->mixer,(KvArticulation)c->count);
         else if(c->type==12) kv_mixer_dynamics(a->mixer,c->values[0],c->values[1]);
         else if(c->type==13) kv_mixer_pedal(a->mixer,c->count!=0);
+        else if(c->type==14) kv_mixer_rhythm(a->mixer,c->count!=0,(KvGrid)c->voices,(KvMeter)c->instrument,c->seconds,c->values[0]);
+        else if(c->type==15) kv_mixer_count_in(a->mixer,c->seconds);
         else if(kv_mixer_play(a->mixer,c->notes,c->count,c->voices,c->seconds,c->instrument,c->type==2)) {
             a->muted=false; atomic_store(&a->start,kv_mixer_start(a->mixer)); atomic_store(&a->playing,true);
         } else atomic_store(&a->error,1);
@@ -71,7 +73,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
     atomic_store_explicit(&a->read,read,memory_order_release);
     apply_stop(a);
     float *pcm=buffer->mAudioData;
-    kv_mixer_render(a->mixer,pcm,FRAMES);
+    kv_mixer_render(a->mixer,pcm,FRAMES); const float *dry=kv_mixer_dry(a->mixer);
     atomic_store(&a->playing,!a->muted && kv_mixer_running(a->mixer));
     if(kv_mixer_busy(a->mixer)) a->tail=(a->effects.reverb>0 || a->effects.delay>0)?44100*6:0;
     else if(a->tail>FRAMES) a->tail-=FRAMES;
@@ -82,10 +84,11 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
         for(int c=0;c<2;c++) {
             float x=pcm[i*2+c],magnitude=fabsf(x);
             float limited=magnitude<=.85f?x:copysignf(.85f+.10f*tanhf((magnitude-.85f)/.10f),x);
-            pcm[i*2+c]=isfinite(x)?limited*a->output_gain:0;
+            float out=(isfinite(x)?limited*a->output_gain:0)+dry[i*2+c];   // the click goes in after the effects and the fade-out
+            pcm[i*2+c]=fmaxf(-1,fminf(1,out));
         }
     }
-    atomic_store(&a->clock,kv_mixer_clock(a->mixer)); atomic_store(&a->event,kv_mixer_event(a->mixer));
+    atomic_store(&a->clock,kv_mixer_clock(a->mixer)); atomic_store(&a->event,kv_mixer_event(a->mixer)); atomic_store(&a->rhythm_beat,kv_mixer_rhythm_beat(a->mixer));
     int notes[KV_ACTIVE_NOTES]; unsigned count=kv_mixer_active(a->mixer,notes); uint64_t low=0,high=0;
     for(unsigned i=0;i<count;i++) { if(notes[i]<64) low|=UINT64_C(1)<<notes[i]; else high|=UINT64_C(1)<<(notes[i]-64); }
     atomic_store(&a->active_low,low); atomic_store(&a->active_high,high);
@@ -96,7 +99,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
 KvAudio *kv_audio_create(void) {
     KvAudio *a=calloc(1,sizeof(*a)); if(!a) return NULL;
     atomic_init(&a->stop_epoch,0); atomic_init(&a->pending_plays,0); atomic_init(&a->stop_requested,false); atomic_init(&a->read,0); atomic_init(&a->write,0); atomic_init(&a->closing,false); atomic_init(&a->playing,false); atomic_init(&a->error,0); atomic_init(&a->event,-1);
-    atomic_init(&a->clock,0); atomic_init(&a->start,0); atomic_init(&a->active_low,0); atomic_init(&a->active_high,0);
+    atomic_init(&a->clock,0); atomic_init(&a->start,0); atomic_init(&a->rhythm_beat,-1.0); atomic_init(&a->active_low,0); atomic_init(&a->active_high,0);
     a->effects=(KvEffects){0,0,.3}; a->output_gain=1; a->mixer=kv_mixer_create(); a->fx=kv_live_effects_create();
     if(!a->mixer || !a->fx) { kv_audio_destroy(a); return NULL; }
     AudioStreamBasicDescription format={.mSampleRate=44100,.mFormatID=kAudioFormatLinearPCM,.mFormatFlags=kAudioFormatFlagIsFloat|kAudioFormatFlagIsPacked,.mBytesPerPacket=8,.mFramesPerPacket=1,.mBytesPerFrame=8,.mChannelsPerFrame=2,.mBitsPerChannel=32};
@@ -173,6 +176,13 @@ bool kv_audio_performance(KvAudio *a,const KvPerformance *p,double seconds) {
     if(!send(a,command)) { atomic_fetch_sub(&a->pending_plays,1); return false; } return true;
 }
 bool kv_audio_set_articulation(KvAudio *a,KvArticulation articulation) { return a && articulation>=0 && articulation<KV_ARTICULATION_COUNT && send(a,(struct Command){.type=11,.count=(size_t)articulation}); }
+bool kv_audio_set_rhythm(KvAudio *a,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,double volume) {
+    if(!a || grid<0 || grid>=KV_GRID_COUNT || meter<0 || meter>=KV_METER_COUNT || !isfinite(seconds_per_beat) || seconds_per_beat<.08 || seconds_per_beat>5 || !isfinite(volume)) return false;
+    if(on && !start(a)) return false;
+    return send(a,(struct Command){.type=14,.count=on,.voices=(size_t)grid,.instrument=(int)meter,.seconds=seconds_per_beat,.values={(float)volume,0}});
+}
+bool kv_audio_count_in(KvAudio *a,double beats) { return a && isfinite(beats) && beats>=0 && beats<=16 && send(a,(struct Command){.type=15,.seconds=beats}); }
+double kv_audio_rhythm_beat(KvAudio *a) { return a?atomic_load(&a->rhythm_beat):-1; }
 bool kv_audio_set_pedal(KvAudio *a,bool down) { return a && send(a,(struct Command){.type=13,.count=down}); }
 bool kv_audio_set_dynamics(KvAudio *a,double dynamics,double expression) {
     return a && isfinite(dynamics) && isfinite(expression) && send(a,(struct Command){.type=12,.values={(float)fmax(0,fmin(1,dynamics)),(float)fmax(0,fmin(1,expression))}});
@@ -190,7 +200,7 @@ bool kv_audio_playhead(KvAudio *a,double *seconds) {
 unsigned kv_audio_active_notes(KvAudio *a,int notes[KV_ACTIVE_NOTES]) {
     if(!a || !notes || !kv_audio_is_playing(a)) return 0;
     uint64_t low=atomic_load(&a->active_low),high=atomic_load(&a->active_high); unsigned count=0;
-    for(int i=21;i<=108 && count<64;i++) if(i<64?(low&(UINT64_C(1)<<i)):(high&(UINT64_C(1)<<(i-64)))) notes[count++]=i;
+    for(int i=21;i<=108 && count<KV_ACTIVE_NOTES;i++) if(i<64?(low&(UINT64_C(1)<<i)):(high&(UINT64_C(1)<<(i-64)))) notes[count++]=i;
     return count;
 }
 int kv_audio_error(const KvAudio *a) { return a?atomic_load(&a->error):1; }

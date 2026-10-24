@@ -8,6 +8,17 @@
 #include <stdint.h>
 #include <time.h>
 #define CHECK(expr) do { if(!(expr)) { fprintf(stderr,"Mixer check failed at %d: %s\n",__LINE__,#expr); return 1; } } while(0)
+/* Render `frames` and return the frames where a click starts (dry left channel rising from silence) and its peak. */
+static size_t clicks(KvMixer *m,size_t frames,size_t *at,float *peak,size_t max) {
+    static float out[256*2]; size_t n=0,quiet=4096; uint64_t base=kv_mixer_clock(m);
+    for(size_t done=0;done<frames;done+=256) {
+        size_t k=frames-done<256?frames-done:256; kv_mixer_render(m,out,k); const float *dry=kv_mixer_dry(m);
+        for(size_t f=0;f<k;f++) { float x=fabsf(dry[f*2]);
+            if(x>0 && quiet>=64 && n<max) { at[n]=(size_t)(base+done+f); peak[n]=0; n++; }
+            if(x>0) { if(n && x>peak[n-1]) peak[n-1]=x; quiet=0; } else quiet++; }
+    }
+    return n;
+}
 static void advance(KvMixer *m,float *block,unsigned frames) {
     while(frames) { unsigned n=frames>256?256:frames; kv_mixer_render(m,block,n); frames-=n; }
 }
@@ -276,6 +287,41 @@ int main(int argc,char **argv) {
         #undef RENDER
         kv_piano_free(strings);
     }
+    // The metronome: clicks on the exact frame of each beat at 60/100/160 BPM, accents on the bar in 4/4, 3/4 and 6/8 (two
+    // dotted quarters), subdivisions softer; it joins a sequence on its first beat, counts it in, and keeps the beat across a tempo change.
+    { size_t at[64]; float peak[64];
+      const KvMeter meters[3]={KV_METER_4_4,KV_METER_3_4,KV_METER_6_8}; const double bars[3]={4,3,3},pulses[3]={1,1,1.5};
+      for(int t=0;t<3;t++) for(int mt=0;mt<3;mt++) {
+          double bpm=(double[]){60,100,160}[t],beat=44100*60/bpm; KvMixer *r=kv_mixer_create(); CHECK(r);
+          kv_mixer_rhythm(r,true,KV_GRID_BEATS,meters[mt],60/bpm,.6f); uint64_t origin=kv_mixer_clock(r);
+          size_t n=clicks(r,(size_t)(beat*7),at,peak,64); size_t want=(size_t)(7/pulses[mt]-1e-9)+1; CHECK(n==want);
+          for(size_t i=0;i<n;i++) {
+              double expected=origin+i*pulses[mt]*beat; CHECK(fabs((double)at[i]-1-expected)<=.5+1e-9);   /* a click's first sample is 0 (its 1 ms rise): heard from the next frame */
+              bool accent=fmod(i*pulses[mt]+1e-9,bars[mt])<1e-6; CHECK(accent?peak[i]>peak[1%n]*1.15f || i==1:true);
+          }
+          CHECK(peak[0]>peak[1]*1.15f);
+          kv_mixer_free(r);
+      }
+      // Eighths: the off-beat clicks are softer than the beats.
+      KvMixer *r=kv_mixer_create(); kv_mixer_rhythm(r,true,KV_GRID_EIGHTHS,KV_METER_4_4,.5,.6f);
+      size_t n=clicks(r,44100*2,at,peak,64); CHECK(n==8 && fabs((double)at[1]-at[0]-11025)<=1 && peak[1]<peak[2]*.8f && peak[2]<peak[0]);
+      // Joins a sequence: started off-grid, the clicks move onto the sequence's first beat.
+      advance(r,block,7777);   // off the click grid
+      KvPerformance perf={0}; KvArrangement arr={.style=KV_BALLAD,.meter=KV_METER_4_4,.length=KV_LENGTH_BAR,.blocks=true,.seconds_per_beat=.5};
+      KvChord c; CHECK(kv_chord((KvKey){0,false,0,0},0,&c)); CHECK(kv_arrange_with(&c,1,60,(KvKey){0,false,0,0},arr,&perf));
+      kv_mixer_bank(r,0,banks[0]); CHECK(kv_mixer_performance(r,&perf,.5,0)); uint64_t start=kv_mixer_start(r);
+      n=clicks(r,44100,at,peak,64); CHECK(n>=1 && at[0]==start+1 && peak[0]>.2f);
+      // Count-in: one bar of clicks, then the sequence on the next accent.
+      kv_mixer_stop(r); kv_mixer_rhythm(r,false,KV_GRID_BEATS,KV_METER_4_4,.5,.6f); advance(r,block,4410);
+      kv_mixer_rhythm(r,true,KV_GRID_BEATS,KV_METER_4_4,.5,.6f); kv_mixer_count_in(r,4); CHECK(kv_mixer_performance(r,&perf,.5,0)); uint64_t now=kv_mixer_clock(r);
+      CHECK(kv_mixer_start(r)==now+4*22050 && kv_mixer_running(r));
+      n=clicks(r,4*22050+100,at,peak,64); CHECK(n==5 && at[0]==now+1 && at[4]==now+4*22050+1 && peak[4]>peak[1]*1.15f);
+      int sounding[KV_ACTIVE_NOTES]; CHECK(kv_mixer_active(r,sounding)>0);
+      // A tempo change keeps the beat: the beat counted just before is the beat counted just after, and the next click follows the new tempo.
+      kv_mixer_stop(r); double before=kv_mixer_rhythm_beat(r); kv_mixer_rhythm(r,true,KV_GRID_BEATS,KV_METER_4_4,.25,.6f); CHECK(fabs(kv_mixer_rhythm_beat(r)-before)<1e-9);
+      n=clicks(r,44100,at,peak,64); CHECK(n>=3 && fabs((double)(at[2]-at[1])-11025)<=1);
+      kv_mixer_rhythm(r,false,KV_GRID_BEATS,KV_METER_4_4,.25,.6f); advance(r,block,2400); CHECK(kv_mixer_rhythm_beat(r)<0 && clicks(r,44100,at,peak,64)==0);
+      kv_mixer_free(r); }
     // Polyphony as on a digital piano: under the pedal, 300 strikes in 0.3 s never lose a note, the pool stays bounded,
     // and when it runs short the quietest voice fades (no sample-to-sample jump beyond what the music itself has).
     { KvMixer *p=kv_mixer_create(); CHECK(p); kv_mixer_bank(p,0,banks[0]); kv_mixer_humanize(p,false); kv_mixer_pedal(p,true);

@@ -11,12 +11,31 @@ struct Head { KvSampleView s; double pos,ratio,loop_start,loop_end,crossfade; };
    ring: a short stroke (spiccato, pizzicato) that plays its recording out; neither its gate nor a key-up stops it. */
 struct Voice { struct Head head[2]; int heads; float tone[2]; uint64_t age,gate; unsigned attack,release_floor,release,release_total,note_release; float release_level,gain; int midi; unsigned hand; unsigned char stroke; bool active,preview,held,sequenced,bowed,strings,ring; };
 #define CAP KV_PERFORMANCE_CAPACITY
+#define CLICK_FRAMES 2205   /* 50 ms */
+enum { CLICK_ACCENT, CLICK_PULSE, CLICK_SUB, CLICKS };
+/* A sounding metronome click: which wave, where in it, how loud. */
+struct Click { int wave; unsigned pos; float gain; bool active; };
 struct KvMixer { const KvPianoBank *banks[KV_INSTRUMENTS]; struct Voice voices[VOICES]; int sequence[CAP]; uint64_t onset[CAP],gate[CAP]; float gain[CAP],velocity[CAP]; unsigned chord[CAP],hand[CAP]; unsigned short source[CAP]; unsigned char stroke[CAP],event_stroke[CAP],round_robin[128];
     KvPerformance performance; bool custom,humanize,loop,marking_preview,marking_held,pedal; uint32_t random; size_t count,next,stride; uint64_t interval,sequence_start,clock,cycle_end,cycle; int instrument;
-    KvArticulation articulation; float dynamics_target,dynamics_now,expression_target,expression_now; };
+    KvArticulation articulation; float dynamics_target,dynamics_now,expression_target,expression_now;
+    /* rhythm: on, grid, bar and pulse in beats, step between clicks, frames per beat, origin (frame of beat 0), next click */
+    bool rhythm; KvGrid grid; double bar,pulse,step,beat_frames,origin,lead_beats; uint64_t hit; float rhythm_volume;
+    struct Click clicks[4]; float click_wave[CLICKS][CLICK_FRAMES]; float dry[KV_DRY_FRAMES*2]; };
+/* A woodblock-like click: a tone with an overtone and a breath of noise, 1 ms rise, ~15 ms decay. Accent higher and louder. */
+static void synthesize_clicks(KvMixer *m) {
+    static const float pitch[CLICKS]={1975.5f,1318.5f,1318.5f},level[CLICKS]={1,.72f,.38f};
+    uint32_t noise=0x9e3779b9;
+    for(int c=0;c<CLICKS;c++) for(int i=0;i<CLICK_FRAMES;i++) {
+        float t=(float)i/RATE,rise=i<44?(float)i/44:1,decay=expf(-t/.015f);
+        noise^=noise<<13; noise^=noise>>17; noise^=noise<<5;
+        float n=((float)(noise&65535)/32767.5f-1)*expf(-t/.002f)*.25f;
+        m->click_wave[c][i]=level[c]*rise*decay*(.8f*sinf(2*(float)M_PI*pitch[c]*t)+.25f*sinf(4*(float)M_PI*pitch[c]*t)+n)*.5f;
+    }
+}
 KvMixer *kv_mixer_create(void) {
     KvMixer *m=calloc(1,sizeof(KvMixer));
-    if(m) { m->humanize=true; m->random=0x746f6e6f; m->dynamics_target=m->dynamics_now=.6f; m->expression_target=m->expression_now=1; }
+    if(m) { m->humanize=true; m->random=0x746f6e6f; m->dynamics_target=m->dynamics_now=.6f; m->expression_target=m->expression_now=1;
+            m->bar=4; m->pulse=1; m->step=1; m->beat_frames=RATE*.6; m->rhythm_volume=.6f; synthesize_clicks(m); }
     return m;
 }
 void kv_mixer_humanize(KvMixer *m,bool enabled) { if(m) m->humanize=enabled; }
@@ -46,6 +65,38 @@ static void steal(KvMixer *m) {
     if(quietest) cut(quietest,132);
 }
 void kv_mixer_pedal(KvMixer *m,bool down) { if(m) m->pedal=down; }
+/* The rhythm grid restarts at origin: the next click is the first one at or after now. */
+static void rhythm_align(KvMixer *m,double origin) {
+    m->origin=origin; double ahead=((double)m->clock-origin)/(m->step*m->beat_frames);
+    m->hit=ahead<=0?0:(uint64_t)ceil(ahead-1e-9);
+}
+/* A new beat length that keeps the current beat: the origin moves so that the beat counted now stays the same. */
+static void rhythm_retime(KvMixer *m,double beat_frames) {
+    if(fabs(beat_frames-m->beat_frames)<1e-6) return;
+    double beat=((double)m->clock-m->origin)/m->beat_frames; m->beat_frames=beat_frames; rhythm_align(m,(double)m->clock-beat*beat_frames);
+}
+void kv_mixer_rhythm(KvMixer *m,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,float volume) {
+    if(!m || grid<0 || grid>=KV_GRID_COUNT || meter<0 || meter>=KV_METER_COUNT || !isfinite(seconds_per_beat) || seconds_per_beat<.08 || seconds_per_beat>5 || !isfinite(volume)) return;
+    bool was=m->rhythm; m->rhythm_volume=fmaxf(0,fminf(1,volume));
+    m->bar=kv_meter_bar(meter); m->pulse=kv_meter_pulse(meter); m->grid=grid;
+    m->step=grid==KV_GRID_BEATS?m->pulse:grid==KV_GRID_SIXTEENTHS?.25:grid==KV_GRID_TRIPLETS && meter!=KV_METER_6_8?1.0/3:.5;
+    m->rhythm=on; if(!on) return;
+    if(was) { rhythm_retime(m,seconds_per_beat*RATE); rhythm_align(m,m->origin); return; }
+    m->beat_frames=seconds_per_beat*RATE;
+    // Switched on: with a sequence under way it joins the sequence's beats, otherwise it starts now.
+    rhythm_align(m,m->count && m->clock>=m->sequence_start?(double)m->sequence_start:(double)m->clock);
+}
+void kv_mixer_count_in(KvMixer *m,double beats) { if(m && isfinite(beats) && beats>=0 && beats<=16) m->lead_beats=beats; }
+double kv_mixer_rhythm_beat(const KvMixer *m) { return m && m->rhythm?((double)m->clock-m->origin)/m->beat_frames:-1; }
+const float *kv_mixer_dry(const KvMixer *m) { return m?m->dry:NULL; }
+/* The click due at grid position k: accent on the bar, louder on the pulse, soft between. */
+static void click(KvMixer *m,uint64_t k) {
+    double at=fmod(k*m->step+1e-6,m->bar),within=fmod(at,m->pulse);
+    int wave=at<2e-6?CLICK_ACCENT:within<2e-6?CLICK_PULSE:CLICK_SUB;
+    struct Click *slot=&m->clicks[0];
+    for(int i=0;i<4;i++) { if(!m->clicks[i].active) { slot=&m->clicks[i]; break; } if(m->clicks[i].pos>slot->pos) slot=&m->clicks[i]; }
+    *slot=(struct Click){.wave=wave,.pos=0,.gain=m->rhythm_volume,.active=true};
+}
 unsigned kv_mixer_voices(const KvMixer *m) { unsigned n=0; if(m) for(int i=0;i<VOICES;i++) if(m->voices[i].active) n++; return n; }
 void kv_mixer_stop(KvMixer *m) { if(!m) return; m->loop=false; m->count=m->next=0; for(int i=0;i<VOICES;i++) cut(&m->voices[i],441); }
 static bool open_head(const KvPianoBank *bank,int midi,int layer,struct Head *h) {
@@ -171,8 +222,8 @@ static void schedule(KvMixer *m) {
 }
 void kv_mixer_loop(KvMixer *m,bool enabled) {
     if(!m) return;
-    if(enabled && !m->loop && m->count && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
-        m->sequence_start=m->clock; m->cycle++; m->next=0; schedule(m);
+    if(enabled && !m->loop && m->count && m->next==m->count && m->clock>=m->sequence_start && m->clock-m->sequence_start>=m->cycle_end) {
+        m->sequence_start=m->clock; m->cycle++; m->next=0; schedule(m); if(m->rhythm) rhythm_align(m,(double)m->sequence_start);
     }
     m->loop=enabled && m->count>0;
 }
@@ -229,16 +280,23 @@ bool kv_mixer_preview(KvMixer *m,int midi,double duration,int instrument) {
 bool kv_mixer_performance(KvMixer *m,const KvPerformance *p,double seconds,int instrument) {
     if(!m || !kv_performance_valid(p) || !isfinite(seconds) || seconds<.25 || seconds>5 || instrument<0 || instrument>=KV_INSTRUMENTS || !m->banks[instrument]) return false;
     m->performance=*p; m->custom=true; m->loop=false; m->cycle=0; m->next=0; m->count=p->count; m->stride=1;
-    m->interval=(uint64_t)llround(seconds*RATE); m->instrument=instrument; m->sequence_start=m->clock;
+    m->interval=(uint64_t)llround(seconds*RATE); m->instrument=instrument;
+    // A count-in puts the start a few beats ahead: the rhythm starts now and counts up to it.
+    uint64_t lead=(uint64_t)llround(m->lead_beats*m->interval); m->lead_beats=0; m->sequence_start=m->clock+lead;
+    if(m->rhythm) { rhythm_retime(m,(double)m->interval); rhythm_align(m,(double)m->clock); }
     schedule(m); for(int i=0;i<VOICES;i++) release(&m->voices[i],1323); return true;
 }
 void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
-    memset(stereo,0,frames*2*sizeof(float));
+    memset(stereo,0,frames*2*sizeof(float)); memset(m->dry,0,(frames<KV_DRY_FRAMES?frames:KV_DRY_FRAMES)*2*sizeof(float));
     for(size_t f=0;f<frames;f++,m->clock++) {
-        if(m->loop && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
-            m->sequence_start+=m->cycle_end; m->cycle++; m->next=0; schedule(m);
+        bool started=m->clock>=m->sequence_start;   // false during a count-in
+        if(started && m->loop && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
+            m->sequence_start+=m->cycle_end; m->cycle++; m->next=0; schedule(m); if(m->rhythm) rhythm_align(m,(double)m->sequence_start);
         }
-        while(m->next<m->count && m->clock-m->sequence_start>=m->onset[m->next]) {
+        if(m->rhythm) while((double)m->clock>=m->origin+m->hit*m->step*m->beat_frames-.5) { click(m,m->hit); m->hit++; }
+        for(int i=0;i<4;i++) { struct Click *c=&m->clicks[i]; if(!c->active) continue;   // a click plays out even once switched off
+            float x=m->click_wave[c->wave][c->pos]*c->gain; if(f<KV_DRY_FRAMES) { m->dry[f*2]+=x; m->dry[f*2+1]+=x; } if(++c->pos>=CLICK_FRAMES) c->active=false; }
+        while(started && m->next<m->count && m->clock-m->sequence_start>=m->onset[m->next]) {
             size_t n=m->next;
             note_on(m,m->sequence[n],m->gate[n],m->instrument,m->gain[n],m->custom && m->performance.controlled?(unsigned)fmin(2646,m->interval*.12):11025,m->stroke[n],m->hand[n],m->velocity[n],true); m->next++;
         }
@@ -248,7 +306,7 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
         float weights[2][4];
         for(int kind=0;kind<2;kind++) {
             float d=m->dynamics_now;
-            if(kind && m->custom && m->count && m->performance.beats_per_chord>0 && m->interval) {
+            if(kind && started && m->custom && m->count && m->performance.beats_per_chord>0 && m->interval) {
                 double beats=(double)(m->clock-m->sequence_start)/m->interval,phase=fmod(beats,m->performance.beats_per_chord)/m->performance.beats_per_chord;
                 d*=1-.45f*d*(1-(float)sin(M_PI*phase));
             }
@@ -280,7 +338,7 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
 }
 bool kv_mixer_running(const KvMixer *m) {
     if(!m) return false;
-    if(m->count && (m->loop || m->clock-m->sequence_start<m->cycle_end)) return true;
+    if(m->count && (m->loop || m->clock<m->sequence_start || m->clock-m->sequence_start<m->cycle_end)) return true;
     int notes[KV_ACTIVE_NOTES]; return kv_mixer_active(m,notes)>0;
 }
 bool kv_mixer_busy(const KvMixer *m) { if(!m) return false; if(m->loop || m->next<m->count) return true; for(int i=0;i<VOICES;i++) if(m->voices[i].active) return true; return false; }
@@ -297,8 +355,11 @@ unsigned kv_mixer_active(const KvMixer *m,int notes[KV_ACTIVE_NOTES]) {
 
 void kv_mixer_interval(KvMixer *m,double seconds) {
     if(!m || !isfinite(seconds) || seconds<.08 || seconds>5 || !m->interval) return;
-    uint64_t frames=(uint64_t)llround(seconds*RATE),elapsed=m->clock-m->sequence_start;
+    uint64_t frames=(uint64_t)llround(seconds*RATE),elapsed=0;
     double ratio=(double)frames/m->interval;
+    if(m->clock<m->sequence_start) m->sequence_start=m->clock+(uint64_t)llround((m->sequence_start-m->clock)*ratio);   // in a count-in
+    else elapsed=m->clock-m->sequence_start;
+    if(m->rhythm) rhythm_retime(m,m->beat_frames*ratio);
     for(size_t i=m->next;i<m->count;i++) {
         uint64_t remaining=m->onset[i]>elapsed?m->onset[i]-elapsed:0;
         m->onset[i]=elapsed+(uint64_t)llround(remaining*ratio);

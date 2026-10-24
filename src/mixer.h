@@ -30,6 +30,19 @@ void kv_mixer_dynamics(KvMixer *mixer,float dynamics,float expression);
 void kv_mixer_pedal(KvMixer *mixer,bool down);
 /* Voices in use, fading ones included (tests and diagnostics). */
 unsigned kv_mixer_voices(const KvMixer *mixer);
+/* The rhythm layer: a metronome click on a grid of the beat. While on it runs by itself — from the moment it is switched on,
+   or from the first beat of a sequence that starts (again at each loop) — at seconds_per_beat; bar and pulse come from the
+   meter (kv_meter_bar, kv_meter_pulse: 6/8 clicks on its two dotted quarters). A new tempo keeps the beat. The click is dry:
+   it is left out of the stereo render and read with kv_mixer_dry, to be mixed after the effects. volume 0…1. */
+typedef enum { KV_GRID_BEATS, KV_GRID_EIGHTHS, KV_GRID_TRIPLETS, KV_GRID_SIXTEENTHS, KV_GRID_COUNT } KvGrid;
+void kv_mixer_rhythm(KvMixer *mixer,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,float volume);
+/* The next sequence starts after this many beats; the metronome counts them in (one bar of the meter, as a rule). */
+void kv_mixer_count_in(KvMixer *mixer,double beats);
+/* Beats since the rhythm's origin (bar position: fmod(beat, kv_meter_bar)), −1 while it is off. */
+double kv_mixer_rhythm_beat(const KvMixer *mixer);
+#define KV_DRY_FRAMES 4096
+/* The dry part (the click) of the last render, stereo interleaved; frames beyond KV_DRY_FRAMES carry no click. */
+const float *kv_mixer_dry(const KvMixer *mixer);
 void kv_mixer_humanize(KvMixer *mixer,bool enabled);
 void kv_mixer_loop(KvMixer *mixer,bool enabled);
 void kv_mixer_interval(KvMixer *mixer,double seconds);
