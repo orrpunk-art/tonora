@@ -5,12 +5,12 @@
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"Song check failed at %d: %s\n",__LINE__,#x); return 1; } } while(0)
 
 static KvSong song_in(KvKey key,KvMeter meter) {
-    KvSong s; memset(&s,0,sizeof(s)); s.key=key; s.meter=meter; s.bpm=100; s.keyboard_base=60; s.extension=0; return s;
+    KvSong s; memset(&s,0,sizeof(s)); s.key=key; s.meter=meter; s.bpm=100; s.keyboard_base=60; s.extension=0; kv_song_reset(&s); return s;
 }
 static KvArrangement hands(KvPianoPattern style,KvChordLength length) {
     return (KvArrangement){.style=style,.length=length,.fills=KV_FILL_STYLE};
 }
-static int total_notes(const KvPerformance *a,const KvPerformance *b) { return (int)(a->count+b->count); }
+static size_t hand_notes(const KvPerformance *p,unsigned hand) { size_t n=0; for(size_t i=0;i<p->count;i++) if(p->events[i].hand==hand) n++; return n; }
 
 int main(void) {
     const KvKey c_major={0,false,0,0,false};
@@ -56,7 +56,7 @@ int main(void) {
         song.sections[0].level=1; song.sections[0].edited=true;
         KvPerformance mine=a; mine.events[0].midi=a.events[0].midi+1; KvPerformance played;
         CHECK(kv_section_plan(&song,0,&mine,&played) && played.events[0].midi==mine.events[0].midi);
-        KvPerformance half,rest; CHECK(kv_track_split(&a,2,&half,&rest)); CHECK(!kv_section_plan(&song,0,&half,&played));
+        KvPerformance half=a; half.chord_count=2; half.total_beats=8; CHECK(!kv_section_plan(&song,0,&half,&played));
         // Every texture, style, meter and chord length fits one pass of eight chords.
         const int eight[8]={0,5,3,4,0,5,3,4};
         for(int m=0;m<KV_METER_COUNT;m++) for(int l=0;l<KV_LENGTH_COUNT;l++) for(int t=0;t<KV_PATTERN_COUNT+2+KV_STRINGS_COUNT-1;t++) {
@@ -67,36 +67,74 @@ int main(void) {
             KvPerformance p; CHECK(kv_section_notes(&s,0,&p) && p.chord_count==8);
         }
     }
-    { // Cuts: inside an unrollable section on bar lines, between passes otherwise; tracks split by time.
+    { // Length, trim and cuts anywhere: the pass laid end to end from the section's start and cut at its length.
         KvSong song=song_in(c_major,KV_METER_4_4);
-        KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_BALLAD,KV_LENGTH_BAR)); verse.repeats=2;
+        KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)); verse.repeats=2; verse.arrangement.generated=true; verse.arrangement.seed=5;
         kv_song_insert(&song,0,&verse);
-        CHECK(fabs(kv_song_snap_cut(&song,0,12.3)-12)<1e-9 && kv_song_snap_cut(&song,0,0.2)==4);
-        CHECK(!kv_song_cut(&song,0,13,NULL,NULL,NULL));
-        CHECK(kv_song_cut(&song,0,12,NULL,NULL,NULL) && song.count==2 && kv_song_valid(&song));
-        CHECK(song.sections[0].count==3 && song.sections[0].repeats==1 && song.sections[1].count==5 && song.sections[1].codes[0]==4 && song.sections[1].codes[1]==0);
-        CHECK(fabs(kv_song_beats(&song)-32)<1e-9 && song.sections[1].id!=song.sections[0].id);
-        // Four passes of four chords cannot be unrolled: cuts fall between passes.
-        KvSong many=song_in(c_major,KV_METER_4_4); verse.repeats=4; kv_song_insert(&many,0,&verse);
-        CHECK(fabs(kv_song_snap_cut(&many,0,21)-16)<1e-9);
-        CHECK(kv_song_cut(&many,0,16,NULL,NULL,NULL) && many.sections[0].repeats==1 && many.sections[1].repeats==3 && many.sections[1].count==4);
-        // 3/4 with two-beat chords: the first bar line that is also a chord change is after three chords.
-        KvSong waltz=song_in(c_major,KV_METER_3_4); KvSection w=kv_section_from_draft(KV_SECTION_VERSE,(const int[]){0,5,3,4,0,5},6,hands(KV_WALTZ,KV_LENGTH_TWO_BEATS));
-        kv_song_insert(&waltz,0,&w); CHECK(fabs(kv_song_snap_cut(&waltz,0,2)-6)<1e-9);
-        // An edited track is split at the cut: nothing lost, notes across the cut end there, both halves valid.
-        KvSong edited=song_in(c_major,KV_METER_4_4); KvSection e=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR));
-        e.arrangement.generated=true; e.arrangement.seed=5; kv_song_insert(&edited,0,&e); edited.sections[0].edited=true;
-        KvPerformance track; CHECK(kv_section_notes(&edited,0,&track));
-        KvPerformance l,r; CHECK(kv_song_cut(&edited,0,8,&track,&l,&r));
-        CHECK(total_notes(&l,&r)==(int)track.count && kv_performance_valid(&l) && kv_performance_valid(&r) && l.chord_count==2 && r.chord_count==2);
-        for(size_t i=0;i<l.count;i++) CHECK(l.events[i].beat+l.events[i].duration<=8+1e-9);
-        CHECK(edited.sections[0].edited && edited.sections[1].edited);
-        // A note held across the cut ends at it.
-        KvPerformance held=track; held.events[0]=(KvPianoEvent){.midi=60,.beat=7,.duration=3,.velocity=.8f,.chord=1,.hand=1}; held.count=1;
-        CHECK(kv_track_split(&held,2,&l,&r) && l.count==1 && r.count==0 && fabs(l.events[0].duration-1)<1e-9);
-        // Repeated edited track unrolls with it.
-        KvPerformance twice; CHECK(kv_track_repeat(&track,2,&twice) && twice.count==2*track.count && twice.chord_count==8 && kv_performance_valid(&twice));
-        CHECK(!kv_track_repeat(&track,3,&twice));
+        KvPerformance pass,p; CHECK(kv_section_notes(&song,0,&pass) && fabs(pass.total_beats-16)<1e-9);
+        CHECK(kv_section_part(&song,0,NULL,0,16,&p) && p.count==pass.count && fabs(p.total_beats-16)<1e-9);
+        CHECK(kv_section_part(&song,0,NULL,16,16,&p) && p.count==pass.count && p.events[0].midi==pass.events[0].midi);
+        CHECK(!kv_section_part(&song,0,NULL,32,4,&p) && !kv_section_part(&song,0,NULL,0,0,&p));
+        // Snapping on the song's grid; anywhere without one; never at the edges.
+        CHECK(fabs(kv_song_snap_cut(&song,0,12.3,4)-12)<1e-9 && fabs(kv_song_snap_cut(&song,0,13.3,0)-13.3)<1e-9);
+        CHECK(kv_song_snap_cut(&song,0,.01,0)<0 && kv_song_snap_cut(&song,0,40,4)<0 && kv_song_snap_cut(&song,0,1,4)<0);
+        // A cut in the middle of a chord: the left part ends there, the right one begins there in the pass; nothing lost or doubled.
+        KvSong before=song; uint32_t right=kv_song_cut(&song,0,13);
+        CHECK(right && song.count==2 && song.sections[1].id==right && kv_song_valid(&song) && fabs(kv_song_beats(&song)-32)<1e-9);
+        CHECK(fabs(kv_section_beats(&song,0)-13)<1e-9 && fabs(kv_section_beats(&song,1)-19)<1e-9 && fabs(song.sections[1].start-13)<1e-9 && song.sections[1].count==4);
+        KvPerformance l,r1,r2; CHECK(kv_section_part(&song,0,NULL,0,16,&l) && fabs(l.total_beats-13)<1e-9);
+        CHECK(kv_section_part(&song,1,NULL,0,16,&r1) && kv_section_part(&song,1,NULL,16,16,&r2) && fabs(r2.total_beats-3)<1e-9);
+        CHECK(l.count+r1.count+r2.count==2*pass.count);
+        for(size_t i=0;i<l.count;i++) CHECK(l.events[i].beat+l.events[i].duration<=13+1e-9);
+        size_t first=0; while(first<pass.count && pass.events[first].beat<13-1e-9) first++;
+        CHECK(r1.events[0].midi==pass.events[first].midi && fabs(r1.events[0].beat-(pass.events[first].beat-13))<1e-9);
+        CHECK(!kv_song_cut(&song,0,13) && !kv_song_cut(&song,0,.05));
+        // A cut on a whole pass reads back as repeats; length and repeats agree.
+        song=before; CHECK(kv_song_cut(&song,0,16) && song.sections[0].length==0 && song.sections[0].repeats==1 && song.sections[1].start==0 && song.sections[1].repeats==1);
+        song=before; CHECK(kv_song_set_length(&song,0,24) && song.sections[0].length==24 && fabs(kv_song_beats(&song)-24)<1e-9);
+        CHECK(kv_song_set_length(&song,0,48) && song.sections[0].length==0 && song.sections[0].repeats==3);
+        CHECK(kv_song_set_repeats(&song,0,2) && song.sections[0].length==0 && fabs(kv_song_beats(&song)-32)<1e-9 && !kv_song_set_length(&song,0,0));
+        // Trimming the start keeps the end where it was; trimming back past the pass's start wraps round it.
+        CHECK(kv_song_trim_start(&song,0,4) && fabs(song.sections[0].start-4)<1e-9 && fabs(kv_section_beats(&song,0)-28)<1e-9);
+        CHECK(kv_section_part(&song,0,NULL,0,16,&p)); first=0; while(first<pass.count && pass.events[first].beat<4-1e-9) first++;
+        CHECK(p.events[0].midi==pass.events[first].midi && fabs(p.events[0].beat-(pass.events[first].beat-4))<1e-9);
+        CHECK(kv_song_trim_start(&song,0,-8) && fabs(song.sections[0].start-12)<1e-9 && fabs(kv_section_beats(&song,0)-36)<1e-9 && kv_song_valid(&song));
+        // An edited pass plays in every window; an edited section cut keeps its pass on both sides (the app copies the track).
+        song=before; song.sections[0].edited=true; KvPerformance mine=pass; mine.events[0].midi=pass.events[0].midi+1;
+        CHECK(kv_section_part(&song,0,&mine,16,16,&p) && p.events[0].midi==mine.events[0].midi);
+        CHECK(kv_song_cut(&song,0,8) && song.sections[0].edited && song.sections[1].edited);
+    }
+    { // Regions and tracks: mute, solo, level, shift.
+        KvSong song=song_in(c_major,KV_METER_4_4);
+        KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_ALBERTI,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
+        KvPerformance all,p; CHECK(kv_section_part(&song,0,NULL,0,16,&all) && hand_notes(&all,0) && hand_notes(&all,1));
+        CHECK(kv_region_audible(&song,0,KV_TRACK_DRUMS));
+        song.sections[0].regions[KV_TRACK_BASS].mute=true; CHECK(kv_section_part(&song,0,NULL,0,16,&p) && !hand_notes(&p,0) && hand_notes(&p,1)==hand_notes(&all,1));
+        song.sections[0].regions[KV_TRACK_MELODY].mute=true; CHECK(kv_section_part(&song,0,NULL,0,16,&p) && p.count==0 && fabs(p.total_beats-16)<1e-9);   // an empty part still lasts
+        song.sections[0].regions[KV_TRACK_BASS].mute=song.sections[0].regions[KV_TRACK_MELODY].mute=false;
+        song.track_solo[KV_TRACK_BASS]=true; CHECK(kv_section_part(&song,0,NULL,0,16,&p) && !hand_notes(&p,1) && hand_notes(&p,0)==hand_notes(&all,0) && !kv_region_audible(&song,0,KV_TRACK_DRUMS));
+        song.track_solo[KV_TRACK_BASS]=false; song.track_mute[KV_TRACK_DRUMS]=true; CHECK(!kv_region_audible(&song,0,KV_TRACK_DRUMS)); song.track_mute[KV_TRACK_DRUMS]=false;
+        song.sections[0].regions[KV_TRACK_MELODY].level=.5f; CHECK(kv_section_part(&song,0,NULL,0,16,&p));
+        for(size_t i=0,k=0;i<all.count;i++) if(all.events[i].hand) { while(!p.events[k].hand) k++; CHECK(fabsf(p.events[k].velocity-fmaxf(.4f,all.events[i].velocity*.5f))<1e-6f); k++; }
+        song.sections[0].regions[KV_TRACK_MELODY].level=1;
+        // The bass moved two beats later: its notes follow, those pushed past the end are gone, nothing comes in from outside.
+        song.sections[0].regions[KV_TRACK_BASS].shift=2; CHECK(kv_section_part(&song,0,NULL,0,16,&p));
+        size_t kept=0; for(size_t i=0;i<all.count;i++) if(!all.events[i].hand && all.events[i].beat<14-1e-9) kept++;
+        CHECK(hand_notes(&p,0)==kept && hand_notes(&p,1)==hand_notes(&all,1));
+        double firstBass=-1; for(size_t i=0;i<p.count && firstBass<0;i++) if(!p.events[i].hand) firstBass=p.events[i].beat;
+        CHECK(firstBass>=2-1e-9);
+        for(size_t i=0;i<p.count;i++) CHECK(p.events[i].beat+p.events[i].duration<=16+1e-9 && (i==0 || p.events[i].beat>=p.events[i-1].beat));
+        song.sections[0].regions[KV_TRACK_BASS].shift=-1; CHECK(kv_section_part(&song,0,NULL,0,16,&p));
+        kept=0; for(size_t i=0;i<all.count;i++) if(!all.events[i].hand && all.events[i].beat>=1-1e-9) kept++; CHECK(hand_notes(&p,0)==kept);
+        // In a section shorter than its pass, a region moved earlier does not pull in notes from past the section's end.
+        CHECK(kv_song_set_length(&song,0,12)); song.sections[0].regions[KV_TRACK_BASS].shift=-2; CHECK(kv_section_part(&song,0,NULL,0,12,&p));
+        kept=0; for(size_t i=0;i<all.count;i++) if(!all.events[i].hand && all.events[i].beat>=2-1e-9 && all.events[i].beat<12-1e-9) kept++; CHECK(kept && hand_notes(&p,0)==kept);
+        CHECK(kv_song_set_repeats(&song,0,1));
+        song.sections[0].regions[KV_TRACK_BASS].shift=40; CHECK(!kv_song_valid(&song)); song.sections[0].regions[KV_TRACK_BASS].shift=0;
+        // A stretch with more notes than a plan holds is refused (the app asks for a shorter one).
+        KvSong dense=song_in(c_major,KV_METER_4_4); KvArrangement arp=hands(KV_BALLAD,KV_LENGTH_TWO_BARS); arp.arpeggio=true; arp.division=KV_DIV_SIXTEENTH;
+        KvSection busy=kv_section_from_draft(KV_SECTION_VERSE,(const int[]){0,5,3,4,0,5,3,4},8,arp); busy.repeats=8; kv_song_insert(&dense,0,&busy);
+        CHECK(kv_section_part(&dense,0,NULL,0,64,&p) && !kv_section_part(&dense,0,NULL,0,512,&p));
     }
     { // Transposing an edited track keeps it valid and on the keyboard.
         KvSong song=song_in(c_major,KV_METER_4_4); KvSection v=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_ALBERTI,KV_LENGTH_BAR));
@@ -171,6 +209,51 @@ int main(void) {
         CHECK(g[0].section.kind==KV_SECTION_CHORUS && g[0].copy_of==song.sections[1].id);
         n=kv_song_suggest(&song,1,7,g); CHECK(n>=3 && g[0].section.kind==KV_SECTION_PIT && g[1].section.kind==KV_SECTION_VERSE && g[1].lead_in && g[1].transition.transition==KV_TRANSITION_BREAK);
     }
-    puts("Song: time, row edits, notes in every texture, level and lift, cuts and tracks, chorus, breakdown, intro, outro, transitions and suggestions passed.");
+    { // Bridge: four bars away from the tonic, back to the dominant, in every key and chord length.
+        for(int index=0;index<12;index++) for(int minor=0;minor<2;minor++) for(int l=0;l<KV_LENGTH_COUNT;l++) {
+            KvKey key={index,minor!=0,0,0,false}; KvSong song=song_in(key,KV_METER_4_4);
+            KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,(KvChordLength)l)); kv_song_insert(&song,0,&verse);
+            KvSection bridge=kv_section_bridge(&song,&song.sections[0],(uint32_t)index);
+            int first=kv_code_base(bridge.codes[0]),last=bridge.codes[3];
+            CHECK(bridge.kind==KV_SECTION_BRIDGE && bridge.count==4 && (first==3 || first==5) && (last==4 || last==KV_CODE_SECONDARY) && bridge.lift==12);
+            CHECK(kv_song_insert(&song,1,&bridge) && fabs(kv_section_beats(&song,1)-16)<1e-9);
+            KvPerformance p; CHECK(kv_section_part(&song,1,NULL,0,16,&p) && p.count>0);
+        }
+    }
+    { // Forms: a song in a form from one verse; transitions where the neighbours call for them; hand-edited sections kept.
+        const KvForm *forms; size_t n=kv_song_forms(&forms); CHECK(n==5);
+        for(size_t f=0;f<n;f++) {
+            KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR));
+            kv_song_insert(&song,0,&verse); uint32_t copy_of[KV_SONG_SECTIONS]; uint32_t origin=song.sections[0].id;
+            CHECK(kv_song_apply_form(&song,forms[f].slots,forms[f].count,0,3,copy_of) && kv_song_valid(&song) && *kv_form_name(f));
+            size_t k=0;
+            for(size_t i=0;i<song.count;i++) {
+                const KvSection *x=&song.sections[i];
+                if(x->kind==KV_SECTION_TRANSITION && !x->name[0]) { CHECK(i>0 && i+1<song.count && x->transition!=KV_TRANSITION_FILL); continue; }   // inserted between neighbours
+                int slot=forms[f].slots[k++];
+                if(slot==KV_FORM_BUILD) CHECK(x->kind==KV_SECTION_TRANSITION && x->repeats==2 && !strcmp(x->name,"Билд"));
+                else if(slot==KV_FORM_DROP) CHECK(x->kind==KV_SECTION_CHORUS && x->beat==KV_SECTION_BEAT_FIXED && x->beat_fixed==KV_BEAT_HOUSE && !strcmp(x->name,"Дроп"));
+                else CHECK(x->kind==(KvSectionKind)slot);
+                if(x->kind==KV_SECTION_VERSE) CHECK(copy_of[i]==origin && x->codes[0]==0 && x->count==4);
+            }
+            CHECK(k==forms[f].count);
+        }
+        // Verse into chorus goes through a rise; an existing chorus is reused; an edited verse stays itself, its copies carry its notes.
+        KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR));
+        KvSection chorus=kv_section_from_draft(KV_SECTION_CHORUS,(const int[]){3,4,0,0},4,hands(KV_POP,KV_LENGTH_BAR));
+        KvSection pit=kv_section_from_draft(KV_SECTION_PIT,(const int[]){5,3},2,hands(KV_AMBIENT,KV_LENGTH_TWO_BARS));
+        kv_song_insert(&song,0,&verse); kv_song_insert(&song,1,&chorus); kv_song_insert(&song,2,&pit);
+        song.sections[0].edited=true; song.sections[2].edited=true; uint32_t v=song.sections[0].id,c=song.sections[1].id,b=song.sections[2].id;
+        const int shortForm[4]={KV_SECTION_VERSE,KV_SECTION_CHORUS,KV_SECTION_VERSE,KV_SECTION_CHORUS}; uint32_t copy_of[KV_SONG_SECTIONS];
+        CHECK(kv_song_apply_form(&song,shortForm,4,0,1,copy_of) && kv_song_valid(&song));
+        CHECK(song.sections[0].id==v && copy_of[0]==0 && song.sections[1].kind==KV_SECTION_TRANSITION && song.sections[1].transition==KV_TRANSITION_RISE);
+        CHECK(song.sections[2].kind==KV_SECTION_CHORUS && song.sections[2].codes[0]==3 && copy_of[2]==c && song.sections[2].id!=c);
+        size_t secondVerse=3; while(secondVerse<song.count && song.sections[secondVerse].kind!=KV_SECTION_VERSE) secondVerse++;
+        CHECK(secondVerse<song.count && copy_of[secondVerse]==v && song.sections[secondVerse].edited);
+        CHECK(song.sections[song.count-1].id==b && song.sections[song.count-1].kind==KV_SECTION_PIT);   // the edited breakdown has no slot: kept at the end
+        const int bad[2]={KV_SECTION_VERSE,99}; CHECK(!kv_song_apply_form(&song,bad,2,0,1,copy_of));
+        CHECK(!*kv_form_label(KV_SECTION_VERSE) && !strcmp(kv_form_label(KV_FORM_BUILD),"Билд") && !strcmp(kv_section_kind_name(KV_SECTION_BRIDGE),"Бридж"));
+    }
+    puts("Song: time, row edits, notes in every texture, level and lift, length, trim and cuts anywhere, parts, regions and tracks, chorus, breakdown, bridge, intro, outro, transitions, suggestions and forms passed.");
     return 0;
 }

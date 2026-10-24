@@ -52,9 +52,12 @@ unsigned kv_mixer_drum_voices(const KvMixer *mixer);
 const float *kv_mixer_dry(const KvMixer *mixer);
 /* The part after the playing performance (a song's next section): it starts on the frame the current one ends, without a gap,
    while the current voices ring on; humanizing, tempo and instrument stay. rhythm: −1 leaves the rhythm layer as it is, 0 switches
-   it off, 1 on with `hits` (count 0: the click); the layer restarts on the part's first beat. One part waits at a time: a new
+   it off, 1 on with `hits` (count 0: the click); the layer restarts at `phase` beats into its bar on the part's first frame. One part waits at a time: a new
    call replaces it. kv_mixer_part counts the parts started since the last kv_mixer_performance (0 while the first plays). */
-bool kv_mixer_queue(KvMixer *mixer,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count);
+bool kv_mixer_queue(KvMixer *mixer,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count,double phase);
+/* Where in the bar the next kv_mixer_performance begins, in beats past a downbeat (a song played from inside a bar); the queued
+   parts carry their own phase. Both accept any playable performance (kv_performance_playable), notes or none. */
+void kv_mixer_phase(KvMixer *mixer,double beats);
 unsigned kv_mixer_part(const KvMixer *mixer);
 void kv_mixer_humanize(KvMixer *mixer,bool enabled);
 void kv_mixer_loop(KvMixer *mixer,bool enabled);

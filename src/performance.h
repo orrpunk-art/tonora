@@ -59,6 +59,9 @@ bool kv_two_hand(const int chords[][3],size_t count,int keyboard_base,KvPianoPat
 /* Mechanical musical guards: monophonic lead, bounded leaps/density, no close simultaneous upper voices. */
 bool kv_arrangement_controlled(const KvPerformance *performance);
 bool kv_performance_valid(const KvPerformance *performance);
+/* What the mixer can play: a stretch of a song section (kv_section_part) may begin inside a chord, last any number of beats and
+   hold no notes at all; its notes are in time order, on the keyboard, and start inside it. Every valid performance is playable. */
+bool kv_performance_playable(const KvPerformance *performance);
 /* A piano key cannot sound twice at once: a note that is still held when the same pitch starts again ends there.
    Notes starting together merge into the longer one. Expects events sorted by beat. */
 void kv_performance_resolve_overlaps(KvPerformance *performance);

@@ -153,6 +153,14 @@ bool kv_two_hand_key(const int chords[][3],size_t count,int base,KvPianoPattern 
 bool kv_two_hand(const int chords[][3],size_t count,int base,KvPianoPattern pattern,KvPerformance *out) {
     return kv_two_hand_key(chords,count,base,pattern,(KvKey){0,false,0,0,false},0x746f6e6f,out);
 }
+bool kv_performance_playable(const KvPerformance *p) {
+    if(!p || p->count>KV_PERFORMANCE_CAPACITY || !p->chord_count || p->chord_count>8 || !isfinite(p->beats_per_chord) || p->beats_per_chord<=0 || !isfinite(p->total_beats) || p->total_beats<=0 || p->total_beats>4096) return false;
+    for(size_t i=0;i<p->count;i++) {
+        KvPianoEvent e=p->events[i];
+        if(e.midi<21 || e.midi>108 || !isfinite(e.beat) || !isfinite(e.duration) || !isfinite(e.velocity) || e.beat<0 || e.beat>=p->total_beats+1e-9 || e.duration<=0 || e.velocity<0 || e.velocity>1 || e.chord>=p->chord_count || e.hand>1 || (i && e.beat<p->events[i-1].beat)) return false;
+    }
+    return true;
+}
 bool kv_performance_valid(const KvPerformance *p) {
     if(!p || !p->count || p->count>KV_PERFORMANCE_CAPACITY || !p->chord_count || p->chord_count>8 || !isfinite(p->beats_per_chord) || p->beats_per_chord<1 || p->beats_per_chord>8 || fabs(p->total_beats-p->chord_count*p->beats_per_chord)>1e-9) return false;
     if(p->beats_per_bar && (p->beats_per_bar<3 || p->beats_per_bar>4)) return false;

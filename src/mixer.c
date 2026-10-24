@@ -26,13 +26,13 @@ struct KvMixer { const KvPianoBank *banks[KV_INSTRUMENTS]; struct Voice voices[V
     KvPerformance performance; bool custom,humanize,loop,marking_preview,marking_held,pedal; uint32_t random; size_t count,next,stride; uint64_t interval,sequence_start,clock,cycle_end,cycle; int instrument;
     KvArticulation articulation; float dynamics_target,dynamics_now,expression_target,expression_now;
     /* rhythm: on, grid, bar and pulse in beats, step between clicks, frames per beat, origin (frame of beat 0), next click */
-    bool rhythm; KvGrid grid; double bar,pulse,step,beat_frames,origin,lead_beats; uint64_t hit; float rhythm_volume;
+    bool rhythm; KvGrid grid; double bar,pulse,step,beat_frames,origin,lead_beats,phase; uint64_t hit; float rhythm_volume;
     struct Click clicks[4]; float click_wave[CLICKS][CLICK_FRAMES]; float dry[KV_DRY_FRAMES*2];
     /* beat: one bar of hits, the next one due (bar, hit), the kit; counting: a count-in is under way */
     const KvPianoBank *drums; KvHit beat[KV_BEAT_HITS]; size_t beat_count,beat_hit; uint64_t beat_bar; bool electronic,counting;
     unsigned char take[128]; struct Drum drum_voices[DRUM_VOICES]; float synth[SYNTHS][SYNTH_FRAMES]; size_t synth_frames[SYNTHS];
     /* the queued part (kv_mixer_queue): its plan, its rhythm (−1 as is, 0 off, 1 on) and hits, and parts started so far */
-    KvPerformance queued; bool has_queued; int queued_rhythm; KvHit queued_hits[KV_BEAT_HITS]; size_t queued_hit_count; unsigned part; };
+    KvPerformance queued; bool has_queued; int queued_rhythm; KvHit queued_hits[KV_BEAT_HITS]; size_t queued_hit_count; double queued_phase; unsigned part; };
 /* Drum-machine sounds: a kick that drops from 150 to 48 Hz, a snare of tone and noise, a stick, a clap of three bursts and a
    tail, closed and open hi-hats and a tambourine of bright noise, two congas, a shaker. Peaks by role. */
 static void synthesize_kit(KvMixer *m) {
@@ -144,6 +144,7 @@ void kv_mixer_rhythm(KvMixer *m,bool on,KvGrid grid,KvMeter meter,double seconds
     rhythm_align(m,m->count && m->clock>=m->sequence_start?(double)m->sequence_start:(double)m->clock);
 }
 void kv_mixer_count_in(KvMixer *m,double beats) { if(m && isfinite(beats) && beats>=0 && beats<=16) m->lead_beats=beats; }
+void kv_mixer_phase(KvMixer *m,double beats) { if(m && isfinite(beats) && beats>=0 && beats<=16) m->phase=beats; }
 double kv_mixer_rhythm_beat(const KvMixer *m) { return m && m->rhythm?((double)m->clock-m->origin)/m->beat_frames:-1; }
 const float *kv_mixer_dry(const KvMixer *m) { return m?m->dry:NULL; }
 void kv_mixer_drums(KvMixer *m,const KvPianoBank *bank) { if(m) m->drums=bank; }
@@ -180,7 +181,7 @@ static void click(KvMixer *m,uint64_t k) {
     *slot=(struct Click){.wave=wave,.pos=0,.gain=m->rhythm_volume,.active=true};
 }
 unsigned kv_mixer_voices(const KvMixer *m) { unsigned n=0; if(m) for(int i=0;i<VOICES;i++) if(m->voices[i].active) n++; return n; }
-void kv_mixer_stop(KvMixer *m) { if(!m) return; m->loop=false; m->has_queued=false; m->count=m->next=0; for(int i=0;i<VOICES;i++) cut(&m->voices[i],441); }
+void kv_mixer_stop(KvMixer *m) { if(!m) return; m->loop=false; m->has_queued=false; m->custom=false; m->count=m->next=0; for(int i=0;i<VOICES;i++) cut(&m->voices[i],441); }
 static bool open_head(const KvPianoBank *bank,int midi,int layer,struct Head *h) {
     KvSampleView s; if(!kv_piano_layer(bank,midi,layer,&s)) return false;
     *h=(struct Head){.s=s,.ratio=pow(2,(midi-s.midi)/12.0-s.cents/1200.0)}; return true;
@@ -360,17 +361,18 @@ bool kv_mixer_preview(KvMixer *m,int midi,double duration,int instrument) {
     return true;
 }
 bool kv_mixer_performance(KvMixer *m,const KvPerformance *p,double seconds,int instrument) {
-    if(!m || !kv_performance_valid(p) || !isfinite(seconds) || seconds<.25 || seconds>5 || instrument<0 || instrument>=KV_INSTRUMENTS || !m->banks[instrument]) return false;
+    if(!m || !kv_performance_playable(p) || !isfinite(seconds) || seconds<.25 || seconds>5 || instrument<0 || instrument>=KV_INSTRUMENTS || !m->banks[instrument]) return false;
     m->performance=*p; m->custom=true; m->loop=false; m->cycle=0; m->next=0; m->count=p->count; m->stride=1; m->has_queued=false; m->part=0;
     m->interval=(uint64_t)llround(seconds*RATE); m->instrument=instrument;
     // A count-in puts the start a few beats ahead: the rhythm starts now and counts up to it.
     uint64_t lead=(uint64_t)llround(m->lead_beats*m->interval); m->lead_beats=0; m->sequence_start=m->clock+lead;
-    if(m->rhythm) { rhythm_retime(m,(double)m->interval); rhythm_align(m,(double)m->clock); }
-    schedule(m); for(int i=0;i<VOICES;i++) release(&m->voices[i],1323); return true;
+    // The bar runs from `phase` beats before now (a part that begins inside a bar); a count-in is whole bars, so it lands the same.
+    if(m->rhythm) { rhythm_retime(m,(double)m->interval); rhythm_align(m,(double)m->clock-m->phase*(double)m->interval); }
+    m->phase=0; schedule(m); for(int i=0;i<VOICES;i++) release(&m->voices[i],1323); return true;
 }
-bool kv_mixer_queue(KvMixer *m,const KvPerformance *p,int rhythm,const KvHit *hits,size_t count) {
-    if(!m || !m->custom || !m->count || !kv_performance_valid(p) || rhythm<-1 || rhythm>1 || count>KV_BEAT_HITS || (count && !hits)) return false;
-    m->queued=*p; m->queued_rhythm=rhythm; m->queued_hit_count=count; if(count) memcpy(m->queued_hits,hits,count*sizeof *hits);
+bool kv_mixer_queue(KvMixer *m,const KvPerformance *p,int rhythm,const KvHit *hits,size_t count,double phase) {
+    if(!m || !m->custom || !kv_performance_playable(p) || rhythm<-1 || rhythm>1 || count>KV_BEAT_HITS || (count && !hits) || !isfinite(phase) || phase<0 || phase>16) return false;
+    m->queued=*p; m->queued_rhythm=rhythm; m->queued_phase=phase; m->queued_hit_count=count; if(count) memcpy(m->queued_hits,hits,count*sizeof *hits);
     m->has_queued=true; return true;
 }
 unsigned kv_mixer_part(const KvMixer *m) { return m?m->part:0; }
@@ -383,7 +385,7 @@ static void start_queued(KvMixer *m) {
         if(m->queued_hit_count) memcpy(m->beat,m->queued_hits,m->queued_hit_count*sizeof *m->beat);
         m->beat_count=m->queued_hit_count; m->beat_frames=(double)m->interval; m->rhythm=true;
     }
-    if(m->rhythm) rhythm_align(m,(double)m->sequence_start);   // every part starts on a downbeat
+    if(m->rhythm) rhythm_align(m,(double)m->sequence_start-m->queued_phase*(double)m->interval);   // the part's place in the bar
 }
 void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
     memset(stereo,0,frames*2*sizeof(float)); memset(m->dry,0,(frames<KV_DRY_FRAMES?frames:KV_DRY_FRAMES)*2*sizeof(float));
@@ -393,7 +395,7 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
         else if(started && m->loop && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
             m->sequence_start+=m->cycle_end; m->cycle++; m->next=0; schedule(m); if(m->rhythm) rhythm_align(m,(double)m->sequence_start);
         }
-        bool counting=m->count && m->clock<m->sequence_start;
+        bool counting=(m->count || m->custom) && m->clock<m->sequence_start;
         if(m->counting && !counting) beat_align(m);   // the count-in is over: the beat starts on the sequence's first beat
         m->counting=counting;
         if(m->rhythm && m->beat_count && !counting)
@@ -452,13 +454,13 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
 }
 bool kv_mixer_running(const KvMixer *m) {
     if(!m) return false;
-    if(m->count && (m->loop || m->has_queued || m->clock<m->sequence_start || m->clock-m->sequence_start<m->cycle_end)) return true;
+    if((m->count || m->custom) && (m->loop || m->has_queued || m->clock<m->sequence_start || m->clock-m->sequence_start<m->cycle_end)) return true;   // a part without notes still lasts
     int notes[KV_ACTIVE_NOTES]; return kv_mixer_active(m,notes)>0;
 }
 bool kv_mixer_busy(const KvMixer *m) { if(!m) return false; if(m->loop || m->has_queued || m->next<m->count) return true; for(int i=0;i<VOICES;i++) if(m->voices[i].active) return true; return false; }
 uint64_t kv_mixer_clock(const KvMixer *m) { return m?m->clock:0; }
 bool kv_mixer_silent(const KvMixer *m) {
-    if(!m || m->rhythm || kv_mixer_busy(m)) return false;
+    if(!m || m->rhythm || kv_mixer_busy(m) || kv_mixer_running(m)) return false;
     for(int i=0;i<DRUM_VOICES;i++) if(m->drum_voices[i].active) return false;
     for(int i=0;i<4;i++) if(m->clicks[i].active) return false;
     return true;

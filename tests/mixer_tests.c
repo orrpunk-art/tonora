@@ -334,10 +334,10 @@ int main(int argc,char **argv) {
       KvChord c; CHECK(kv_chord(ck,0,&c) && kv_arrange_with(&c,1,60,ck,arr,&first));
       CHECK(kv_chord(ck,4,&c) && kv_arrange_with(&c,1,60,ck,arr,&next));
       CHECK(kv_chord(ck,3,&c) && kv_arrange_with(&c,1,60,ck,arr,&third));
-      CHECK(!kv_mixer_queue(q,&next,-1,NULL,0));                       // nothing playing yet
+      CHECK(!kv_mixer_queue(q,&next,-1,NULL,0,0));                       // nothing playing yet
       CHECK(kv_mixer_performance(q,&first,.5,0)); uint64_t start=kv_mixer_start(q);
       kv_mixer_rhythm(q,false,KV_GRID_BEATS,KV_METER_4_4,.5,.6f);
-      CHECK(kv_mixer_queue(q,&next,-1,NULL,0) && kv_mixer_part(q)==0 && kv_mixer_busy(q));
+      CHECK(kv_mixer_queue(q,&next,-1,NULL,0,0) && kv_mixer_part(q)==0 && kv_mixer_busy(q));
       advance(q,block,(unsigned)(start-kv_mixer_clock(q))+88200-8); CHECK(kv_mixer_part(q)==0);
       advance(q,block,16); CHECK(kv_mixer_part(q)==1 && kv_mixer_start(q)==start+88200);
       unsigned struck=0; for(size_t i=0;i<next.count;i++) if(next.events[i].beat<.01) struck++;
@@ -346,15 +346,26 @@ int main(int argc,char **argv) {
       advance(q,block,88200+44100*2); CHECK(kv_mixer_part(q)==1 && !kv_mixer_running(q));
       // The rhythm follows the parts: off in the first, a beat in the second, off again in the third.
       KvHit kicks[2]={{0,KV_DRUM_KICK,1},{2,KV_DRUM_KICK,.8f}};
-      CHECK(kv_mixer_performance(q,&first,.5,0)); start=kv_mixer_start(q); CHECK(kv_mixer_queue(q,&next,1,kicks,2));
+      CHECK(kv_mixer_performance(q,&first,.5,0)); start=kv_mixer_start(q); CHECK(kv_mixer_queue(q,&next,1,kicks,2,0));
       advance(q,block,88200-256); CHECK(kv_mixer_drum_voices(q)==0 && kv_mixer_rhythm_beat(q)<0);
       advance(q,block,512); CHECK(kv_mixer_part(q)==1 && kv_mixer_drum_voices(q)>0 && kv_mixer_rhythm_beat(q)>=0 && kv_mixer_rhythm_beat(q)<.05);
-      CHECK(kv_mixer_queue(q,&third,0,NULL,0)); advance(q,block,88200); CHECK(kv_mixer_part(q)==2 && kv_mixer_rhythm_beat(q)<0);
+      CHECK(kv_mixer_queue(q,&third,0,NULL,0,0)); advance(q,block,88200); CHECK(kv_mixer_part(q)==2 && kv_mixer_rhythm_beat(q)<0);
       // A stop drops the queue; so does a fresh performance.
-      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_part(q)==0 && kv_mixer_queue(q,&next,-1,NULL,0)); kv_mixer_stop(q);
+      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_part(q)==0 && kv_mixer_queue(q,&next,-1,NULL,0,0)); kv_mixer_stop(q);
       advance(q,block,88200*2); CHECK(kv_mixer_part(q)==0 && !kv_mixer_running(q));
-      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_queue(q,&next,-1,NULL,0) && kv_mixer_performance(q,&third,.5,0));
+      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_queue(q,&next,-1,NULL,0,0) && kv_mixer_performance(q,&third,.5,0));
       advance(q,block,88200*2); CHECK(kv_mixer_part(q)==0);
+      // A part without notes (every track muted) still lasts its beats, and the next one starts on time after it.
+      KvPerformance hush=next; hush.count=0; hush.total_beats=2; CHECK(kv_performance_playable(&hush) && !kv_performance_valid(&hush));
+      CHECK(kv_mixer_performance(q,&hush,.5,0)); start=kv_mixer_start(q); CHECK(kv_mixer_queue(q,&next,-1,NULL,0,0));
+      advance(q,block,44100-64); CHECK(kv_mixer_part(q)==0 && kv_mixer_running(q) && !kv_mixer_silent(q));
+      advance(q,block,128); CHECK(kv_mixer_part(q)==1 && kv_mixer_start(q)==start+44100);
+      // A part that begins inside a bar: its beat starts that far into the bar, the queued one's and the first one's alike.
+      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_queue(q,&next,1,kicks,2,1.5)); start=kv_mixer_start(q);
+      advance(q,block,88200+64); CHECK(kv_mixer_part(q)==1 && fabs(kv_mixer_rhythm_beat(q)-1.5)<.01);
+      kv_mixer_phase(q,3); CHECK(kv_mixer_performance(q,&first,.5,0)); advance(q,block,64); CHECK(fabs(kv_mixer_rhythm_beat(q)-3)<.01);
+      CHECK(!kv_mixer_queue(q,&next,1,kicks,2,-1));
+      kv_mixer_rhythm(q,false,KV_GRID_BEATS,KV_METER_4_4,.5,.6f);
       // Silence: once everything has died away nothing can sound and a skip only moves the clock; not with the rhythm on,
       // not while a count-in waits for its sequence.
       kv_mixer_stop(q); advance(q,block,44100); CHECK(kv_mixer_silent(q));

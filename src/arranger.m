@@ -258,8 +258,8 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
         const KvSection *x=&s->sections[i]; NSRect r=[self rectOfSection:i]; if(NSMaxX(r)<0 || NSMinX(r)>w) continue;
         NSColor *color=KindColor(x->kind); if(i==self.pressed && self.dragging) color=[color colorWithAlphaComponent:.55];
         NSBezierPath *path=[NSBezierPath bezierPathWithRoundedRect:r xRadius:8 yRadius:8]; [color setFill]; [path fill];
-        double pass=kv_section_pass_beats(s,x);
-        for(int k=1;k<x->repeats;k++) { CGFloat px=NSMinX(r)+(CGFloat)(k*pass*[self scale]); [[NSColor.whiteColor colorWithAlphaComponent:.35] setFill]; NSRectFill(NSMakeRect(px,NSMinY(r)+6,1,NSHeight(r)-12)); }
+        double pass=kv_section_pass_beats(s,x),length=kv_section_beats(s,(size_t)i);   // a notch where each pass begins again
+        for(double t=pass-fmod(x->start,pass);t<length-1e-9;t+=pass) { CGFloat px=NSMinX(r)+(CGFloat)(t*[self scale]); [[NSColor.whiteColor colorWithAlphaComponent:.35] setFill]; NSRectFill(NSMakeRect(px,NSMinY(r)+6,1,NSHeight(r)-12)); }
         if(i==self.selected) { NSBezierPath *ring=[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(r,-2,-2) xRadius:10 yRadius:10]; ring.lineWidth=2; [NSColor.labelColor setStroke]; [ring stroke]; }
         NSRect text=NSInsetRect(r,8,0); BOOL edited=[self.owner arrangerEdited:i];
         if(NSWidth(text)>14) {
@@ -315,7 +315,7 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
     double before=self.cutBeat; self.cutBeat=-1; self.cutSection=-1;
     const KvSong *s=[self song]; NSInteger i=[self sectionAtPoint:p];
     if(s && i>=0 && (flags&NSEventModifierFlagCommand)) {
-        double start=kv_section_start(s,(size_t)i),cut=kv_song_snap_cut(s,(size_t)i,[self beatAtX:p.x]-start);
+        double start=kv_section_start(s,(size_t)i),cut=kv_song_snap_cut(s,(size_t)i,[self beatAtX:p.x]-start,kv_meter_bar(s->meter));
         if(cut>0) { self.cutBeat=start+cut; self.cutSection=i; }
     }
     if(before!=self.cutBeat) self.needsDisplay=YES;
