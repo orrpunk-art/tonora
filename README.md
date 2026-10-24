@@ -86,8 +86,4 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 
 Compact subsets of the recordings are bundled. Full licence texts, authorship and SHA-256 manifests are in `assets/` and inside the app (Tonora → Instruments — authorship and licences).
 
-## What's new
-
-**1.2.0** — English interface (system language, switch in FX); textures grouped with icons, strokes with icons and an explanation of «Auto»; defaults of piano, two hands, reverb and delay 10 %; a help page on the circle of fifths; fixes: animation no longer freezes while dragging a slider, strings dynamics affect short strokes, hover labels no longer show through the help card.
-
-The full history of every version, with design decisions, is in the [Russian README](README.ru.md) and in `design/`.
+Design notes and specs (in Russian) are in `design/`.
