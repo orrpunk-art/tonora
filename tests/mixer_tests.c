@@ -23,7 +23,7 @@ static void advance(KvMixer *m,float *block,unsigned frames) {
     while(frames) { unsigned n=frames>256?256:frames; kv_mixer_render(m,block,n); frames-=n; }
 }
 int main(int argc,char **argv) {
-    CHECK(argc==4 || argc==5);
+    CHECK(argc>=4 && argc<=6);   /* pianos, then optionally the strings and the percussion */
     KvPianoBank *banks[3]={kv_piano_load(argv[1]),kv_piano_load(argv[2]),kv_piano_load(argv[3])};
     CHECK(banks[0] && banks[1] && banks[2]);
     KvMixer *a=kv_mixer_create(),*b=kv_mixer_create(); CHECK(a && b);
@@ -220,7 +220,7 @@ int main(int argc,char **argv) {
         kv_mixer_free(m); kv_piano_free(strings); unlink(path); snprintf(path,sizeof(path),"%s/tone.wav",dir); unlink(path); rmdir(dir);
     }
     // The real strings bank: every recording, held 20 s, keeps sounding and its loop seam is no louder a step than its own vibrato.
-    if(argc==5) {
+    if(argc>=5) {
         KvPianoBank *strings=kv_piano_load(argv[4]); CHECK(strings); KvMixer *m=kv_mixer_create(); CHECK(m); kv_mixer_bank(m,KV_INSTRUMENT_STRINGS,strings); kv_mixer_humanize(m,false);
         const int notes[]={36,40,43,47,50,53,57,59,62,66,69,72,76,79,83,86,96};
         for(size_t k=0;k<sizeof(notes)/sizeof(*notes);k++) {
@@ -322,6 +322,34 @@ int main(int argc,char **argv) {
       n=clicks(r,44100,at,peak,64); CHECK(n>=3 && fabs((double)(at[2]-at[1])-11025)<=1);
       kv_mixer_rhythm(r,false,KV_GRID_BEATS,KV_METER_4_4,.25,.6f); advance(r,block,2400); CHECK(kv_mixer_rhythm_beat(r)<0 && clicks(r,44100,at,peak,64)==0);
       kv_mixer_free(r); }
+    // Beats: hits on the exact frames of the bar; the electronic kit needs no recordings; the recorded kit has every drum the
+    // acoustic beats use (soft and loud, two takes); a count-in is clicked and the beat comes in with the sequence.
+    { size_t at[64]; float peak[64];
+      KvMixer *r=kv_mixer_create(); CHECK(r); kv_mixer_humanize(r,false);
+      kv_mixer_rhythm(r,true,KV_GRID_BEATS,KV_METER_4_4,.6,.6f); uint64_t origin=kv_mixer_clock(r);
+      KvHit two[2]={{0,KV_DRUM_KICK,1},{2,KV_DRUM_KICK,.75f}}; kv_mixer_beat(r,two,2,true);
+      size_t n=clicks(r,(size_t)(26460*4.5),at,peak,64);
+      CHECK(n==3 && at[0]<=origin+1 && llabs((long long)at[1]-(long long)(origin+2*26460))<=1 && llabs((long long)at[2]-(long long)(origin+4*26460))<=1 && peak[0]>peak[1]);
+      KvHit pop[KV_BEAT_HITS]; size_t np=kv_beat_bar(KV_BEAT_POP,KV_METER_4_4,pop);
+      kv_mixer_beat(r,pop,np,false); advance(r,block,26460*2); CHECK(kv_mixer_drum_voices(r)>0);   // no recordings: the synthesized kit plays instead
+      if(argc==6) {
+          KvPianoBank *kit=kv_piano_load(argv[5]); CHECK(kit);
+          for(int b=0;b<KV_BEAT_COUNT;b++) for(int mt=0;mt<KV_METER_COUNT;mt++) { KvHit h[KV_BEAT_HITS]; size_t k=kv_beat_bar((KvBeat)b,(KvMeter)mt,h);
+              if(kv_beat_electronic((KvBeat)b)) continue;
+              for(size_t i=0;i<k;i++) for(int layer=0;layer<4;layer++) { KvSampleView v; CHECK(kv_piano_layer(kit,h[i].drum,layer,&v) && v.midi==h[i].drum && v.frames>441); } }
+          kv_mixer_drums(r,kit); kv_mixer_beat(r,pop,np,false); float energy=0;
+          for(int i=0;i<40;i++) { advance(r,block,2646); const float *dry=kv_mixer_dry(r); for(int f=0;f<256;f++) energy+=dry[f*2]*dry[f*2]; }
+          CHECK(energy>.01f);
+          // Count-in: one bar of clicks only, then the drums start on the sequence's first beat.
+          KvPerformance perf={0}; KvArrangement arr={.style=KV_BALLAD,.meter=KV_METER_4_4,.length=KV_LENGTH_BAR,.blocks=true,.seconds_per_beat=.6};
+          KvChord c; CHECK(kv_chord((KvKey){0,false,0,0},0,&c)); CHECK(kv_arrange_with(&c,1,60,(KvKey){0,false,0,0},arr,&perf));
+          kv_mixer_bank(r,0,banks[0]); advance(r,block,44100); kv_mixer_count_in(r,4); CHECK(kv_mixer_performance(r,&perf,.6,0));
+          uint64_t start=kv_mixer_start(r); advance(r,block,(unsigned)(start-kv_mixer_clock(r)-600));
+          CHECK(kv_mixer_drum_voices(r)==0);
+          advance(r,block,1200); CHECK(kv_mixer_drum_voices(r)>0);
+          kv_mixer_stop(r); kv_mixer_free(r); r=NULL; kv_piano_free(kit);
+      }
+      if(r) kv_mixer_free(r); }
     // Polyphony as on a digital piano: under the pedal, 300 strikes in 0.3 s never lose a note, the pool stays bounded,
     // and when it runs short the quietest voice fades (no sample-to-sample jump beyond what the music itself has).
     { KvMixer *p=kv_mixer_create(); CHECK(p); kv_mixer_bank(p,0,banks[0]); kv_mixer_humanize(p,false); kv_mixer_pedal(p,true);

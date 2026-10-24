@@ -391,5 +391,21 @@ int main(void) {
         }
         CHECK(checked==4*12*2*KV_METER_COUNT*3*2*4);
     }
+    // Beats: every beat in every meter is one bar of hits, sorted, inside the bar, opening with a full kick on the downbeat;
+    // 4/4 patterns differ from each other; every style has a beat; names and tempos are there.
+    for(int beat=0;beat<KV_BEAT_COUNT;beat++) {
+        for(int meter=0;meter<KV_METER_COUNT;meter++) {
+            KvHit hits[KV_BEAT_HITS]; size_t n=kv_beat_bar((KvBeat)beat,(KvMeter)meter,hits); double bar=kv_meter_bar((KvMeter)meter);
+            CHECK(n>=4 && n<=KV_BEAT_HITS && hits[0].beat==0 && hits[0].drum==KV_DRUM_KICK && hits[0].velocity==1);
+            for(size_t i=0;i<n;i++) { CHECK(hits[i].beat>=0 && hits[i].beat<bar-1e-9 && hits[i].velocity>0 && hits[i].velocity<=1); if(i) CHECK(hits[i].beat>=hits[i-1].beat); }
+            if(meter==KV_METER_6_8) { bool second=false; for(size_t i=0;i<n;i++) if(fabs(hits[i].beat-1.5)<1e-9) second=true; CHECK(second); }   // the second dotted quarter is played
+        }
+        int low=0,high=0; kv_beat_tempo((KvBeat)beat,&low,&high); CHECK(low>=50 && low<high && high<=160 && kv_beat_name((KvBeat)beat)[0]);
+        for(int other=0;other<beat;other++) { KvHit a[KV_BEAT_HITS],b[KV_BEAT_HITS]; size_t na=kv_beat_bar((KvBeat)beat,KV_METER_4_4,a),nb=kv_beat_bar((KvBeat)other,KV_METER_4_4,b);
+            CHECK(na!=nb || memcmp(a,b,na*sizeof *a)!=0); }
+    }
+    for(int style=0;style<KV_PATTERN_COUNT;style++) { KvBeat b=kv_beat_for_style((KvPianoPattern)style); CHECK(b>=0 && b<KV_BEAT_COUNT); }
+    CHECK(kv_beat_for_style(KV_POP)==KV_BEAT_POP && kv_beat_for_style(KV_TRIP_HOP)==KV_BEAT_TRIPHOP && kv_beat_for_style(KV_DARK_JAZZ)==KV_BEAT_SHUFFLE);
+    CHECK(kv_beat_electronic(KV_BEAT_HOUSE) && !kv_beat_electronic(KV_BEAT_POP));
     puts("Legacy and melodic piano patterns: 24 keys, five registers, independent hands, scale/chord membership, fills, voice leading and invalid inputs passed."); return 0;
 }

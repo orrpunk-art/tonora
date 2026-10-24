@@ -40,6 +40,13 @@ void kv_mixer_rhythm(KvMixer *mixer,bool on,KvGrid grid,KvMeter meter,double sec
 void kv_mixer_count_in(KvMixer *mixer,double beats);
 /* Beats since the rhythm's origin (bar position: fmod(beat, kv_meter_bar)), −1 while it is off. */
 double kv_mixer_rhythm_beat(const KvMixer *mixer);
+/* Instead of the click: one bar of drum hits (kv_beat_bar) repeated on the rhythm's grid, on the recorded kit (kv_mixer_drums)
+   or the built-in electronic one; count 0 returns to the click. A count-in is always clicked; the beat starts with the sequence. */
+void kv_mixer_beat(KvMixer *mixer,const KvHit *hits,size_t count,bool electronic);
+/* The recorded kit: a bank on General MIDI drum notes, layers 0-1 soft and 2-3 loud takes. Without it every beat is electronic. */
+void kv_mixer_drums(KvMixer *mixer,const KvPianoBank *bank);
+/* Drum voices sounding now (tests and diagnostics). */
+unsigned kv_mixer_drum_voices(const KvMixer *mixer);
 #define KV_DRY_FRAMES 4096
 /* The dry part (the click) of the last render, stereo interleaved; frames beyond KV_DRY_FRAMES carry no click. */
 const float *kv_mixer_dry(const KvMixer *mixer);

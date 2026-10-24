@@ -1,0 +1,6 @@
+Percussion — Versilian Community Sample Library (VCSL), Versilian Studios (Sam Gossner and contributors).
+CC0 1.0 Universal (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+https://github.com/sgossner/VCSL
+Pinned commit: c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e
+Cajon (bass and slap), snare side stick, claps, closed and open hi-hat, tambourine, conga and tumba, small shaker; cut at the hit, shortened with a fade, converted to FLAC and level-matched.
+No author endorsement implied.

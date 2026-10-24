@@ -24,7 +24,7 @@ set_source_files_properties("${KVARTA_ICON}" PROPERTIES GENERATED TRUE MACOSX_PA
 add_executable(Tonora MACOSX_BUNDLE src/main.m src/brand.m src/controls.m src/strings_en.m src/midiio.m src/pianoroll.m src/mididrag.m "${KVARTA_ICON}")
 target_compile_options(Tonora PRIVATE -fobjc-arc -Wall -Wextra -Wno-missing-field-initializers)
 target_link_libraries(Tonora PRIVATE kvarta_core "-framework Cocoa" "-framework CoreMIDI" "-framework UniformTypeIdentifiers")
-foreach(SAMPLE_SET IN ITEMS piano CP80 Pianet Strings)
+foreach(SAMPLE_SET IN ITEMS piano CP80 Pianet Strings Percussion)
   file(GLOB SAMPLE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/${SAMPLE_SET}/*")
   if(SAMPLE_SET STREQUAL "piano")
     set(RESOURCE_DIR "Piano")
@@ -52,7 +52,7 @@ add_executable(mixer_tests tests/mixer_tests.c src/music.c src/mixer.c src/piano
 target_include_directories(mixer_tests PRIVATE src)
 target_compile_options(mixer_tests PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
 target_link_libraries(mixer_tests PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
-add_test(NAME realtime_mixer COMMAND mixer_tests "${CMAKE_CURRENT_SOURCE_DIR}/assets/piano" "${CMAKE_CURRENT_SOURCE_DIR}/assets/CP80" "${CMAKE_CURRENT_SOURCE_DIR}/assets/Pianet" "${CMAKE_CURRENT_SOURCE_DIR}/assets/Strings")
+add_test(NAME realtime_mixer COMMAND mixer_tests "${CMAKE_CURRENT_SOURCE_DIR}/assets/piano" "${CMAKE_CURRENT_SOURCE_DIR}/assets/CP80" "${CMAKE_CURRENT_SOURCE_DIR}/assets/Pianet" "${CMAKE_CURRENT_SOURCE_DIR}/assets/Strings" "${CMAKE_CURRENT_SOURCE_DIR}/assets/Percussion")
 
 set(FX_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/verblib/verblib.h" "${CMAKE_CURRENT_SOURCE_DIR}/third_party/verblib/README.txt")
 set_source_files_properties(${FX_LICENSE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/FX-Licenses")

@@ -15,12 +15,55 @@ struct Voice { struct Head head[2]; int heads; float tone[2]; uint64_t age,gate;
 enum { CLICK_ACCENT, CLICK_PULSE, CLICK_SUB, CLICKS };
 /* A sounding metronome click: which wave, where in it, how loud. */
 struct Click { int wave; unsigned pos; float gain; bool active; };
+/* The electronic kit, synthesized once per mixer (mono). */
+enum { SYNTH_KICK, SYNTH_STICK, SYNTH_SNARE, SYNTH_CLAP, SYNTH_HAT, SYNTH_HAT_OPEN, SYNTH_TAMBOURINE, SYNTH_CONGA_HIGH, SYNTH_CONGA_LOW, SYNTH_SHAKER, SYNTHS };
+#define SYNTH_FRAMES 22050
+#define DRUM_VOICES 24
+/* A sounding drum: its recording (stereo) or synthesized sound (mono), where in it (negative: still waiting, for a humanized
+   late start), its level and a choke fade (an open hi-hat closed by the closed one). */
+struct Drum { const float *pcm; size_t frames; long pos; unsigned channels,fade,fade_total; float gain; int drum; bool active; };
 struct KvMixer { const KvPianoBank *banks[KV_INSTRUMENTS]; struct Voice voices[VOICES]; int sequence[CAP]; uint64_t onset[CAP],gate[CAP]; float gain[CAP],velocity[CAP]; unsigned chord[CAP],hand[CAP]; unsigned short source[CAP]; unsigned char stroke[CAP],event_stroke[CAP],round_robin[128];
     KvPerformance performance; bool custom,humanize,loop,marking_preview,marking_held,pedal; uint32_t random; size_t count,next,stride; uint64_t interval,sequence_start,clock,cycle_end,cycle; int instrument;
     KvArticulation articulation; float dynamics_target,dynamics_now,expression_target,expression_now;
     /* rhythm: on, grid, bar and pulse in beats, step between clicks, frames per beat, origin (frame of beat 0), next click */
     bool rhythm; KvGrid grid; double bar,pulse,step,beat_frames,origin,lead_beats; uint64_t hit; float rhythm_volume;
-    struct Click clicks[4]; float click_wave[CLICKS][CLICK_FRAMES]; float dry[KV_DRY_FRAMES*2]; };
+    struct Click clicks[4]; float click_wave[CLICKS][CLICK_FRAMES]; float dry[KV_DRY_FRAMES*2];
+    /* beat: one bar of hits, the next one due (bar, hit), the kit; counting: a count-in is under way */
+    const KvPianoBank *drums; KvHit beat[KV_BEAT_HITS]; size_t beat_count,beat_hit; uint64_t beat_bar; bool electronic,counting;
+    unsigned char take[128]; struct Drum drum_voices[DRUM_VOICES]; float synth[SYNTHS][SYNTH_FRAMES]; size_t synth_frames[SYNTHS]; };
+/* Drum-machine sounds: a kick that drops from 150 to 48 Hz, a snare of tone and noise, a stick, a clap of three bursts and a
+   tail, closed and open hi-hats and a tambourine of bright noise, two congas, a shaker. Peaks by role. */
+static void synthesize_kit(KvMixer *m) {
+    static const float length[SYNTHS]={.5f,.1f,.3f,.3f,.12f,.5f,.3f,.3f,.3f,.12f},peak[SYNTHS]={.38f,.18f,.25f,.23f,.13f,.13f,.13f,.23f,.25f,.1f};   // level with the recorded kit (measured RMS of the beats)
+    uint32_t seed=0x2545f491;
+    for(int k=0;k<SYNTHS;k++) {
+        size_t n=(size_t)(length[k]*RATE); float *x=m->synth[k],phase=0,last=0,hp=0,top=0; m->synth_frames[k]=n;
+        for(size_t i=0;i<n;i++) {
+            float t=(float)i/RATE; seed^=seed<<13; seed^=seed>>17; seed^=seed<<5; float noise=(float)(seed&65535)/32767.5f-1;
+            hp=noise-last; last=noise;   // a first difference: noise with its lows taken out
+            float v=0;
+            switch(k) {
+                case SYNTH_KICK: phase+=2*(float)M_PI*(48+102*expf(-t/.03f))/RATE; v=sinf(phase)*expf(-t/.18f)+.15f*noise*expf(-t/.002f); break;
+                case SYNTH_STICK: v=(.7f*sinf(2*(float)M_PI*1700*t)+.5f*sinf(2*(float)M_PI*820*t))*expf(-t/.012f)+.4f*noise*expf(-t/.004f); break;
+                case SYNTH_SNARE: v=.5f*sinf(2*(float)M_PI*190*t)*expf(-t/.06f)+.7f*hp*expf(-t/.12f); break;
+                case SYNTH_CLAP: { float burst=0; for(int b=0;b<3;b++) { float u=t-b*.01f; if(u>=0) burst+=expf(-u/.006f); } v=hp*(burst+.5f*expf(-fmaxf(0,t-.02f)/.08f)*(t>.02f)); break; }
+                case SYNTH_HAT: v=hp*expf(-t/.03f); break;
+                case SYNTH_HAT_OPEN: v=hp*expf(-t/.25f); break;
+                case SYNTH_TAMBOURINE: v=hp*expf(-t/.12f)*(.6f+.4f*sinf(2*(float)M_PI*18*t)); break;
+                case SYNTH_CONGA_HIGH: phase+=2*(float)M_PI*(330+40*expf(-t/.02f))/RATE; v=sinf(phase)*expf(-t/.09f); break;
+                case SYNTH_CONGA_LOW: phase+=2*(float)M_PI*(220+30*expf(-t/.02f))/RATE; v=sinf(phase)*expf(-t/.12f); break;
+                case SYNTH_SHAKER: v=hp*fminf(1,t/.01f)*expf(-t/.05f); break;
+            }
+            float tail=i+441>n?(float)(n-i)/441:1; x[i]=v*tail; top=fmaxf(top,fabsf(x[i]));   // a 10 ms fade at the end
+        }
+        if(top>0) for(size_t i=0;i<n;i++) x[i]*=peak[k]/top;
+    }
+}
+static int synth_of(int drum) {
+    switch(drum) { case KV_DRUM_KICK: return SYNTH_KICK; case KV_DRUM_STICK: return SYNTH_STICK; case KV_DRUM_SNARE: return SYNTH_SNARE; case KV_DRUM_CLAP: return SYNTH_CLAP;
+        case KV_DRUM_HAT: return SYNTH_HAT; case KV_DRUM_HAT_OPEN: return SYNTH_HAT_OPEN; case KV_DRUM_TAMBOURINE: return SYNTH_TAMBOURINE;
+        case KV_DRUM_CONGA_HIGH: return SYNTH_CONGA_HIGH; case KV_DRUM_CONGA_LOW: return SYNTH_CONGA_LOW; case KV_DRUM_SHAKER: return SYNTH_SHAKER; default: return -1; }
+}
 /* A woodblock-like click: a tone with an overtone and a breath of noise, 1 ms rise, ~15 ms decay. Accent higher and louder. */
 static void synthesize_clicks(KvMixer *m) {
     static const float pitch[CLICKS]={1975.5f,1318.5f,1318.5f},level[CLICKS]={1,.72f,.38f};
@@ -35,7 +78,7 @@ static void synthesize_clicks(KvMixer *m) {
 KvMixer *kv_mixer_create(void) {
     KvMixer *m=calloc(1,sizeof(KvMixer));
     if(m) { m->humanize=true; m->random=0x746f6e6f; m->dynamics_target=m->dynamics_now=.6f; m->expression_target=m->expression_now=1;
-            m->bar=4; m->pulse=1; m->step=1; m->beat_frames=RATE*.6; m->rhythm_volume=.6f; synthesize_clicks(m); }
+            m->bar=4; m->pulse=1; m->step=1; m->beat_frames=RATE*.6; m->rhythm_volume=.6f; synthesize_clicks(m); synthesize_kit(m); }
     return m;
 }
 void kv_mixer_humanize(KvMixer *m,bool enabled) { if(m) m->humanize=enabled; }
@@ -65,10 +108,19 @@ static void steal(KvMixer *m) {
     if(quietest) cut(quietest,132);
 }
 void kv_mixer_pedal(KvMixer *m,bool down) { if(m) m->pedal=down; }
+/* The next hit of the beat: the first one at or after now. */
+static void beat_align(KvMixer *m) {
+    double at=((double)m->clock-.5-m->origin)/m->beat_frames; if(at<0) at=0;
+    uint64_t bar=(uint64_t)floor(at/m->bar+1e-9); size_t j=0;
+    while(j<m->beat_count && bar*m->bar+m->beat[j].beat<at-1e-9) j++;
+    if(j==m->beat_count) { bar++; j=0; }
+    m->beat_bar=bar; m->beat_hit=j;
+}
 /* The rhythm grid restarts at origin: the next click is the first one at or after now. */
 static void rhythm_align(KvMixer *m,double origin) {
     m->origin=origin; double ahead=((double)m->clock-origin)/(m->step*m->beat_frames);
     m->hit=ahead<=0?0:(uint64_t)ceil(ahead-1e-9);
+    beat_align(m);
 }
 /* A new beat length that keeps the current beat: the origin moves so that the beat counted now stays the same. */
 static void rhythm_retime(KvMixer *m,double beat_frames) {
@@ -89,6 +141,31 @@ void kv_mixer_rhythm(KvMixer *m,bool on,KvGrid grid,KvMeter meter,double seconds
 void kv_mixer_count_in(KvMixer *m,double beats) { if(m && isfinite(beats) && beats>=0 && beats<=16) m->lead_beats=beats; }
 double kv_mixer_rhythm_beat(const KvMixer *m) { return m && m->rhythm?((double)m->clock-m->origin)/m->beat_frames:-1; }
 const float *kv_mixer_dry(const KvMixer *m) { return m?m->dry:NULL; }
+void kv_mixer_drums(KvMixer *m,const KvPianoBank *bank) { if(m) m->drums=bank; }
+void kv_mixer_beat(KvMixer *m,const KvHit *hits,size_t count,bool electronic) {
+    if(!m || (count && !hits)) return;
+    if(count>KV_BEAT_HITS) count=KV_BEAT_HITS;
+    if(count) memcpy(m->beat,hits,count*sizeof *hits);
+    m->beat_count=count; m->electronic=electronic; beat_align(m);
+    if(!count) rhythm_align(m,m->origin);   // back to the click from now on
+}
+unsigned kv_mixer_drum_voices(const KvMixer *m) { unsigned n=0; if(m) for(int i=0;i<DRUM_VOICES;i++) if(m->drum_voices[i].active) n++; return n; }
+/* Strike a drum: the recorded kit's soft or loud layer (two takes alternating), or the synthesized sound. Humanized, it lands
+   up to 4 ms late and ±6 % in level; a closed hi-hat chokes an open one. */
+static void strike(KvMixer *m,int drum,float velocity) {
+    const float *pcm=NULL; size_t frames=0; unsigned channels=1;
+    if(m->electronic || !m->drums) { int s=synth_of(drum); if(s<0) return; pcm=m->synth[s]; frames=m->synth_frames[s]; }
+    else {
+        int layer=(velocity>=.62f?2:0)+(m->take[drum&127]^=1); KvSampleView v;
+        if(!kv_piano_layer(m->drums,drum,layer,&v) || v.midi!=drum) return;
+        pcm=v.pcm; frames=v.frames; channels=2;
+    }
+    if(drum==KV_DRUM_HAT) for(int i=0;i<DRUM_VOICES;i++) { struct Drum *d=&m->drum_voices[i]; if(d->active && d->drum==KV_DRUM_HAT_OPEN && !d->fade_total) d->fade=d->fade_total=441; }
+    struct Drum *slot=&m->drum_voices[0];
+    for(int i=0;i<DRUM_VOICES;i++) { struct Drum *d=&m->drum_voices[i]; if(!d->active) { slot=d; break; } if(d->pos>slot->pos) slot=d; }   // else the oldest
+    long late=m->humanize?(long)(random_unit(m)*176):0; float gain=velocity*(m->humanize?.94f+.12f*random_unit(m):1);
+    *slot=(struct Drum){.pcm=pcm,.frames=frames,.pos=-late,.channels=channels,.gain=gain,.drum=drum,.active=true};
+}
 /* The click due at grid position k: accent on the bar, louder on the pulse, soft between. */
 static void click(KvMixer *m,uint64_t k) {
     double at=fmod(k*m->step+1e-6,m->bar),within=fmod(at,m->pulse);
@@ -293,7 +370,21 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
         if(started && m->loop && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
             m->sequence_start+=m->cycle_end; m->cycle++; m->next=0; schedule(m); if(m->rhythm) rhythm_align(m,(double)m->sequence_start);
         }
-        if(m->rhythm) while((double)m->clock>=m->origin+m->hit*m->step*m->beat_frames-.5) { click(m,m->hit); m->hit++; }
+        bool counting=m->count && m->clock<m->sequence_start;
+        if(m->counting && !counting) beat_align(m);   // the count-in is over: the beat starts on the sequence's first beat
+        m->counting=counting;
+        if(m->rhythm && m->beat_count && !counting)
+            while((double)m->clock>=m->origin+(m->beat_bar*m->bar+m->beat[m->beat_hit].beat)*m->beat_frames-.5) {
+                strike(m,m->beat[m->beat_hit].drum,m->beat[m->beat_hit].velocity);
+                if(++m->beat_hit==m->beat_count) { m->beat_hit=0; m->beat_bar++; }
+            }
+        else if(m->rhythm) while((double)m->clock>=m->origin+m->hit*m->step*m->beat_frames-.5) { click(m,m->hit); m->hit++; }
+        for(int i=0;i<DRUM_VOICES;i++) { struct Drum *d=&m->drum_voices[i]; if(!d->active) continue;
+            if(d->pos<0) { d->pos++; continue; }
+            float g=d->gain*m->rhythm_volume; if(d->fade_total) { g*=(float)d->fade/d->fade_total; if(!--d->fade) d->active=false; }
+            const float *p=d->pcm+(size_t)d->pos*d->channels; float l=p[0]*g,r=(d->channels==2?p[1]:p[0])*g;
+            if(f<KV_DRY_FRAMES) { m->dry[f*2]+=l; m->dry[f*2+1]+=r; }
+            if((size_t)++d->pos>=d->frames) d->active=false; }
         for(int i=0;i<4;i++) { struct Click *c=&m->clicks[i]; if(!c->active) continue;   // a click plays out even once switched off
             float x=m->click_wave[c->wave][c->pos]*c->gain; if(f<KV_DRY_FRAMES) { m->dry[f*2]+=x; m->dry[f*2+1]+=x; } if(++c->pos>=CLICK_FRAMES) c->active=false; }
         while(started && m->next<m->count && m->clock-m->sequence_start>=m->onset[m->next]) {

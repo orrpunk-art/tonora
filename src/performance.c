@@ -324,6 +324,50 @@ bool kv_arrange(const KvChord *chords,size_t count,int base,KvPianoPattern patte
    Meter, chord length and fill rate are independent parameters. A style is written as
    bar templates for 4/4, 3/4 and 6/8; chords are laid over a continuous beat timeline and
    each template hit takes the chord that sounds at its onset. */
+/* ---- beats: lanes of steps, X loud, x normal, o soft; a lane of 12 steps in 4/4 counts triplet eighths, otherwise a step
+   is a sixteenth ---- */
+typedef struct { int drum; const char *steps; } Lane;
+#define LANES 5
+static const Lane four[KV_BEAT_COUNT][LANES]={
+    [KV_BEAT_POP]={{KV_DRUM_KICK,"X.......x.x....."},{KV_DRUM_SNARE,"....X.......X..."},{KV_DRUM_SHAKER,"x.o.x.o.x.o.x.o."},{KV_DRUM_TAMBOURINE,"....o.......o..."}},
+    [KV_BEAT_BALLAD]={{KV_DRUM_KICK,"X.........o....."},{KV_DRUM_STICK,"....x.......x..."},{KV_DRUM_HAT,"o.o.o.o.o.o.o.o."}},
+    [KV_BEAT_BOSSA]={{KV_DRUM_KICK,"X..x....X..x...."},{KV_DRUM_STICK,"x..x..x...x..x.."},{KV_DRUM_SHAKER,"xoxoxoxoxoxoxoxo"},{KV_DRUM_CONGA_LOW,"..............o."},{KV_DRUM_CONGA_HIGH,"......o.......o."}},
+    [KV_BEAT_SHUFFLE]={{KV_DRUM_KICK,"X.....x....."},{KV_DRUM_SNARE,"...X.....X.."},{KV_DRUM_HAT,"x.ox.ox.ox.o"}},
+    [KV_BEAT_HIPHOP]={{KV_DRUM_KICK,"X......x..x....."},{KV_DRUM_SNARE,"....X.......X..."},{KV_DRUM_HAT,"x.o.x.o.x.o.x.o."}},
+    [KV_BEAT_TRIPHOP]={{KV_DRUM_KICK,"X.........x....."},{KV_DRUM_SNARE,"........X......."},{KV_DRUM_HAT,"o.o.o.o.o.o.o.o."},{KV_DRUM_SHAKER,"..o...o...o...o."}},
+    [KV_BEAT_HOUSE]={{KV_DRUM_KICK,"X...x...x...x..."},{KV_DRUM_CLAP,"....x.......x..."},{KV_DRUM_HAT_OPEN,"..x...x...x...x."},{KV_DRUM_HAT,"o...o...o...o..."}},
+};
+/* 3/4 and 6/8 by kit: [electronic][meter 3/4, 6/8]; a step is a sixteenth (an eighth is two). */
+static const Lane odd[2][2][LANES]={
+    {{{KV_DRUM_KICK,"X..........."},{KV_DRUM_TAMBOURINE,"....o...o..."},{KV_DRUM_SHAKER,"x.o.x.o.x.o."}},
+     {{KV_DRUM_KICK,"X..........."},{KV_DRUM_SNARE,"......x....."},{KV_DRUM_SHAKER,"x.o.o.x.o.o."}}},
+    {{{KV_DRUM_KICK,"X..........."},{KV_DRUM_CLAP,"....o...o..."},{KV_DRUM_HAT,"x.o.x.o.x.o."}},
+     {{KV_DRUM_KICK,"X..........."},{KV_DRUM_SNARE,"......x....."},{KV_DRUM_HAT,"x.o.o.x.o.o."}}},
+};
+static int by_beat(const void *a,const void *b) { double d=((const KvHit *)a)->beat-((const KvHit *)b)->beat; return d<0?-1:d>0?1:((const KvHit *)a)->drum-((const KvHit *)b)->drum; }
+size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]) {
+    if(beat<0 || beat>=KV_BEAT_COUNT || meter<0 || meter>=KV_METER_COUNT || !hits) return 0;
+    const Lane *lanes=meter==KV_METER_4_4?four[beat]:odd[kv_beat_electronic(beat)][meter==KV_METER_6_8];
+    double bar=kv_meter_bar(meter); size_t n=0;
+    for(int l=0;l<LANES && lanes[l].steps;l++) {
+        size_t steps=strlen(lanes[l].steps); double step=bar/steps;
+        for(size_t i=0;i<steps && n<KV_BEAT_HITS;i++) { char c=lanes[l].steps[i];
+            if(c=='X' || c=='x' || c=='o') hits[n++]=(KvHit){i*step,lanes[l].drum,c=='X'?1:c=='x'?.75f:.45f}; }
+    }
+    qsort(hits,n,sizeof *hits,by_beat); return n;
+}
+bool kv_beat_electronic(KvBeat beat) { return beat==KV_BEAT_HIPHOP || beat==KV_BEAT_TRIPHOP || beat==KV_BEAT_HOUSE; }
+KvBeat kv_beat_for_style(KvPianoPattern style) {
+    return style==KV_POP?KV_BEAT_POP:style==KV_DARK_JAZZ?KV_BEAT_SHUFFLE:style==KV_TRIP_HOP?KV_BEAT_TRIPHOP:KV_BEAT_BALLAD;   // the waltz becomes one in 3/4
+}
+const char *kv_beat_name(KvBeat beat) {
+    static const char *names[KV_BEAT_COUNT]={"Поп","Баллада","Босса-нова","Шаффл","Хип-хоп","Трип-хоп","Хаус"};
+    return beat>=0 && beat<KV_BEAT_COUNT?names[beat]:"";
+}
+void kv_beat_tempo(KvBeat beat,int *low,int *high) {
+    static const int range[KV_BEAT_COUNT][2]={{90,120},{60,80},{120,140},{90,120},{80,95},{70,90},{115,128}};
+    if(beat<0 || beat>=KV_BEAT_COUNT) return; if(low) *low=range[beat][0]; if(high) *high=range[beat][1];
+}
 const char *kv_pattern_russian(KvPianoPattern pattern) {
     static const char *names[]={"Баллада","Перебор","Альберти","Поп","Вальс","Дарк-джаз","Трип-хоп","Эмбиент","Интерлюдия"};
     return pattern>=0 && pattern<KV_PATTERN_COUNT?names[pattern]:"";

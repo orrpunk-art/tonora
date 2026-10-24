@@ -33,7 +33,7 @@ for name in ['main.m', 'pianoroll.m', 'mididrag.m', 'midiio.m']:
         keys.update(re.findall(r'@"((?:[^"\\\n]|\\.)*)"', constants))
     keys.update(m.group(1) for m in re.finditer(r'(?<![@\\])"((?:[^"\\\n]|\\.)*)"', text) if text[m.start() - 1] != '@')
 for name, functions in [('music.c', ['kv_mode_name']),
-                        ('performance.c', ['kv_pattern_russian', 'kv_arpeggio_name', 'kv_division_name', 'kv_string_texture_name', 'kv_articulation_name'])]:
+                        ('performance.c', ['kv_pattern_russian', 'kv_arpeggio_name', 'kv_division_name', 'kv_string_texture_name', 'kv_articulation_name', 'kv_beat_name'])]:
     text = src.joinpath(name).read_text()
     for function in functions:
         start = text.index('const char *' + function + '(')
