@@ -3,6 +3,10 @@
 @class KvArranger;
 /* The section properties set from the «Секция» panel. */
 typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, KvSectionFieldBeat, KvSectionFieldLift, KvSectionFieldTransition } KvSectionField;
+/* Tools of the tracks (spec 1.5 §4): ⌘ held gives the scissors for a moment. */
+typedef enum { KvToolPointer, KvToolScissors, KvToolPencil } KvArrangerTool;
+/* Snap: «smart» follows the zoom (a bar far out, a beat, an eighth close up). */
+typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvArrangerSnap;
 /* The owner keeps the song, its tracks and undo; the arranger draws the tracks and reports gestures. */
 @protocol KvArrangerOwner <NSObject>
 - (const KvSong *)arrangerSong;
@@ -32,6 +36,10 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 - (void)arrangerAcceptVariant:(NSInteger)variant after:(NSInteger)index;
 - (void)arrangerTransitionAfter:(NSInteger)index kind:(NSInteger)kind;    /* between index and index+1; kind −1: the one that suits */
 - (void)arrangerAudition:(NSInteger)suggestion after:(NSInteger)index;    /* plays a ghost; suggestion −1 stops */
+- (void)arrangerPlayFrom:(double)beat;              /* a click on the ruler while the song plays: on from there */
+- (void)arrangerSetCycleFrom:(double)from to:(double)to;   /* a drag on the ruler; from == to: no cycle */
+- (BOOL)arrangerCycles;                             /* ↻ is on: the cycle (or the song) repeats */
+- (void)arrangerDrawAt:(NSInteger)index;            /* pencil: the circle's progression becomes a section at index */
 @end
 /* Tracks of the song (spec 1.5 §2): a ruler, the arrangement track of section markers, the melody, bass and drum tracks with
    their headers and regions, and an overview of the whole song. */
@@ -39,6 +47,14 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 @property(nonatomic,weak) id<KvArrangerOwner> owner;
 @property(nonatomic) NSInteger selected;           /* the owner sets it; −1 none */
 @property(nonatomic) double scrollBeat;            /* first beat shown */
+@property(nonatomic) KvArrangerTool tool;
+@property(nonatomic) KvArrangerSnap snap;
+@property(nonatomic) double zoom;                  /* 1: the whole song (at least 18 pt a bar); more: closer */
+@property(nonatomic) double cursorBeat;            /* the playhead at rest: a click on the ruler puts it there, the song plays from it */
+- (double)snapGrid:(NSEventModifierFlags)flags;    /* in beats, 0 none (⌃ held: none) */
+- (CGFloat)scale;                                  /* points per beat */
+- (void)zoomBy:(double)factor aroundX:(CGFloat)x;
+- (void)showWholeSong:(id)sender;                  /* Z */
 - (void)reload;                                    /* the song or the selection changed */
 - (void)updatePlayhead;                            /* each frame while something plays: moves the playhead line only */
 - (NSRect)rectOfSection:(NSInteger)index;          /* its marker on the arrangement track, in view coordinates */
@@ -50,6 +66,9 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 @property(nonatomic,readonly) NSInteger hoverSection,hoverGhost,hoverSeam;
 /* The «Секция» tab of the inspector: the owner places it; the arranger fills and updates it. */
 @property(nonatomic,readonly) NSView *sectionPanel;
+@property(nonatomic,readonly) NSSegmentedControl *toolChoice;
+@property(nonatomic,readonly) NSPopUpButton *snapChoice;
+@property(nonatomic,readonly) NSButton *zoomOutButton,*zoomInButton,*wholeSongButton;
 @property(nonatomic,readonly) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @property(nonatomic,readonly) NSArray<NSButton *> *trackMutes,*trackSolos,*regionMutes;   /* per track */
