@@ -16,7 +16,7 @@ struct KvAudio {
     KvMixer *mixer; KvLiveEffects *fx; KvPianoBank *banks[KV_INSTRUMENTS],*drums;
     struct Command commands[COMMANDS]; atomic_uint read,write,stop_epoch; unsigned applied_stop;
     atomic_bool closing,playing,stop_requested; atomic_uint pending_plays; bool muted; float output_gain; atomic_int error,event;
-    atomic_uint_fast64_t clock,start,active_low,active_high,part_start; atomic_uint part; _Atomic double rhythm_beat;
+    atomic_uint_fast64_t clock,start,active_low,active_high,part_start,silent; atomic_uint part; _Atomic double rhythm_beat;
     KvEffects effects; int instrument; bool started; uint64_t tail;
 };
 static bool send(KvAudio *audio,struct Command command) {
@@ -75,6 +75,17 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
     atomic_store_explicit(&a->read,read,memory_order_release);
     apply_stop(a);
     float *pcm=buffer->mAudioData;
+    if(!a->tail && kv_mixer_silent(a->mixer)) {   // nothing sounds and the effects have died away: zeros, only the clock moves
+        kv_mixer_skip(a->mixer,FRAMES); memset(pcm,0,FRAMES*8); atomic_store(&a->playing,false); atomic_fetch_add(&a->silent,FRAMES);
+        atomic_store(&a->part,kv_mixer_part(a->mixer)); atomic_store(&a->part_start,kv_mixer_start(a->mixer));
+        atomic_store(&a->clock,kv_mixer_clock(a->mixer)); atomic_store(&a->event,kv_mixer_event(a->mixer)); atomic_store(&a->rhythm_beat,kv_mixer_rhythm_beat(a->mixer));
+        atomic_store(&a->active_low,0); atomic_store(&a->active_high,0);
+        buffer->mAudioDataByteSize=FRAMES*8;
+        OSStatus result=AudioQueueEnqueueBuffer(queue,buffer,0,NULL);
+        if(result!=noErr && !atomic_load(&a->closing)) { atomic_store(&a->error,(int)result); atomic_store(&a->playing,false); }
+        return;
+    }
+    atomic_store(&a->silent,0);
     kv_mixer_render(a->mixer,pcm,FRAMES); const float *dry=kv_mixer_dry(a->mixer);
     atomic_store(&a->playing,!a->muted && kv_mixer_running(a->mixer));
     if(kv_mixer_busy(a->mixer)) a->tail=(a->effects.reverb>0 || a->effects.delay>0)?44100*6:0;
@@ -129,6 +140,12 @@ static bool start(KvAudio *a) {
     OSStatus result=AudioQueueStart(a->queue,NULL);
     if(result!=noErr) { fprintf(stderr,"AudioQueueStart: %d\n",(int)result); return false; }
     a->started=true; return true;
+}
+bool kv_audio_suspend(KvAudio *a) {
+    if(!a || !a->started || atomic_load(&a->silent)<44100*3) return false;
+    // Nothing waiting in the command ring (only this thread writes it): a stopped queue would leave it unplayed.
+    if(atomic_load(&a->read)!=atomic_load(&a->write) || atomic_load(&a->pending_plays)) return false;
+    AudioQueueStop(a->queue,true); a->started=false; atomic_store(&a->silent,0); return true;
 }
 void kv_audio_stop(KvAudio *a) {
     if(!a) return;

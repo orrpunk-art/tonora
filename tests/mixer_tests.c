@@ -355,6 +355,13 @@ int main(int argc,char **argv) {
       advance(q,block,88200*2); CHECK(kv_mixer_part(q)==0 && !kv_mixer_running(q));
       CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_queue(q,&next,-1,NULL,0) && kv_mixer_performance(q,&third,.5,0));
       advance(q,block,88200*2); CHECK(kv_mixer_part(q)==0);
+      // Silence: once everything has died away nothing can sound and a skip only moves the clock; not with the rhythm on,
+      // not while a count-in waits for its sequence.
+      kv_mixer_stop(q); advance(q,block,44100); CHECK(kv_mixer_silent(q));
+      uint64_t was=kv_mixer_clock(q); kv_mixer_skip(q,256); CHECK(kv_mixer_clock(q)==was+256 && kv_mixer_silent(q));
+      kv_mixer_rhythm(q,true,KV_GRID_BEATS,KV_METER_4_4,.5,.6f); CHECK(!kv_mixer_silent(q));
+      kv_mixer_rhythm(q,false,KV_GRID_BEATS,KV_METER_4_4,.5,.6f); advance(q,block,4410); CHECK(kv_mixer_silent(q));
+      kv_mixer_count_in(q,4); CHECK(kv_mixer_performance(q,&first,.5,0) && !kv_mixer_silent(q));
       kv_mixer_free(q); }
     // Beats: hits on the exact frames of the bar; without recordings the synthesized kit plays; the recorded kit has every drum
     // the beats use (soft and loud, two takes); a count-in is clicked and the beat comes in with the sequence.

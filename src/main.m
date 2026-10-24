@@ -113,6 +113,8 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 @property(nonatomic) uint32_t suggestSeed;                  /* picks among the choruses that fit; new after each accepted suggestion */
 @property(nonatomic) NSArray<NSData *> *chorusVariants;     /* ⌥-click on a chorus ghost: the other choruses offered */
 @property(nonatomic) BOOL auditioningGhost;
+@property(nonatomic) BOOL transportPlaying;
+@property(nonatomic) NSUInteger idleTicks;                  /* frames since anything last played or moved */                 /* what the play button showed at the last frame */
 @property(nonatomic) double speed;           /* practice speed factor, 1 = tempo as set */
 @property(nonatomic) BOOL restoring;         /* saveState is a no-op while the saved state is being replayed */
 /* Musical time is piecewise linear: after each tempo or speed change it continues from (rateBeat, rateSeconds). */
@@ -1009,7 +1011,11 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         [NSRunLoop.mainRunLoop addTimer:[NSTimer timerWithTimeInterval:1.0/60 repeats:YES block:^(NSTimer *timer) {
             KvRoot *root=weakSelf;
             if(!root) { [timer invalidate]; return; }
-            [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers]; [root updateMidiOut]; [root updateTransport]; [root updateBeatDots]; [root updateSongPlayback];
+            // Two quiet seconds in: ten frames a second are enough, and the output queue may rest.
+            BOOL busy=kv_audio_is_playing(root.audio) || root.metronomeOn || root.visualPlayback || root.songPlaying;
+            root.idleTicks=busy?0:root.idleTicks+1;
+            if(root.idleTicks>120) { if(root.idleTicks%60==0 && root.audio) kv_audio_suspend(root.audio); if(root.idleTicks%6) return; }
+            [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers]; [root updateMidiOut]; [root updateTransportIfChanged]; [root updateBeatDots]; [root updateSongPlayback];
             [root reconcilePlayback];
             if(!root.roll.hidden) {
                 double beat=[root isPlayingProgression]?[root playheadBeat]:-1;
@@ -2015,6 +2021,12 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     self.loopButton.state=self.loopEnabled?NSControlStateValueOn:NSControlStateValueOff;
     NSString *loopHint=self.loopEnabled?T(@"Повтор включён · L"):T(@"Повтор выключен · L"); if(![((TNButton *)self.loopButton).hint isEqualToString:loopHint]) Hint(self.loopButton,loopHint);
     NSString *summary=[self arrangementSummary]; if(![self.arrangementInfo.stringValue isEqualToString:summary]) self.arrangementInfo.stringValue=summary;
+}
+/* The frame clock's share of updateTransport: the play button follows a sequence that ends by itself. Everything else that
+   changes the transport calls updateTransport where it changes (it builds the summary line, too dear for every frame). */
+- (void)updateTransportIfChanged {
+    BOOL playing=kv_audio_is_playing(self.audio); if(playing==self.transportPlaying) return;
+    self.transportPlaying=playing; [self updateTransport];
 }
 - (void)togglePlayback:(id)sender {
     if(kv_audio_is_playing(self.audio)) [self stopPlayback:sender];
@@ -4650,6 +4662,14 @@ int main(int argc, const char *argv[]) {
                 [NSFileManager.defaultManager removeItemAtPath:path error:NULL]; }
               root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
               [root showView:0]; }
+            // Silence rests the output queue; the next sound starts it again and is heard.
+            { [root stopPlayback:nil]; if(root.metronomeOn) [root toggleMetronome:nil];
+              [root playTonic:nil]; NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:15]; BOOL rested=NO;
+              while(!rested && deadline.timeIntervalSinceNow>0) { [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.1]]; rested=kv_audio_suspend(root.audio) || (!kv_audio_is_playing(root.audio) && root.idleTicks>200); }
+              KV_CHECK(rested,@"Silence: the output queue rests after a quiet while");
+              [root playTonic:nil]; int sounding[KV_ACTIVE_NOTES]; unsigned heard=0; deadline=[NSDate dateWithTimeIntervalSinceNow:2];
+              while(!heard && deadline.timeIntervalSinceNow>0) { [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.02]]; heard=kv_audio_active_notes(root.audio,sounding); }
+              KV_CHECK(heard>0,@"Silence: the first sound after the rest starts the queue again and sounds"); [root stopPlayback:nil]; }
             // .tonora: the work, and only the work, goes into the file; opening it in a new window brings it back; other files are refused.
             { [root stopPlayback:nil]; [root showView:0];
               NSData *file=[root documentData]; NSDictionary *state=[KvRoot documentStateFromData:file];

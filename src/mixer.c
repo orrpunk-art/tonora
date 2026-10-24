@@ -457,6 +457,13 @@ bool kv_mixer_running(const KvMixer *m) {
 }
 bool kv_mixer_busy(const KvMixer *m) { if(!m) return false; if(m->loop || m->has_queued || m->next<m->count) return true; for(int i=0;i<VOICES;i++) if(m->voices[i].active) return true; return false; }
 uint64_t kv_mixer_clock(const KvMixer *m) { return m?m->clock:0; }
+bool kv_mixer_silent(const KvMixer *m) {
+    if(!m || m->rhythm || kv_mixer_busy(m)) return false;
+    for(int i=0;i<DRUM_VOICES;i++) if(m->drum_voices[i].active) return false;
+    for(int i=0;i<4;i++) if(m->clicks[i].active) return false;
+    return true;
+}
+void kv_mixer_skip(KvMixer *m,size_t frames) { if(!m) return; m->clock+=frames; memset(m->dry,0,(frames<KV_DRY_FRAMES?frames:KV_DRY_FRAMES)*2*sizeof(float)); }
 uint64_t kv_mixer_start(const KvMixer *m) { return m?m->sequence_start:0; }
 unsigned kv_mixer_active(const KvMixer *m,int notes[KV_ACTIVE_NOTES]) {
     unsigned count=0; if(!m || !notes) return 0;

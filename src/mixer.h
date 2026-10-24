@@ -62,6 +62,10 @@ void kv_mixer_interval(KvMixer *mixer,double seconds);
 int kv_mixer_event(const KvMixer *mixer);
 void kv_mixer_render(KvMixer *mixer,float *stereo,size_t frames);
 bool kv_mixer_running(const KvMixer *mixer);
+/* Nothing can sound now (no voice, drum or click, no sequence waiting, the rhythm off): kv_mixer_skip may stand in for a render,
+   moving only the clock. The audio callback uses it once the effects' tail has died away, so silence costs next to nothing. */
+bool kv_mixer_silent(const KvMixer *mixer);
+void kv_mixer_skip(KvMixer *mixer,size_t frames);
 bool kv_mixer_busy(const KvMixer *mixer);
 uint64_t kv_mixer_clock(const KvMixer *mixer);
 uint64_t kv_mixer_start(const KvMixer *mixer);

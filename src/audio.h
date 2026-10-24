@@ -47,6 +47,9 @@ bool kv_audio_set_beat(KvAudio *audio,const KvHit *hits,size_t count,bool electr
 /* Beats since the rhythm's origin (for the beat dots), −1 while it is off. */
 double kv_audio_rhythm_beat(KvAudio *audio);
 void kv_audio_stop(KvAudio *audio);
+/* After three seconds of silence (nothing sounding, the effects died away, the rhythm off) stops the output queue, which
+   otherwise keeps the audio hardware busy rendering zeros; the next sound starts it again. Main thread; true when it stopped. */
+bool kv_audio_suspend(KvAudio *audio);
 void kv_audio_destroy(KvAudio *audio);
 bool kv_audio_is_playing(const KvAudio *audio);
 bool kv_audio_playhead(KvAudio *audio, double *seconds);
