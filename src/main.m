@@ -3212,6 +3212,7 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
 /* What plays under a section: 0 nothing, 1 the rhythm layer with these hits (none: the click). */
 - (int)rhythmOfSection:(const KvSection *)s hits:(KvHit *)hits count:(size_t *)count {
     *count=0; const KvArrangement *a=&s->arrangement; KvPianoPattern style=a->blocks || a->arpeggio || a->strings?KV_BALLAD:a->style; NSInteger beat=-1;
+    if(s->kind==KV_SECTION_TRANSITION && s->beat!=KV_SECTION_BEAT_OFF) { *count=kv_transition_hits(s->transition,self.meter,hits); if(*count) return 1; }   // the roll of a rise, the kick of a break
     switch(s->beat) {
         case KV_SECTION_BEAT_OFF: return 0;
         case KV_SECTION_BEAT_SONG: if(!self.metronomeOn) return 0; beat=self.rhythmBeat==KvBeatByStyle?kv_beat_for_style(style):self.rhythmBeat; break;
@@ -4447,6 +4448,9 @@ int main(int argc, const char *argv[]) {
               [root.arranger layout]; NSRect pit=[root.arranger rectOfSection:3];
               [root.arranger hoverAtPoint:NSMakePoint(NSMinX(pit)-1.5,NSMidY(pit))]; KV_CHECK(root.arranger.hoverSeam==2,@"Suggestions: the seam between chorus and breakdown takes a transition");
               [root arrangerTransitionAfter:2 kind:-1]; KV_CHECK(root.song->count==5 && root.song->sections[3].kind==KV_SECTION_TRANSITION && root.song->sections[3].transition==KV_TRANSITION_BREAK,@"Suggestions: chorus → breakdown gets a break");
+              { KvHit hits[KV_BEAT_HITS]; size_t n=0; int on=[root rhythmOfSection:&root.song->sections[3] hits:hits count:&n];
+                KV_CHECK(on==1 && n==1 && hits[0].drum==KV_DRUM_KICK,@"Suggestions: a break plays one kick under it");
+                on=[root rhythmOfSection:&root.song->sections[1] hits:hits count:&n]; KV_CHECK(on==1 && n==17 && hits[16].drum==KV_DRUM_SNARE,@"Suggestions: a rise plays a snare roll under it"); }
               [root undoSequence:nil]; KV_CHECK(root.song->count==4,@"Suggestions: ⌘Z takes the transition back");
               KvPerformance plan; for(NSInteger i=0;i<(NSInteger)root.song->count;i++) KV_CHECK([root songPlan:i into:&plan],([NSString stringWithFormat:@"Suggestions: section %ld plays",(long)i]));
               root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
