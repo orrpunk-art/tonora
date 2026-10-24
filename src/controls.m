@@ -14,6 +14,12 @@ NSString *TNLanguage(void) {
 void TNSetLanguage(NSString *language) { if(language) [TNDefaults() setObject:language forKey:@"language"]; else [TNDefaults() removeObjectForKey:@"language"]; }
 BOOL TNEnglish(void) { return [TNLanguage() isEqualToString:@"en"]; }
 NSString *T(NSString *russian) { if(!russian.length || !TNEnglish()) return russian; NSString *english=TNEnglishTable()[russian]; return english?:russian; }
+NSString *TNBarCount(double bars) {
+    if(fabs(bars-round(bars))>1e-9) return [NSString stringWithFormat:T(@"%@ такта"),[[NSString stringWithFormat:@"%.1f",bars] stringByReplacingOccurrencesOfString:@"." withString:TNEnglish()?@".":@","]];
+    long n=lround(bars),tens=n%100,last=n%10;
+    if(tens>=11 && tens<=14) return [NSString stringWithFormat:T(@"%ld тактов"),n];
+    return [NSString stringWithFormat:last==1?T(@"%ld такт"):last>=2 && last<=4?T(@"%ld такта"):T(@"%ld тактов"),n];
+}
 NSColor *TNPassing(void) { return Color(.91,.33,.60); }
 NSColor *TNAnticipation(void) { return Color(.60,.32,.90); }
 static NSColor *Control(void) { return Dark()?Color(.14,.18,.25):Color(.89,.92,.96); }

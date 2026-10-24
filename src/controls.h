@@ -21,6 +21,7 @@ NSString *TNLanguage(void);
 void TNSetLanguage(NSString *language);   /* @"en", @"ru" or nil (follow the system) */
 BOOL TNEnglish(void);
 NSString *T(NSString *russian);
+NSString *TNBarCount(double bars);   /* «1 такт», «3 такта», «12 тактов», «2,5 такта» — translated */
 NSDictionary<NSString *,NSString *> *TNEnglishTable(void); /* for self-tests: the text on screen, or nil */
 @interface TNButton : NSButton
 /* Label shown in a bubble on hover and read by VoiceOver; replaces the slow system tooltip. */
