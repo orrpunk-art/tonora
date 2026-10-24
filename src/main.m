@@ -767,6 +767,11 @@ static const KvShortcut KvRollKeys[]={
     {"⌫","удалить выделенное"},{"← →","сдвиг на шаг сетки"},{"↑ ↓ · ⇧↑ ⇧↓","полутон или ступень · октава"},{"⌥↑ ⌥↓","громкость"},
     {"⌘+колесо · ⌘+ ⌘−","масштаб времени"},{"⌘⌥+колесо · ⌘⌥±","высота строк"},{"Колесо · ⇧+колесо","прокрутка"},{"⌘0","4 такта, высота по нотам"},
     {"⌘F","следовать за курсором"},{"F","свернуть до гаммы"},{NULL,NULL}};
+static const KvShortcut KvSongKeys[]={
+    {"T · I · P","инструменты ▸ ✂ ✎"},{"⌘ при щелчке","ножницы на миг"},{"Z · ⌘← ⌘→","вся песня · зум шагом"},{"⌘+колесо · щипок","зум к курсору"},
+    {"Щелчок по линейке","плейхед · Пробел — отсюда"},{"Протяжка по линейке","цикл · ↻ или L — по кругу"},{"⇧-щелчок · ⌘A · Esc","диапазон · все · одна"},
+    {"⌘D · ⌫ · ⌘T","копия · удалить · разрез"},{"⌥⌘← ⌥⌘→","переставить секцию"},{"Углы региона","повторы · длина · начало"},
+    {"Регион на дорожке","сдвиг по времени"},{"⌃ при жесте","без привязки"},{"⌘R после формы","другой вариант формы"},{"Щелчок ×2 в полосе","точка автоматизации"},{NULL,NULL}};
 static const KvShortcut KvComputerKeys[]={
     {"A S D F G H J K L ; '","белые клавиши от до"},{"W E · T Y U · O P","чёрные клавиши"},{"Z X","октава ниже · выше"},{"C V","сила удара −20 · +20"},{NULL,NULL}};
 @implementation KvShortcutsCard
@@ -788,7 +793,7 @@ static NSString *const KvCardTabs[]={@"Сочетания клавиш",@"Кви
     return NSZeroRect;
 }
 - (NSRect)cardRect {
-    CGFloat w=MIN(NSWidth(self.bounds)-40,1060),h=MIN(NSHeight(self.bounds)-40,64+24+19*18);
+    CGFloat w=MIN(NSWidth(self.bounds)-40,1060),h=MIN(NSHeight(self.bounds)-40,64+24+21*18);   // the third column holds the computer keyboard and the song
     return NSMakeRect(round(NSMidX(self.bounds)-w/2),round(NSMidY(self.bounds)-h/2),w,h);
 }
 static const char *const KvCircleHelp[][2]={
@@ -825,7 +830,8 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     if(self.tab==1) { for(int i=0;i<3;i++) DrawParagraphs(T(@(KvCircleHelp[i][0])),T(@(KvCircleHelp[i][1])),x+i*(column+24),top,column); return; }
     DrawShortcuts(T(@"Везде"),KvGeneral,x,top,column);
     DrawShortcuts(T(@"Пиано-ролл"),KvRollKeys,x+column+24,top,column);
-    DrawShortcuts(T(@"Клавиатура компьютера · M"),KvComputerKeys,x+2*(column+24),top,column);
+    CGFloat below=DrawShortcuts(T(@"Клавиатура компьютера · M"),KvComputerKeys,x+2*(column+24),top,column);
+    DrawShortcuts(T(@"Песня · аранжировщик"),KvSongKeys,x+2*(column+24),below+14,column);
 }
 @end
 
@@ -5349,8 +5355,8 @@ int main(int argc, const char *argv[]) {
                   NSString *russian=KvCyrillicIn(english.soundPanel.contentView); KV_CHECK(!russian,([@"English: Cyrillic left in FX: " stringByAppendingString:russian?:@""]));
                   KV_CHECK([english.heading.stringValue rangeOfCharacterFromSet:[NSCharacterSet characterSetWithRange:NSMakeRange(0x400,0x100)]].location==NSNotFound,@"English: the key title is English");
                   NSMutableArray<NSString *> *texts=[NSMutableArray arrayWithObjects:T(KvCircleHint),T(EmptyHint),T(EmptyLink),T(KvCardTabs[0]),T(KvCardTabs[1]),nil];
-                  const KvShortcut *tables[]={KvGeneral,KvRollKeys,KvComputerKeys};
-                  for(int t=0;t<3;t++) for(int i=0;tables[t][i].key;i++) { [texts addObject:T(@(tables[t][i].key))]; [texts addObject:T(@(tables[t][i].text))]; }
+                  const KvShortcut *tables[]={KvGeneral,KvRollKeys,KvComputerKeys,KvSongKeys};
+                  for(int t=0;t<4;t++) for(int i=0;tables[t][i].key;i++) { [texts addObject:T(@(tables[t][i].key))]; [texts addObject:T(@(tables[t][i].text))]; }
                   for(int i=0;i<3;i++) { [texts addObject:T(@(KvCircleHelp[i][0]))]; [texts addObject:T(@(KvCircleHelp[i][1]))]; }
                   for(NSArray<NSString *> *entry in KvSequenceMenu()) [texts addObject:entry[0]];
                   for(NSString *text in texts) KV_CHECK([text rangeOfCharacterFromSet:[NSCharacterSet characterSetWithRange:NSMakeRange(0x400,0x100)]].location==NSNotFound,([@"English: Cyrillic left in the help card or menus: " stringByAppendingString:text]));
