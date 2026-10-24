@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dispatch/dispatch.h>
 
 #define RATE 44100
 #define BANK_SIZE 192
@@ -40,40 +41,44 @@ KvPianoBank *kv_piano_load(const char *directory) {
     } else {
         count=17; for(size_t i=0;i<count;i++) { snprintf(names[i],sizeof(names[i]),"%sv8.flac",filenames[i]); roots[i]=45+(int)i*3; gains[i]=1; skips[i]=0; layers[i]=0; cents[i]=0; }
     }
-    for(size_t i=0;i<count;i++) {
+    // The recordings decode side by side, each into its own slot; any failure fails the bank.
+    __block bool failed=false;
+    char (*name)[256]=names; const int *root=roots,*layer=layers; const float *gain=gains,*skip=skips,*cent=cents;   // blocks cannot capture arrays
+    dispatch_apply(count,dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^(size_t i) {
         char path[4096];
-        int length=snprintf(path,sizeof(path),"%s/%s",directory,names[i]);
-        if(length<0 || (size_t)length>=sizeof(path)) { kv_piano_free(piano); return NULL; }
+        int length=snprintf(path,sizeof(path),"%s/%s",directory,name[i]);
+        if(length<0 || (size_t)length>=sizeof(path)) { failed=true; return; }
         CFURLRef url=CFURLCreateFromFileSystemRepresentation(NULL,(const UInt8 *)path,strlen(path),false);
-        if(!url) { kv_piano_free(piano); return NULL; }
+        if(!url) { failed=true; return; }
         ExtAudioFileRef file=NULL;
         OSStatus status=ExtAudioFileOpenURL(url,&file); CFRelease(url);
-        if(status!=noErr) { fprintf(stderr,"Piano open: %s (%d)\n",path,(int)status); kv_piano_free(piano); return NULL; }
+        if(status!=noErr) { fprintf(stderr,"Piano open: %s (%d)\n",path,(int)status); failed=true; return; }
         AudioStreamBasicDescription format={0}; format.mSampleRate=RATE; format.mFormatID=kAudioFormatLinearPCM;
         format.mFormatFlags=kAudioFormatFlagIsFloat|kAudioFormatFlagIsPacked;
         format.mBytesPerPacket=8; format.mFramesPerPacket=1; format.mBytesPerFrame=8; format.mChannelsPerFrame=2; format.mBitsPerChannel=32;
         status=ExtAudioFileSetProperty(file,kExtAudioFileProperty_ClientDataFormat,sizeof(format),&format);
         // Long notes keep 8 s; short articulations (layers ≥ 2: spiccato, pizzicato) die away within 3 s.
-        const UInt32 cap=layers[i]>=2?RATE*3:RATE*8; UInt32 frames=cap;
+        const UInt32 cap=layer[i]>=2?RATE*3:RATE*8; UInt32 frames=cap;
         float *pcm=calloc((size_t)frames*2,sizeof(float));
         if(status==noErr && pcm) {
             AudioBufferList buffer={.mNumberBuffers=1,.mBuffers={{.mNumberChannels=2,.mDataByteSize=frames*8,.mData=pcm}}};
             status=ExtAudioFileRead(file,&frames,&buffer);
         } else if(!pcm) status=kAudio_MemFullError;
         OSStatus close_status=ExtAudioFileDispose(file);
-        if(status!=noErr || close_status!=noErr || frames<2) { free(pcm); kv_piano_free(piano); return NULL; }
+        if(status!=noErr || close_status!=noErr || frames<2) { free(pcm); failed=true; return; }
         // Remove recording pre-roll, keeping 2 ms before the first audible attack.
         size_t start=0;
         while(start<(size_t)frames-2 && start<RATE/2 && fabsf(pcm[start*2])+fabsf(pcm[start*2+1])<0.00015f) start++;
-        start=start>88?start-88:0; start+=(size_t)(skips[i]*RATE); if(start>(size_t)frames/2) start=(size_t)frames/2;
+        start=start>88?start-88:0; start+=(size_t)(skip[i]*RATE); if(start>(size_t)frames/2) start=(size_t)frames/2;
         if(start) { memmove(pcm,pcm+start*2,((size_t)frames-start)*2*sizeof(float)); frames-=(UInt32)start; }
-        if(gains[i]!=1) for(size_t j=0;j<(size_t)frames*2;j++) pcm[j]*=gains[i];
+        if(gain[i]!=1) for(size_t j=0;j<(size_t)frames*2;j++) pcm[j]*=gain[i];
         // A recording cut by the cap fades out over 50 ms instead of stopping on a click; the buffer shrinks to fit.
         if(frames+start>=cap) for(size_t j=0;j<2205 && j<frames;j++) for(int c=0;c<2;c++) pcm[(frames-1-j)*2+c]*=(float)j/2205;
         float *fitted=realloc(pcm,(size_t)frames*2*sizeof(float)); if(fitted) pcm=fitted;
-        piano->samples[i]=(struct Recording){pcm,frames,roots[i],layers[i],cents[i]}; piano->count++;
-    }
-    return piano;
+        piano->samples[i]=(struct Recording){pcm,frames,root[i],layer[i],cent[i]};
+    });
+    if(failed) { kv_piano_free(piano); return NULL; }
+    piano->count=count; return piano;
 }
 bool kv_effects_valid(KvEffects effects) {
     return isfinite(effects.reverb) && effects.reverb>=0 && effects.reverb<=1.0f && isfinite(effects.delay) && effects.delay>=0 && effects.delay<=0.6f && isfinite(effects.delay_seconds) && effects.delay_seconds>=0.04 && effects.delay_seconds<=1.2;
