@@ -31,18 +31,38 @@ size_t kv_midi_encode(const KvPerformance *p,double bpm,int numerator,int denomi
     return kv_midi_encode_events(p->events,p->count,p->total_beats,bpm,numerator,denominator_power,sharps,minor,program,title,out,capacity);
 }
 size_t kv_midi_encode_events(const KvPianoEvent *events,size_t count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity) {
-    if(!events || !count || count>KV_PERFORMANCE_CAPACITY || !out || !isfinite(bpm) || bpm<20 || bpm>400 || numerator<1 || numerator>16 || denominator_power<1 || denominator_power>4 || sharps<-7 || sharps>7 || program<0 || program>127 || !isfinite(length_beats) || length_beats<=0) return 0;
+    if(count>KV_PERFORMANCE_CAPACITY) return 0;
+    return kv_midi_encode_song(events,count,NULL,0,NULL,0,length_beats,bpm,numerator,denominator_power,sharps,minor,program,title,out,capacity);
+}
+static void put_track(Buffer *b,const char *label,Message *messages,size_t n,int channel,int program,uint32_t total) {
+    qsort(messages,n,sizeof(Message),compare);
+    size_t start; track_begin(b,&start); meta(b,0,0x03,label,strlen(label));
+    if(program>=0) { vlq(b,0); byte(b,(uint8_t)(0xc0|channel)); byte(b,(uint8_t)program); }
+    uint32_t tick=0;
+    for(size_t i=0;i<n;i++) { vlq(b,messages[i].tick-tick); tick=messages[i].tick; byte(b,messages[i].status); byte(b,messages[i].data1); byte(b,messages[i].data2); }
+    // Hold the track to the end of the last chord so loops in a DAW line up with the bar.
+    uint8_t end[]={0xff,0x2f,0x00}; vlq(b,total>tick?total-tick:0); bytes(b,end,3);
+    if(b->overflow) return;
+    uint32_t length=(uint32_t)(b->size-start);
+    b->data[start-4]=(uint8_t)(length>>24); b->data[start-3]=(uint8_t)(length>>16); b->data[start-2]=(uint8_t)(length>>8); b->data[start-1]=(uint8_t)length;
+}
+size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity) {
+    if(!events || !count || (drum_count && !drums) || (marker_count && !markers) || !out || !isfinite(bpm) || bpm<20 || bpm>400 || numerator<1 || numerator>16 || denominator_power<1 || denominator_power>4 || sharps<-7 || sharps>7 || program<0 || program>127 || !isfinite(length_beats) || length_beats<=0) return 0;
     for(size_t i=0;i<count;i++) if(events[i].midi<0 || events[i].midi>127 || !isfinite(events[i].beat) || events[i].beat<0 || !isfinite(events[i].duration) || events[i].duration<=0 || events[i].hand>1) return 0;
+    for(size_t i=0;i<drum_count;i++) if(drums[i].drum<0 || drums[i].drum>127 || !isfinite(drums[i].beat) || drums[i].beat<0 || !isfinite(drums[i].velocity)) return 0;
+    for(size_t i=0;i<marker_count;i++) if(!markers[i].name || !isfinite(markers[i].beat) || markers[i].beat<0 || (i && markers[i].beat<markers[i-1].beat)) return 0;
     Buffer b={out,0,capacity,false};
-    bytes(&b,"MThd",4); be32(&b,6); be16(&b,1); be16(&b,3); be16(&b,KV_MIDI_PPQ);
+    bytes(&b,"MThd",4); be32(&b,6); be16(&b,1); be16(&b,drum_count?4:3); be16(&b,KV_MIDI_PPQ);
     size_t start; track_begin(&b,&start);
     const char *name=title && *title?title:"Tonora";
     meta(&b,0,0x03,name,strlen(name));
     uint32_t micro=(uint32_t)llround(60000000.0/bpm); uint8_t tempo[3]={(uint8_t)(micro>>16),(uint8_t)(micro>>8),(uint8_t)micro}; meta(&b,0,0x51,tempo,3);
     uint8_t timesig[4]={(uint8_t)numerator,(uint8_t)denominator_power,(uint8_t)(denominator_power==3?12:24),8}; meta(&b,0,0x58,timesig,4);
     uint8_t keysig[2]={(uint8_t)(int8_t)sharps,(uint8_t)(minor?1:0)}; meta(&b,0,0x59,keysig,2);
+    { uint32_t tick=0; for(size_t i=0;i<marker_count;i++) { uint32_t at=(uint32_t)llround(markers[i].beat*KV_MIDI_PPQ); meta(&b,at-tick,0x06,markers[i].name,strlen(markers[i].name)); tick=at; } }   // section markers
     track_end(&b,start);
-    static Message messages[KV_PERFORMANCE_CAPACITY*2];
+    Message *messages=malloc((count>drum_count?count:drum_count)*2*sizeof(Message)); if(!messages) return 0;
+    uint32_t total=(uint32_t)llround(length_beats*KV_MIDI_PPQ);
     for(unsigned hand=0;hand<2;hand++) {
         size_t n=0;
         for(size_t i=0;i<count;i++) {
@@ -52,19 +72,17 @@ size_t kv_midi_encode_events(const KvPianoEvent *events,size_t count,double leng
             messages[n++]=(Message){on,(uint8_t)(0x90|hand),(uint8_t)e.midi,(uint8_t)velocity};
             messages[n++]=(Message){off,(uint8_t)(0x80|hand),(uint8_t)e.midi,64};
         }
-        qsort(messages,n,sizeof(Message),compare);
-        track_begin(&b,&start);
-        const char *label=hand?"Right hand":"Left hand"; meta(&b,0,0x03,label,strlen(label));
-        vlq(&b,0); byte(&b,(uint8_t)(0xc0|hand)); byte(&b,(uint8_t)program);
-        uint32_t tick=0;
-        for(size_t i=0;i<n;i++) { vlq(&b,messages[i].tick-tick); tick=messages[i].tick; byte(&b,messages[i].status); byte(&b,messages[i].data1); byte(&b,messages[i].data2); }
-        // Hold the track to the end of the last chord so loops in a DAW line up with the bar.
-        uint32_t total=(uint32_t)llround(length_beats*KV_MIDI_PPQ); uint8_t end[]={0xff,0x2f,0x00};
-        vlq(&b,total>tick?total-tick:0); bytes(&b,end,3);
-        if(b.overflow) return 0;
-        uint32_t length=(uint32_t)(b.size-start);
-        b.data[start-4]=(uint8_t)(length>>24); b.data[start-3]=(uint8_t)(length>>16); b.data[start-2]=(uint8_t)(length>>8); b.data[start-1]=(uint8_t)length;
+        put_track(&b,hand?"Right hand":"Left hand",messages,n,(int)hand,program,total);
     }
+    if(drum_count) {   // General MIDI percussion: channel 10, an eighth of a beat per hit
+        size_t n=0;
+        for(size_t i=0;i<drum_count;i++) {
+            uint32_t on=(uint32_t)llround(drums[i].beat*KV_MIDI_PPQ); int velocity=(int)lround(drums[i].velocity*127); velocity=velocity<1?1:velocity>127?127:velocity;
+            messages[n++]=(Message){on,0x99,(uint8_t)drums[i].drum,(uint8_t)velocity}; messages[n++]=(Message){on+KV_MIDI_PPQ/8,0x89,(uint8_t)drums[i].drum,64};
+        }
+        put_track(&b,"Drums",messages,n,9,-1,total);
+    }
+    free(messages);
     return b.overflow?0:b.size;
 }
 bool kv_midi_write(const KvPerformance *p,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,const char *path) {
@@ -153,9 +171,10 @@ bool kv_midi_decode(const uint8_t *data,size_t size,KvMidiSong *out) {
     }
     if(ok) {
         qsort(raw,raw_count,sizeof(RawNote),compare_raw);
-        unsigned channels=0; for(size_t i=0;i<raw_count;i++) channels|=1u<<raw[i].channel;
+        unsigned channels=0; for(size_t i=0;i<raw_count;i++) if(raw[i].channel!=9) channels|=1u<<raw[i].channel;
         bool own=channels==3u; // exactly channels 1 and 2: Tonora's left and right hand
         for(size_t i=0;i<raw_count;i++) {
+            if(raw[i].channel==9) continue;   // General MIDI drums (channel 10) are not notes of the harmony
             if(out->count==KV_PERFORMANCE_CAPACITY) { out->dropped++; continue; }
             KvPianoEvent *e=&out->notes[out->count++];
             e->midi=raw[i].key; e->beat=(double)raw[i].on/division; e->duration=fmax(.05,(double)(raw[i].off-raw[i].on)/division);

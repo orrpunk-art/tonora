@@ -41,5 +41,5 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 - (void)hoverAtPoint:(NSPoint)point;                        /* as a mouse move there (self-test) */
 @property(nonatomic,readonly) NSInteger hoverSection,hoverGhost,hoverSeam;
 @property(nonatomic,readonly) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
-@property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton;
+@property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @end

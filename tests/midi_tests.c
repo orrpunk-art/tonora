@@ -81,5 +81,18 @@ int main(void){
     int sus[]={60,65,67}; CHECK(kv_midi_chord_name(sus,3,name,&root) && strcmp(name,"Csus4")==0);
     int dm7b5[]={62,65,68,72}; CHECK(kv_midi_chord_name(dm7b5,4,name,&root) && strcmp(name,"Dm7b5")==0);
     int cluster[]={60,61,62}; CHECK(!kv_midi_chord_name(cluster,3,name,&root));
-    puts("MIDI file: header, three tracks, tempo, signatures, note pairs, hold to the bar line and chord naming passed."); return 0;
+    { // A song: more notes than one plan holds, drums on channel 10 in a fourth track, section markers; read back without the drums.
+        static KvPianoEvent notes[600]; for(int i=0;i<600;i++) notes[i]=(KvPianoEvent){.midi=48+i%24,.beat=i*.25,.duration=.25,.velocity=.7f,.hand=(unsigned)(i%2)};
+        KvHit drums[3]={{0,36,1},{1,38,.8f},{2,42,.5f}}; KvMidiMarker marks[2]={{0,"Verse"},{64,"Chorus"}};
+        static uint8_t file[1<<16]; size_t size=kv_midi_encode_song(notes,600,drums,3,marks,2,150,100,4,2,0,false,0,"Song",file,sizeof(file));
+        CHECK(size>0 && file[11]==4);   // four tracks
+        bool verse=false,chorus=false; for(size_t i=0;i+6<size;i++) { if(!memcmp(file+i,"Verse",5) && file[i-2]==0x06) verse=true; if(!memcmp(file+i,"Chorus",6) && file[i-2]==0x06) chorus=true; }
+        CHECK(verse && chorus);
+        bool percussion=false; for(size_t i=0;i+2<size;i++) if(file[i]==0x99 && file[i+1]==38) percussion=true; CHECK(percussion);
+        static KvMidiSong back; CHECK(kv_midi_decode(file,size,&back) && back.count==KV_PERFORMANCE_CAPACITY && back.dropped==600-KV_PERFORMANCE_CAPACITY);
+        for(size_t i=0;i<back.count;i++) CHECK(back.notes[i].midi>=48 && back.notes[i].midi<72);   // no drum among them
+        CHECK(!kv_midi_encode_song(notes,600,drums,3,(KvMidiMarker[]){{64,"B"},{0,"A"}},2,150,100,4,2,0,false,0,"Song",file,sizeof(file)));   // markers out of order
+        CHECK(!kv_midi_encode_events(notes,600,150,100,4,2,0,false,0,"Song",file,sizeof(file)));   // the plan entry point keeps its limit
+    }
+    puts("MIDI file: header, three tracks, tempo, signatures, note pairs, hold to the bar line, chord naming, songs with drums and markers passed."); return 0;
 }

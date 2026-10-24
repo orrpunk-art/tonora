@@ -12,11 +12,15 @@ size_t kv_midi_encode(const KvPerformance *performance,double bpm,int numerator,
 /* Same file from a loose list of notes (a clip): no chord bookkeeping, only pitch, timing and velocity are used.
    `length_beats` is where the tracks end (rounded up to whole bars by the caller). */
 size_t kv_midi_encode_events(const KvPianoEvent *events,size_t count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity);
+/* A whole song: any number of notes; drums (beat from the song's start, General MIDI notes) on channel 10 in a fourth track;
+   markers (meta event 6, in time order) in the conductor track. */
+typedef struct { double beat; const char *name; } KvMidiMarker;
+size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity);
 bool kv_midi_write(const KvPerformance *performance,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,const char *path);
 /* A Standard MIDI File read back (format 0 or 1, ticks per quarter note). Every length is checked against the data:
    a damaged or unsupported file returns false and never reads past `size`. Notes are in time order with beat and
    duration in quarter notes and velocity 0…1; hand: channels 1 and 2 when the file uses exactly those (Tonora's own
-   export), otherwise below middle C is the left hand. The first tempo, time and key signature of the file count.
+   export), otherwise below middle C is the left hand. Channel 10 (General MIDI drums) is left out. The first tempo, time and key signature of the file count.
    Notes beyond the performance capacity are counted in `dropped`. */
 typedef struct {
     KvPianoEvent notes[KV_PERFORMANCE_CAPACITY]; size_t count,dropped;

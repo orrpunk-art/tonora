@@ -38,7 +38,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
 @property(nonatomic) NSArray<NSDictionary *> *ghosts; @property(nonatomic) NSInteger ghostsFor;
 @property(nonatomic) BOOL auditioning;
 @property(nonatomic,readwrite) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
-@property(nonatomic,readwrite) NSButton *openButton,*revertButton,*removeButton,*takeButton;
+@property(nonatomic,readwrite) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @end
 
 @implementation KvArranger
@@ -65,8 +65,9 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
         _removeButton=Icon(@"trash",@"⌫",T(@"Удалить секцию · ⌫"),self,@selector(removeSelected:));
         _takeButton=[TNButton buttonWithTitle:T(@"Взять текущую последовательность") target:self action:@selector(take:)]; _takeButton.bezelStyle=NSBezelStyleRounded; _takeButton.bordered=NO;
         _takeButton.font=[NSFont systemFontOfSize:13 weight:NSFontWeightSemibold]; ((TNButton *)_takeButton).hint=T(@"Последовательность с круга становится первой секцией · ⇧⌘A");
+        _exportButton=Icon(@"square.and.arrow.down",@"↓",T(@"Экспорт MIDI песни… · ⇧⌘E · все секции, бит на 10-м канале, маркеры секций"),nil,NSSelectorFromString(@"exportSong:"));
         _info=[NSTextField labelWithString:@""]; _info.font=[NSFont systemFontOfSize:12 weight:NSFontWeightMedium]; _info.textColor=NSColor.secondaryLabelColor; _info.lineBreakMode=NSLineBreakByTruncatingTail;
-        for(NSView *view in @[_kindChoice,_repeatsChoice,_levelChoice,_beatChoice,_liftChoice,_transitionChoice,_openButton,_revertButton,_removeButton,_takeButton,_info]) [self addSubview:view];
+        for(NSView *view in @[_kindChoice,_repeatsChoice,_levelChoice,_beatChoice,_liftChoice,_transitionChoice,_openButton,_revertButton,_removeButton,_takeButton,_exportButton,_info]) [self addSubview:view];
     }
     return self;
 }
@@ -107,6 +108,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     CGFloat right=NSWidth(self.bounds)-KvInset;
     self.removeButton.frame=NSMakeRect(right-34,y-2,34,32); self.revertButton.frame=NSMakeRect(right-74,y-2,34,32); self.openButton.frame=NSMakeRect(right-114,y-2,34,32);
     self.takeButton.frame=NSMakeRect(round(NSMidX(self.bounds)-150),round(NSMidY(self.bounds)+4),300,32);
+    self.exportButton.frame=NSMakeRect(right-34,0,34,28);
 }
 - (void)reload {
     self.ghosts=nil; self.ghostsFor=-1;
@@ -115,7 +117,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     if(!empty && (self.selected<0 || self.selected>=(NSInteger)s->count)) self.selected=0;
     BOOL has=!empty && self.selected>=0;
     for(NSView *view in @[self.kindChoice,self.repeatsChoice,self.levelChoice,self.beatChoice,self.liftChoice,self.transitionChoice,self.openButton,self.revertButton,self.removeButton,self.info]) view.hidden=!has;
-    self.takeButton.hidden=!empty;
+    self.takeButton.hidden=!empty; self.exportButton.hidden=empty;
     if(has) {
         const KvSection *x=&s->sections[self.selected];
         [self.kindChoice selectItemAtIndex:x->kind]; [self.repeatsChoice selectItemAtIndex:x->repeats-1];
@@ -224,7 +226,7 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
     }
     double bar=[self beatsPerBar],total=kv_song_beats(s),bpm=s->bpm; int bars=(int)ceil(total/bar-1e-9),seconds=(int)lround(total*60/bpm);
     NSString *header=[NSString stringWithFormat:T(@"Песня · %@ · %@ · %.0f BPM · %@ · %d:%02d"),Translated(kv_key_title(s->key)),Translated(kv_meter_name(s->meter)),bpm,TNBarCount(bars),seconds/60,seconds%60];
-    Text(header,NSMakeRect(KvInset,4,w-2*KvInset,20),14,NSFontWeightSemibold,NSColor.labelColor,NO);
+    Text(header,NSMakeRect(KvInset,4,w-2*KvInset-44,20),14,NSFontWeightSemibold,NSColor.labelColor,NO);
     [NSGraphicsContext saveGraphicsState]; NSRectClip(NSMakeRect(KvInset-2,28,w-2*KvInset+4,NSHeight(self.bounds)-28));
     // Ruler: a number at each section start and every four bars; a tick on every bar.
     [[NSColor.separatorColor colorWithAlphaComponent:.8] setFill]; NSRectFill(NSMakeRect(KvInset,52,w-2*KvInset,1));

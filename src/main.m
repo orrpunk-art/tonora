@@ -1928,6 +1928,7 @@ static NSString *Describe(NSView *view) {
     if(item.action==@selector(undoSequence:)) { item.title=self.viewMode==1?T(@"Отменить правку дорожки"):T(@"Вернуть последовательность"); return self.viewMode==1?self.trackUndo.count>0:self.sequenceUndo!=nil; }
     if(item.action==@selector(redoTrack:)) return self.viewMode==1 && self.trackRedo.count>0;
     if(item.action==@selector(duplicateSection:) || item.action==@selector(cutSection:)) return self.viewMode==2 && self.editingSection>=0;
+    if(item.action==@selector(exportSong:)) return self.song->count>0;
     if(item.action==@selector(sendToArranger:)) { item.title=self.editingSection>=0?T(@"Обратно в аранжировщик"):T(@"В аранжировщик"); return self.editingSection>=0 || self.progression.count>0; }
     if(item.action==@selector(showCircle:) || item.action==@selector(showRoll:) || item.action==@selector(showArranger:)) { item.state=self.viewMode==(item.action==@selector(showCircle:)?0:item.action==@selector(showRoll:)?1:2)?NSControlStateValueOn:NSControlStateValueOff; return YES; }
     if(item.action==@selector(continueProgression:)) return [self continueCount]>0;
@@ -2503,6 +2504,7 @@ static BOOL KvIsMidiURL(NSURL *url) { NSString *ext=url.pathExtension.lowercaseS
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info { return info.draggingSource==nil && [self draggedMidi:info]?NSDragOperationCopy:NSDragOperationNone; }
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)info { NSURL *url=[self draggedMidi:info]; return url && [self importMidiData:[NSData dataWithContentsOfURL:url] name:url.lastPathComponent]; }
 - (BOOL)importMidiData:(NSData *)data name:(NSString *)name {
+    if(self.editingSection>=0) [self showView:0];   // a file goes into the draft, never over a section of the song
     KvMidiSong *song=calloc(1,sizeof(KvMidiSong)); if(!song) return NO;
     if(!data || data.length>(8u<<20) || !kv_midi_decode(data.bytes,data.length,song)) { self.status.stringValue=[NSString stringWithFormat:T(@"⚠ «%@» не читается как MIDI-файл"),name?:T(@"файл")]; free(song); return NO; }
     if(!song->count) { self.status.stringValue=[NSString stringWithFormat:T(@"В «%@» нет нот"),name]; free(song); return NO; }
@@ -3219,6 +3221,44 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     [self startPerformance:&plan chords:chords count:count degrees:codes offset:0]; kv_audio_set_loop(self.audio,true);
     self.auditioningGhost=YES; self.status.stringValue=T(@"Слушаем подсказку · Пробел или уход курсора — стоп");
 }
+// ---- the song as a MIDI file: every section and repeat, its level, its drums on channel 10, a marker per section ----
+- (BOOL)exportSongToPath:(NSString *)path {
+    [self storeWorking]; const KvSong *song=[self songWithWorking]; if(!song->count || !path) return NO;
+    NSMutableData *notes=[NSMutableData data],*drums=[NSMutableData data]; NSMutableArray<NSString *> *names=[NSMutableArray array];
+    KvMidiMarker *marks=calloc(song->count,sizeof(KvMidiMarker)); if(!marks) return NO;
+    double at=0,bar=kv_meter_bar(song->meter);
+    for(size_t i=0;i<song->count;i++) {
+        KvPerformance plan; if(![self songPlan:(NSInteger)i into:&plan]) { free(marks); return NO; }
+        [names addObject:[self arrangerName:(NSInteger)i]]; marks[i]=(KvMidiMarker){at,names.lastObject.UTF8String};
+        KvHit hits[KV_BEAT_HITS]; size_t n=0; int on=[self rhythmOfSection:&song->sections[i] hits:hits count:&n];
+        double pass=plan.total_beats;
+        for(int r=0;r<song->sections[i].repeats;r++,at+=pass) {
+            for(size_t k=0;k<plan.count;k++) { KvPianoEvent e=plan.events[k]; e.beat+=at; [notes appendBytes:&e length:sizeof(e)]; }
+            for(double b=0;on && n && b<pass-1e-9;b+=bar) for(size_t h=0;h<n;h++) if(b+hits[h].beat<pass-1e-9) { KvHit hit=hits[h]; hit.beat+=at+b; [drums appendBytes:&hit length:sizeof(hit)]; }
+        }
+    }
+    size_t count=notes.length/sizeof(KvPianoEvent),drumCount=drums.length/sizeof(KvHit),capacity=4096+count*24+drumCount*24+song->count*96;
+    uint8_t *file=malloc(capacity); if(!file) { free(marks); return NO; }
+    int numerator=song->meter==KV_METER_4_4?4:song->meter==KV_METER_3_4?3:6,power=song->meter==KV_METER_6_8?3:2;
+    int scale[8]; kv_scale(song->key,scale); BOOL minor=scale[2]-scale[0]==3;
+    NSString *title=[NSString stringWithFormat:T(@"Tonora · песня · %@"),[self keyTitle]];
+    size_t size=kv_midi_encode_song(notes.bytes,count,drums.bytes,drumCount,marks,song->count,at,song->bpm,numerator,power,[self writtenSignature],minor,[self midiProgram],title.UTF8String,file,capacity);
+    BOOL ok=size && [[NSData dataWithBytesNoCopy:file length:size freeWhenDone:NO] writeToFile:path atomically:YES];
+    free(file); free(marks); return ok;
+}
+- (void)exportSong:(id)sender {
+    (void)sender; if(!self.song->count || !self.window) return;
+    NSSavePanel *panel=[NSSavePanel savePanel]; panel.title=T(@"Экспорт MIDI песни"); panel.prompt=T(@"Сохранить");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    panel.allowedFileTypes=@[@"mid",@"midi"];
+#pragma clang diagnostic pop
+    panel.nameFieldStringValue=[NSString stringWithFormat:T(@"Tonora · песня · %@.mid"),[self keyTitle]];
+    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
+        if(response!=NSModalResponseOK || !panel.URL) return;
+        self.status.stringValue=[self exportSongToPath:panel.URL.path]?[NSString stringWithFormat:T(@"Песня сохранена в MIDI: %@"),panel.URL.lastPathComponent]:T(@"⚠ Не удалось сохранить MIDI");
+    }];
+}
 // ---- song playback: one plan per part, the next one queued while the current one plays ----
 - (BOOL)songPlan:(NSInteger)section into:(KvPerformance *)out {
     NSData *cached=self.songPlans[@(section)]; if(cached.length==sizeof(KvPerformance)) { memcpy(out,cached.bytes,sizeof(*out)); return YES; }
@@ -3347,7 +3387,7 @@ static NSArray<NSArray<NSString *> *> *KvSequenceMenu(void) {
     return @[@[T(@"Новые аккорды"),@"n",@"generateProgression:"],@[T(@"Дополнить аккордами"),@"N",@"continueProgression:"],@[T(@"Вернуть последовательность"),@"z",@"undoSequence:"],
              @[T(@"Повторить правку дорожки"),@"Z",@"redoTrack:"],@[T(@"Скопировать MIDI"),@"c",@"copyMidi:"],@[T(@"Импортировать MIDI…"),@"o",@"importMidi:"],@[T(@"Новая вариация рисунка"),@"r",@"regenerateArrangement:"],@[@"-"],
              @[T(@"Круг"),@"1",@"showCircle:"],@[T(@"Пиано-ролл"),@"2",@"showRoll:"],@[T(@"Аранжировщик"),@"3",@"showArranger:"],@[T(@"В аранжировщик"),@"A",@"sendToArranger:"],
-             @[T(@"Дублировать секцию"),@"d",@"duplicateSection:"],@[T(@"Разрезать секцию по такту"),@"t",@"cutSection:"],@[@"-"],
+             @[T(@"Дублировать секцию"),@"d",@"duplicateSection:"],@[T(@"Разрезать секцию по такту"),@"t",@"cutSection:"],@[T(@"Экспорт MIDI песни…"),@"E",@"exportSong:"],@[@"-"],
              @[T(@"Играть / стоп    Пробел"),@"",@"togglePlayback:"],@[T(@"Повтор    L"),@"",@"toggleLoop:"],@[T(@"Метроном"),@"k",@"toggleMetronome:"],@[T(@"Удалить выбранный аккорд    ⌫"),@"",@"removeSelectedChord:"]];
 }
 @interface KvDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, KvInterfaceHost>
@@ -4481,6 +4521,15 @@ int main(int argc, const char *argv[]) {
                 on=[root rhythmOfSection:&root.song->sections[1] hits:hits count:&n]; KV_CHECK(on==1 && n==17 && hits[16].drum==KV_DRUM_SNARE,@"Suggestions: a rise plays a snare roll under it"); }
               [root undoSequence:nil]; KV_CHECK(root.song->count==4,@"Suggestions: ⌘Z takes the transition back");
               KvPerformance plan; for(NSInteger i=0;i<(NSInteger)root.song->count;i++) KV_CHECK([root songPlan:i into:&plan],([NSString stringWithFormat:@"Suggestions: section %ld plays",(long)i]));
+              { // The song as MIDI: every section's notes, the chorus's beat on channel 10, a marker per section; imported back, no drums.
+                NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:@"tonora-song.mid"]; KV_CHECK([root exportSongToPath:path],@"Song MIDI: the file is written");
+                NSData *file=[NSData dataWithContentsOfFile:path]; const uint8_t *bytes=file.bytes; BOOL drums=NO,marker=NO;
+                for(NSUInteger i=0;i+2<file.length;i++) { if(bytes[i]==0x99) drums=YES; if(bytes[i]==0xff && bytes[i+1]==0x06) marker=YES; }
+                KV_CHECK(file.length>14 && bytes[11]==4 && drums && marker,@"Song MIDI: four tracks, drums on channel 10, section markers");
+                KvMidiSong *back=calloc(1,sizeof(KvMidiSong)); KV_CHECK(back && kv_midi_decode(bytes,file.length,back) && fabs(back->length-kv_song_beats(root.song))<1.01,@"Song MIDI: it reads back as long as the song");
+                size_t expected=0; for(NSInteger i=0;i<(NSInteger)root.song->count;i++) { [root songPlan:i into:&plan]; expected+=plan.count*root.song->sections[i].repeats; }
+                KV_CHECK(back->count+back->dropped==expected,@"Song MIDI: every note of every section and repeat, no drum among them"); free(back);
+                [NSFileManager.defaultManager removeItemAtPath:path error:NULL]; }
               root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
               [root showView:0]; }
             // English: the same saved state in an English interface; no Cyrillic anywhere in it; the replaced view is freed.
