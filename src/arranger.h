@@ -26,6 +26,8 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerSwap:(NSInteger)a with:(NSInteger)b;           /* a region dropped on another */
 - (void)arrangerSetLength:(NSInteger)index beats:(double)beats; /* the resize corner */
 - (void)arrangerTrimStart:(NSInteger)index beats:(double)beats; /* the start corner: + later in the pass, − earlier */
+- (void)arrangerShiftRegion:(NSInteger)index track:(int)track shift:(double)shift;   /* a region dragged on its track: beats, ±32 */
+- (void)arrangerExport:(NSInteger)what;           /* MIDI: 0 the song, 1 the melody, 2 the bass, 3 the drums */
 - (void)arrangerRemove:(NSInteger)index;
 - (void)arrangerSet:(KvSectionField)field value:(NSInteger)value;   /* of the selected section */
 - (void)arrangerSetTrack:(int)track mute:(int)mute solo:(int)solo level:(double)level;   /* −1 (level < 0): unchanged */

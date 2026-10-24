@@ -3220,6 +3220,14 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     self.songPlans=nil; [self.arranger reload]; [self saveState];
     self.status.stringValue=[NSString stringWithFormat:beats>0?T(@"«%@» начинается позже в прогрессии · ⌘Z — отменить"):T(@"«%@» начинается раньше в прогрессии · ⌘Z — отменить"),[self arrangerName:index]];
 }
+/* A region dragged on its track (spec 1.5 §3, answer 2): its notes (or its beat) move in time inside the section. */
+- (void)arrangerShiftRegion:(NSInteger)index track:(int)track shift:(double)shift {
+    if(index<0 || index>=(NSInteger)self.song->count || track<0 || track>=KV_TRACKS || !isfinite(shift)) return;
+    [self pushSongUndo]; self.song->sections[index].regions[track].shift=MAX(-32,MIN(32,shift));
+    self.songPlans=nil; [self.arranger reload]; [self saveState];
+    NSArray *names=@[T(@"Мелодия"),T(@"Бас"),T(@"Ударные")];
+    self.status.stringValue=[NSString stringWithFormat:T(@"«%@» в «%@» сдвинута: %+g дол. · ⌘Z — отменить"),names[track],[self arrangerName:index],self.song->sections[index].regions[track].shift];
+}
 - (void)arrangerCut:(NSInteger)index atBeat:(double)beat {
     if(index<0 || index>=(NSInteger)self.song->count) return;
     [self pushSongUndo]; KvSong *song=[self liveSong]; NSData *track=self.sectionTracks[@(song->sections[index].id)];
@@ -3542,7 +3550,9 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     self.auditioningGhost=YES; self.status.stringValue=T(@"Слушаем подсказку · Пробел или уход курсора — стоп");
 }
 // ---- the song as a MIDI file: every section and repeat, its level, its drums on channel 10, a marker per section ----
-- (BOOL)exportSongToPath:(NSString *)path {
+- (BOOL)exportSongToPath:(NSString *)path { return [self exportSongToPath:path tracks:0]; }
+/* what: 0 the whole song, 1 only the melody (right hand), 2 only the bass (left hand), 3 only the drums. */
+- (BOOL)exportSongToPath:(NSString *)path tracks:(NSInteger)what {
     [self storeWorking]; const KvSong *song=[self songWithWorking]; if(!song->count || !path) return NO;
     NSMutableData *notes=[NSMutableData data],*drums=[NSMutableData data]; NSMutableArray<NSString *> *names=[NSMutableArray array];
     KvMidiMarker *marks=calloc(song->count,sizeof(KvMidiMarker)); if(!marks) return NO;
@@ -3550,12 +3560,13 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     for(size_t i=0;i<song->count;i++) {
         [names addObject:[self arrangerName:(NSInteger)i]]; marks[i]=(KvMidiMarker){at,names.lastObject.UTF8String};
         NSData *part=[self arrangerNotes:(NSInteger)i],*beat=[self arrangerHits:(NSInteger)i]; if(!part) { free(marks); return NO; }
-        const KvPianoEvent *e=part.bytes; for(size_t k=0;k<part.length/sizeof(*e);k++) { KvPianoEvent x=e[k]; x.beat+=at; [notes appendBytes:&x length:sizeof(x)]; }
-        const KvHit *h=beat.bytes; for(size_t k=0;k<beat.length/sizeof(*h);k++) { KvHit x=h[k]; x.beat+=at; [drums appendBytes:&x length:sizeof(x)]; }
+        const KvPianoEvent *e=part.bytes; for(size_t k=0;k<part.length/sizeof(*e);k++) { KvPianoEvent x=e[k]; x.beat+=at;
+            if(what==0 || (what==1 && x.hand) || (what==2 && !x.hand)) [notes appendBytes:&x length:sizeof(x)]; }
+        const KvHit *h=beat.bytes; for(size_t k=0;k<beat.length/sizeof(*h) && (what==0 || what==3);k++) { KvHit x=h[k]; x.beat+=at; [drums appendBytes:&x length:sizeof(x)]; }
         double length=kv_section_beats(song,i);
         at+=length;
     }
-    if(!notes.length) { KvPianoEvent quiet={.midi=60,.beat=0,.duration=.01,.velocity=0,.hand=1}; [notes appendBytes:&quiet length:sizeof(quiet)]; }   // every track muted: an inaudible note keeps the file valid
+    if(!notes.length && !drums.length) { KvPianoEvent quiet={.midi=60,.beat=0,.duration=.01,.velocity=0,.hand=1}; [notes appendBytes:&quiet length:sizeof(quiet)]; }   // every track muted: an inaudible note keeps the file valid
     size_t count=notes.length/sizeof(KvPianoEvent),drumCount=drums.length/sizeof(KvHit),capacity=4096+count*24+drumCount*24+song->count*96;
     uint8_t *file=malloc(capacity); if(!file) { free(marks); return NO; }
     int numerator=song->meter==KV_METER_4_4?4:song->meter==KV_METER_3_4?3:6,power=song->meter==KV_METER_6_8?3:2;
@@ -3565,17 +3576,19 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     BOOL ok=size && [[NSData dataWithBytesNoCopy:file length:size freeWhenDone:NO] writeToFile:path atomically:YES];
     free(file); free(marks); return ok;
 }
-- (void)exportSong:(id)sender {
-    (void)sender; if(!self.song->count || !self.window) return;
+- (void)exportSong:(id)sender { (void)sender; [self arrangerExport:0]; }
+- (void)arrangerExport:(NSInteger)what {
+    if(!self.song->count || !self.window || what<0 || what>3) return;
     NSSavePanel *panel=[NSSavePanel savePanel]; panel.title=T(@"Экспорт MIDI песни"); panel.prompt=T(@"Сохранить");
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     panel.allowedFileTypes=@[@"mid",@"midi"];
 #pragma clang diagnostic pop
-    panel.nameFieldStringValue=[NSString stringWithFormat:T(@"Tonora · песня · %@.mid"),[self keyTitle]];
+    NSArray *parts=@[@"",T(@" · мелодия"),T(@" · бас"),T(@" · ударные")];
+    panel.nameFieldStringValue=[NSString stringWithFormat:T(@"Tonora · песня · %@%@.mid"),[self keyTitle],parts[what]];
     [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) {
         if(response!=NSModalResponseOK || !panel.URL) return;
-        self.status.stringValue=[self exportSongToPath:panel.URL.path]?[NSString stringWithFormat:T(@"Песня сохранена в MIDI: %@"),panel.URL.lastPathComponent]:T(@"⚠ Не удалось сохранить MIDI");
+        self.status.stringValue=[self exportSongToPath:panel.URL.path tracks:what]?[NSString stringWithFormat:T(@"Песня сохранена в MIDI: %@"),panel.URL.lastPathComponent]:T(@"⚠ Не удалось сохранить MIDI");
     }];
 }
 // ---- the .tonora file: the state that makes the work, as the settings keep it (spec 1.4 §3.8) ----
@@ -3657,7 +3670,13 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
         if(before->beat==KV_SECTION_BEAT_SONG || (before->kind==KV_SECTION_TRANSITION && kv_transition_hits(before->transition,self.meter,hits))) continue;
         s=before;
     }
-    *count=[self hitsOfBeat:s into:hits]; return *count?1:click;
+    *count=[self hitsOfBeat:s into:hits];
+    double shift=song->sections[index].regions[KV_TRACK_DRUMS].shift,bar=kv_meter_bar(self.meter);
+    if(*count && fabs(shift)>1e-9) {   // a shifted drums region: the bar's pattern turns by the shift, in order again
+        for(size_t i=0;i<*count;i++) { double at=fmod(hits[i].beat+shift,bar); if(at<0) at+=bar; if(at>bar-1e-9) at=0; hits[i].beat=at; }
+        for(size_t i=1;i<*count;i++) for(size_t j=i;j>0 && hits[j].beat<hits[j-1].beat;j--) { KvHit t=hits[j]; hits[j]=hits[j-1]; hits[j-1]=t; }
+    }
+    return *count?1:click;
 }
 - (size_t)chordsOfSection:(NSInteger)section into:(KvChord *)chords codes:(NSMutableArray<NSNumber *> *)codes {
     const KvSong *song=[self songWithWorking]; const KvSection *s=&song->sections[section]; size_t n=0;
@@ -4453,16 +4472,17 @@ int main(int argc, const char *argv[]) {
             { // Arpeggio: keys and fingers follow the sound note by note, and the right hand uses several fingers, not one.
               NSInteger savedTexture=root.performanceChoice.selectedTag;
               [root.performanceChoice selectItemWithTag:2]; [root performanceChanged:root.performanceChoice]; [root playProgression:nil];
-              BOOL used[5]={NO},keysInStep=YES,fingersInStep=YES,before[128]={NO},late[128]={NO};   /* late: key up while sounding last frame */ NSDate *end=[NSDate dateWithTimeIntervalSinceNow:2.5];
+              BOOL used[5]={NO},keysInStep=YES,fingersInStep=YES,before[128]={NO},late[128]={NO},bare[128]={NO};   /* late: key up while sounding last frame; bare: no finger last frame */ NSDate *end=[NSDate dateWithTimeIntervalSinceNow:2.5];
               while(end.timeIntervalSinceNow>0) {
                   [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.0/60]];
                   [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers];
-                  int active[KV_ACTIVE_NOTES]; unsigned n=kv_audio_active_notes(root.audio,active); BOOL now[128]={NO},lateNow[128]={NO};
+                  int active[KV_ACTIVE_NOTES]; unsigned n=kv_audio_active_notes(root.audio,active); BOOL now[128]={NO},lateNow[128]={NO},bareNow[128]={NO};
                   // The audio thread is sampled a moment apart from the screen: one frame of mismatch as a note ends is jitter, two are a bug.
                   for(unsigned i=0;i<n;i++) { int m=active[i]; now[m]=YES; if(before[m] && [root.piano levelOf:m]<.5) { if(late[m]) keysInStep=NO; lateNow[m]=YES; }
-                      BOOL fingered=NO; for(int h=0;h<2;h++) for(int f=0;f<5;f++) if([root.circle noteOfFinger:f hand:h]==m) fingered=YES; if(!fingered) fingersInStep=NO; }
+                      BOOL fingered=NO; for(int h=0;h<2;h++) for(int f=0;f<5;f++) if([root.circle noteOfFinger:f hand:h]==m) fingered=YES;
+                      if(!fingered) { if(bare[m]) fingersInStep=NO; bareNow[m]=YES; } }   // a note just struck may wait one frame for its finger
                   for(int f=0;f<5;f++) if([root.circle noteOfFinger:f hand:1]>=0) used[f]=YES;
-                  memcpy(before,now,sizeof(now)); memcpy(late,lateNow,sizeof(lateNow));
+                  memcpy(before,now,sizeof(now)); memcpy(late,lateNow,sizeof(lateNow)); memcpy(bare,bareNow,sizeof(bareNow));
               }
               int distinct=0; for(int f=0;f<5;f++) if(used[f]) distinct++;
               KV_CHECK(keysInStep,@"A key stays down for as long as its note sounds");
@@ -5050,6 +5070,14 @@ int main(int argc, const char *argv[]) {
                 size_t expected=0; for(NSInteger i=0;i<(NSInteger)root.song->count;i++) { double length=kv_section_beats(root.song,(size_t)i),pass=kv_section_pass_beats(root.song,&root.song->sections[i]);
                     for(double from=0;from<length-1e-9;from+=pass) { [root songPart:i from:from length:fmin(pass,length-from) into:&plan]; expected+=plan.count; } }
                 KV_CHECK(back->count+back->dropped==expected,@"Song MIDI: every note of every section and repeat, no drum among them"); free(back);
+                // One track: the bass alone (the left hand, no drums), the drums alone (no notes).
+                size_t left=0; for(NSInteger i=0;i<(NSInteger)root.song->count;i++) { NSData *d=[root arrangerNotes:i]; const KvPianoEvent *e=d.bytes; for(size_t k=0;k<d.length/sizeof(*e);k++) if(!e[k].hand) left++; }
+                KV_CHECK([root exportSongToPath:path tracks:2],@"Song MIDI: the bass alone is written"); file=[NSData dataWithContentsOfFile:path]; bytes=file.bytes; drums=file.length>14 && bytes[11]==4;   // a drum track makes four
+                back=calloc(1,sizeof(KvMidiSong));
+                KV_CHECK(back && kv_midi_decode(bytes,file.length,back) && back->count+back->dropped==left && !drums,@"Song MIDI: the bass alone holds every left-hand note and no drum"); free(back);
+                KV_CHECK([root exportSongToPath:path tracks:3],@"Song MIDI: the drums alone are written"); file=[NSData dataWithContentsOfFile:path]; bytes=file.bytes; drums=file.length>14 && bytes[11]==4;
+                back=calloc(1,sizeof(KvMidiSong));
+                KV_CHECK(back && kv_midi_decode(bytes,file.length,back) && back->count==0 && drums,@"Song MIDI: the drums alone hold the beat and no note"); free(back);
                 [NSFileManager.defaultManager removeItemAtPath:path error:NULL]; }
               { // Tools, snap, zoom, the ruler and the cycle (spec 1.5 §4), by real events on the tracks.
                 KvArranger *arr=root.arranger; [root.window makeFirstResponder:arr]; root.loopButton.state=NSControlStateValueOff; [root loopChanged:root.loopButton];
@@ -5110,6 +5138,7 @@ int main(int argc, const char *argv[]) {
                 arr.snap=KvSnapBar; [arr showWholeSong:nil];
                 void (^drag)(NSPoint,NSPoint,NSEventModifierFlags)=^(NSPoint from,NSPoint to,NSEventModifierFlags flags) { [arr mouseDown:mouse(NSEventTypeLeftMouseDown,from,1,flags)]; [arr mouseDragged:mouse(NSEventTypeLeftMouseDragged,to,1,flags)]; [arr mouseUp:mouse(NSEventTypeLeftMouseUp,to,1,flags)]; };
                 NSPoint (^bassMid)(NSInteger)=^NSPoint(NSInteger i) { NSRect r=[arr rectOfRegion:i track:KV_TRACK_BASS]; return NSMakePoint(NSMidX(r),NSMidY(r)+10); };
+                NSPoint (^markerMid)(NSInteger)=^NSPoint(NSInteger i) { NSRect r=[arr rectOfSection:i]; return NSMakePoint(NSMidX(r),NSMidY(r)); };
                 NSRect verse=[arr rectOfRegion:0 track:KV_TRACK_BASS]; double verseBeats=kv_section_beats(root.song,0),pass=kv_section_pass_beats(root.song,&root.song->sections[0]);
                 drag(NSMakePoint(NSMaxX(verse)-2,NSMinY(verse)+4),NSMakePoint(NSMinX(verse)+(CGFloat)(2*pass*arr.scale),NSMinY(verse)+4),0);
                 KV_CHECK(root.song->sections[0].repeats==2 && root.song->sections[0].length==0 && fabs(kv_section_beats(root.song,0)-2*pass)<1e-9,@"Corners: the top right one sets the repeats");
@@ -5135,11 +5164,25 @@ int main(int argc, const char *argv[]) {
                 [root duplicateSection:nil]; BOOL copies=root.song->count==2*count; for(size_t k=0;copies && k<count;k++) copies=root.song->sections[count+k].kind==root.song->sections[k].kind;
                 KV_CHECK(copies && arr.selection.location==count && arr.selection.length==count,@"Selection: ⌘D copies the whole range after it"); [root undoSong];
                 [arr keyDown:key(0,NSEventModifierFlagCommand)]; [arr keyDown:key(53,0)]; KV_CHECK(arr.selection.length==1,@"Selection: Esc narrows it to one");
-                click(bassMid(0),1,0); click(bassMid(1),1,NSEventModifierFlagShift); drag(bassMid(0),NSMakePoint(NSMaxX([arr rectOfSection:3])-4,bassMid(0).y),0);
+                click(bassMid(0),1,0); click(bassMid(1),1,NSEventModifierFlagShift); drag(markerMid(0),NSMakePoint(NSMaxX([arr rectOfSection:3])-4,markerMid(0).y),0);
                 KV_CHECK(root.song->sections[0].id==ids[2] && root.song->sections[1].id==ids[3] && root.song->sections[2].id==ids[0] && root.song->sections[3].id==ids[1] && arr.selection.location==2 && arr.selection.length==2,@"Selection: a drag moves the whole range");
-                [root undoSong]; click(bassMid(0),1,0); drag(bassMid(0),bassMid(3),0);
+                [root undoSong]; click(bassMid(0),1,0); drag(markerMid(0),markerMid(3),0);
                 KV_CHECK(root.song->sections[0].id==ids[3] && root.song->sections[3].id==ids[0] && root.song->sections[1].id==ids[1],@"Swap: a section dropped on the middle of another trades places with it");
                 [root undoSong]; KV_CHECK(root.song->sections[0].id==ids[0] && root.song->sections[3].id==ids[3],@"Swap: ⌘Z puts them back");
+                // A region dragged on its track shifts in time on the snap (the marker moves the section); the drums' bar turns.
+                { arr.snap=KvSnapBeat; double (^firstOf)(NSData *,unsigned)=^double(NSData *d,unsigned hand) { const KvPianoEvent *e=d.bytes; double at=1e9; for(size_t k=0;k<d.length/sizeof(*e);k++) if(e[k].hand==hand) at=fmin(at,e[k].beat); return at; };
+                  NSData *was=[root arrangerNotes:0]; double bass=firstOf(was,0),melody=firstOf(was,1); NSPoint from=bassMid(0);
+                  drag(from,NSMakePoint(from.x+(CGFloat)(1.2*arr.scale),from.y),0); NSData *now=[root arrangerNotes:0];
+                  KV_CHECK(fabs(root.song->sections[0].regions[KV_TRACK_BASS].shift-1)<1e-9 && root.song->sections[0].id==ids[0] && fabs(firstOf(now,0)-(bass+1))<1e-9 && fabs(firstOf(now,1)-melody)<1e-9,@"Shift: a bass region dragged on its track plays a beat later, alone, the section in its place");
+                  [root undoSong]; KV_CHECK(root.song->sections[0].regions[KV_TRACK_BASS].shift==0,@"Shift: ⌘Z takes it back");
+                  [root arrangerSelect:0]; [root arrangerSet:KvSectionFieldBeat value:4+KV_BEAT_POP]; NSData *plain=[root arrangerHits:0];
+                  [root arrangerShiftRegion:0 track:KV_TRACK_DRUMS shift:.5]; NSData *turned=[root arrangerHits:0];
+                  double bar=kv_meter_bar(root.song->meter); NSMutableArray *expect=[NSMutableArray array],*got=[NSMutableArray array];
+                  const KvHit *a=plain.bytes,*b=turned.bytes; for(size_t k=0;k<plain.length/sizeof(KvHit) && a[k].beat<bar-1e-9;k++) [expect addObject:@(round(fmod(a[k].beat+.5,bar)*1000))];
+                  for(size_t k=0;k<turned.length/sizeof(KvHit) && b[k].beat<bar-1e-9;k++) [got addObject:@(round(b[k].beat*1000))];
+                  [expect sortUsingSelector:@selector(compare:)];
+                  KV_CHECK(turned.length==plain.length && expect.count>0 && [expect isEqualToArray:got],@"Shift: a shifted drums region turns the bar's pattern by the shift");
+                  [root undoSong]; [root undoSong]; arr.snap=KvSnapSmart; }
                 // The right-click menu.
                 NSMenu *menu=[arr menuForSection:2 track:KV_TRACK_BASS beat:kv_section_start(root.song,2)+bar]; NSMenuItem *mute=nil;
                 for(NSMenuItem *item in menu.itemArray) if([item.title containsString:T(@"Бас")]) mute=item;

@@ -78,6 +78,9 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
 @property(nonatomic) int corner;                   /* the corner being dragged: 1 loop (repeats), 2 length, 3 start; 0 none */
 @property(nonatomic) double cornerValue;           /* what it points at: repeats, beats of length, beats trimmed from the start */
 @property(nonatomic) NSInteger swapTarget,anchor;  /* the section a drag would swap with; where a ⇧-click range starts */
+@property(nonatomic) int pressedTrack;             /* the track of the region pressed, −1 the marker: a region drag shifts it in time */
+@property(nonatomic) double shiftDelta;            /* while shifting: beats added to the region's shift */
+@property(nonatomic) BOOL shifting;
 @property(nonatomic,readwrite) NSInteger hoverRegion,hoverButton;
 @property(nonatomic,readwrite) int hoverTrack;
 @property(nonatomic) double rulerBeat,cycleFrom,cycleTo;   /* the ruler: where the press snapped, the cycle being drawn */
@@ -127,7 +130,7 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
         _trackNames=labels; _trackKinds=subs; _trackMutes=mutes; _trackSolos=solos; _trackLevels=levels;
         _takeButton=[TNButton buttonWithTitle:T(@"Взять текущую последовательность") target:self action:@selector(take:)]; _takeButton.bezelStyle=NSBezelStyleRounded; _takeButton.bordered=NO;
         _takeButton.font=[NSFont systemFontOfSize:13 weight:NSFontWeightSemibold]; ((TNButton *)_takeButton).hint=T(@"Последовательность с круга становится первой секцией · ⇧⌘A");
-        _exportButton=Icon(@"square.and.arrow.down",@"↓",T(@"Экспорт MIDI песни… · ⇧⌘E · все секции, бит на 10-м канале, маркеры секций"),nil,NSSelectorFromString(@"exportSong:"));
+        _exportButton=Icon(@"square.and.arrow.down",@"↓",T(@"Экспорт MIDI ▾ · вся песня (⇧⌘E) или одна дорожка: мелодия, бас, ударные"),self,@selector(exportMenu:));
         [self addSubview:_takeButton]; [self addSubview:_exportButton];
         _playhead=[[KvPlayheadView alloc] initWithFrame:NSZeroRect]; _playhead.wantsLayer=YES; _playhead.hidden=YES; [self addSubview:_playhead];
         // Toolbar: tools, snap, zoom.
@@ -575,6 +578,8 @@ static const CGFloat KvLeadWidth=24;
                 CGFloat px=NSMinX(r)+(CGFloat)(at*[self scale]); [[NSColor.labelColor colorWithAlphaComponent:.3] setFill]; NSRectFill(NSMakeRect(px,NSMinY(r)+4,1,NSHeight(r)-8)); }
             if(t==KV_TRACK_MELODY && NSWidth(r)>=60) Text([self.owner arrangerChords:i],NSMakeRect(NSMinX(r)+6,NSMinY(r)+2,NSWidth(r)-10,14),10,NSFontWeightMedium,NSColor.labelColor,YES);
             [self drawThumbnails:i track:t inRect:r color:color];
+            double shift=x->regions[t].shift;
+            if(fabs(shift)>1e-9 && NSWidth(r)>=60) Text([NSString stringWithFormat:@"↦ %@",[self shiftText:shift]],NSMakeRect(NSMinX(r)+6,NSMaxY(r)-16,NSWidth(r)-10,14),10,NSFontWeightSemibold,NSColor.labelColor,NO);
         }
         if(NSLocationInRange((NSUInteger)i,self.selection) || i==self.selected) {   // the one in the inspector a little bolder
             BOOL anchor=i==self.selected; NSBezierPath *ring=[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(marker,-1.5,-1.5) xRadius:6 yRadius:6]; ring.lineWidth=anchor?2:1.5; [NSColor.labelColor setStroke]; [ring stroke];
@@ -585,6 +590,15 @@ static const CGFloat KvLeadWidth=24;
     }
     if(self.hoverRegion>=0 && self.hoverRegion<(NSInteger)s->count && self.hoverTrack>=0) [self drawButtonsOf:self.hoverRegion track:self.hoverTrack];
     CGFloat bottom=[self tracksBottom];
+    // A region being shifted: where its content goes, dashed, and by how much.
+    if(self.shifting && self.pressed>=0 && self.pressed<(NSInteger)s->count && self.pressedTrack>=0) {
+        NSRect r=[self rectOfRegion:self.pressed track:self.pressedTrack]; double total=s->sections[self.pressed].regions[self.pressedTrack].shift+self.shiftDelta;
+        NSBezierPath *ghost=[NSBezierPath bezierPathWithRoundedRect:NSOffsetRect(r,(CGFloat)(self.shiftDelta*k),0) xRadius:6 yRadius:6];
+        CGFloat dash[]={5,4}; [ghost setLineDash:dash count:2 phase:0]; ghost.lineWidth=1.5; [NSColor.labelColor setStroke]; [ghost stroke];
+        NSString *label=[NSString stringWithFormat:T(@"сдвиг %@"),[self shiftText:total]]; CGFloat width=ceil([label sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:11 weight:NSFontWeightSemibold]}].width)+10;
+        NSBezierPath *pill=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMinX(r)+(CGFloat)(self.shiftDelta*k),KvRulerTop,width,15) xRadius:4 yRadius:4]; [TNCanvas() setFill]; [pill fill];
+        Text(label,NSMakeRect(NSMinX(r)+(CGFloat)(self.shiftDelta*k)+5,KvRulerTop,width,14),11,NSFontWeightSemibold,NSColor.labelColor,NO);
+    }
     // A corner being dragged: the section it would make, dashed, and what it says.
     if(self.corner && self.pressed>=0 && self.pressed<(NSInteger)s->count) {
         NSRect r=[self columnOf:self.pressed]; double pass=kv_section_pass_beats(s,&s->sections[self.pressed]); CGFloat from=NSMinX(r),to=NSMaxX(r); NSString *label;
@@ -633,6 +647,12 @@ static const CGFloat KvLeadWidth=24;
 }
 - (BOOL)onRulerPoint:(NSPoint)p { return p.x>=KvLaneX && p.y>=KvRulerTop-2 && p.y<KvMarkerTop-2; }
 - (NSString *)lengthText:(double)beats { return TNBarCount(beats/[self beatsPerBar]); }
+/* A shift: whole bars as bars, else beats («+1,5 доли»). */
+- (NSString *)shiftText:(double)beats {
+    double bar=[self beatsPerBar],bars=fabs(beats)/bar; NSString *sign=beats<0?@"−":@"+";
+    NSString *amount=fabs(bars-round(bars))<1e-9?TNBarCount(round(bars)):[NSString stringWithFormat:T(@"%@ дол."),[[NSString stringWithFormat:@"%g",floor(fabs(beats)*1000+.5)/1000] stringByReplacingOccurrencesOfString:@"." withString:TNEnglish()?@".":@","]];
+    return [sign stringByAppendingString:amount];
+}
 /* A region's corners (spec 1.5 §4): top right — repeats (the loop), bottom right — length, bottom left — the start. */
 - (int)cornerAt:(NSPoint)p section:(NSInteger *)index {
     const KvSong *s=[self song]; if(!s || self.tool!=KvToolPointer) return 0;
@@ -740,7 +760,7 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
 - (void)mouseDown:(NSEvent *)event {
     [self.window makeFirstResponder:self];
     NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; NSEventModifierFlags flags=event.modifierFlags;
-    self.downPoint=p; self.dragging=self.scrolling=self.onRuler=self.cycling=self.collapse=NO; self.corner=0; self.swapTarget=-1;
+    self.downPoint=p; self.dragging=self.scrolling=self.onRuler=self.cycling=self.collapse=self.shifting=NO; self.corner=0; self.swapTarget=-1; self.pressedTrack=-1; self.shiftDelta=0;
     const KvSong *s=[self song]; if(!s || !s->count) return;
     if(flags&NSEventModifierFlagControl && !(flags&NSEventModifierFlagCommand)) { NSMenu *menu=[self menuForEvent:event]; if(menu) [NSMenu popUpContextMenu:menu withEvent:event forView:self]; return; }
     if(p.y>=[self overviewTop] && p.x>=KvLaneX) { self.scrolling=YES; [self scrollOverviewTo:p.x]; return; }
@@ -804,6 +824,7 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
         if(i!=self.selected) [self.owner arrangerSelect:i];
         self.anchor=keep; self.selection=NSMakeRange((NSUInteger)a,(NSUInteger)(b-a+1)); self.needsDisplay=YES; return;
     }
+    for(int t=0;t<KV_TRACKS;t++) if(NSPointInRect(p,[self rectOfRegion:i track:t])) self.pressedTrack=t;   // on a region: a drag shifts it; on the marker: it moves the section
     if(NSLocationInRange((NSUInteger)i,self.selection) && self.selection.length>1) self.collapse=YES;   // keep the range for a drag; a plain click narrows it
     else { if(i!=self.selected) [self.owner arrangerSelect:i]; self.anchor=i; self.selection=NSMakeRange((NSUInteger)i,1); self.needsDisplay=YES; }
 }
@@ -825,7 +846,13 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
         if(value!=self.cornerValue) { self.cornerValue=value; self.needsDisplay=YES; }
         return;
     }
-    if(!self.dragging && fabs(p.x-self.downPoint.x)<4) return;
+    if(!self.dragging && !self.shifting && fabs(p.x-self.downPoint.x)<4) return;
+    if(self.pressedTrack>=0) {   // a region on its track: its time, on the snap (a whole grid step at a time)
+        double raw=([self beatAtX:p.x]-[self beatAtX:self.downPoint.x]),grid=[self snapGrid:flags],delta=grid>0?round(raw/grid)*grid:raw;
+        double old=s->sections[self.pressed].regions[self.pressedTrack].shift; delta=MAX(-32-old,MIN(32-old,delta));
+        self.shifting=YES; self.collapse=NO; if(delta!=self.shiftDelta) { self.shiftDelta=delta; self.needsDisplay=YES; }
+        return;
+    }
     self.dragging=YES; self.collapse=NO; self.copying=(flags&NSEventModifierFlagOption)!=0;
     NSRange range=[self rangeWith:self.pressed]; NSInteger swap=-1;
     if(range.length==1 && !self.copying) for(NSInteger i=0;i<(NSInteger)s->count;i++) {   // over the middle of another section: swap with it
@@ -842,6 +869,11 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
         if(self.cycling) { self.cycling=NO; if(self.cycleTo>self.cycleFrom+1e-9) [self.owner arrangerSetCycleFrom:self.cycleFrom to:self.cycleTo]; self.needsDisplay=YES; return; }
         self.cursorBeat=self.rulerBeat; [self updatePlayhead];
         if([self.owner arrangerPlayheadBeat]>=0) [self.owner arrangerPlayFrom:self.cursorBeat];
+        return;
+    }
+    if(self.shifting) {
+        self.shifting=NO; self.needsDisplay=YES; int track=self.pressedTrack; double delta=self.shiftDelta; self.shiftDelta=0;
+        if(s && from>=0 && from<(NSInteger)s->count && fabs(delta)>1e-9) [self.owner arrangerShiftRegion:from track:track shift:s->sections[from].regions[track].shift+delta];
         return;
     }
     if(self.corner) {
@@ -925,6 +957,14 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     else if(item.tag==2001) [self.owner arrangerAnotherForm:sender];
 }
 - (void)deleteForm:(NSMenuItem *)item { [self.owner arrangerDeleteForm:item.representedObject]; }
+// ---- MIDI export: the song or one track ----
+- (NSMenu *)exportMenu {
+    NSMenu *menu=[[NSMenu alloc] initWithTitle:T(@"Экспорт MIDI")]; NSArray *titles=@[T(@"Вся песня… · ⇧⌘E"),T(@"Только мелодия…"),T(@"Только бас…"),T(@"Только ударные…")];
+    for(NSUInteger k=0;k<titles.count;k++) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:titles[k] action:@selector(exportChosen:) keyEquivalent:@""]; item.target=self; item.tag=(NSInteger)k; [menu addItem:item]; }
+    return menu;
+}
+- (void)exportMenu:(NSButton *)sender { [[self exportMenu] popUpMenuPositioningItem:nil atLocation:NSMakePoint(NSMinX(sender.frame),NSMaxY(sender.frame)+2) inView:self]; }
+- (void)exportChosen:(NSMenuItem *)item { [self.owner arrangerExport:item.tag]; }
 // ---- the panel and the track headers ----
 - (void)fieldChanged:(NSPopUpButton *)sender {
     NSInteger v=sender.indexOfSelectedItem;

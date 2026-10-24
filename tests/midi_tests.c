@@ -93,6 +93,10 @@ int main(void){
         for(size_t i=0;i<back.count;i++) CHECK(back.notes[i].midi>=48 && back.notes[i].midi<72);   // no drum among them
         CHECK(!kv_midi_encode_song(notes,600,drums,3,(KvMidiMarker[]){{64,"B"},{0,"A"}},2,150,100,4,2,0,false,0,"Song",file,sizeof(file)));   // markers out of order
         CHECK(!kv_midi_encode_events(notes,600,150,100,4,2,0,false,0,"Song",file,sizeof(file)));   // the plan entry point keeps its limit
+        // The drums alone (an empty piano track), but not nothing at all.
+        size=kv_midi_encode_song(NULL,0,drums,3,marks,2,8,100,4,2,0,false,0,"Drums",file,sizeof(file));
+        CHECK(size>0 && file[11]==4 && kv_midi_decode(file,size,&back) && back.count==0);
+        CHECK(!kv_midi_encode_song(NULL,0,NULL,0,marks,2,8,100,4,2,0,false,0,"Empty",file,sizeof(file)));
     }
     puts("MIDI file: header, three tracks, tempo, signatures, note pairs, hold to the bar line, chord naming, songs with drums and markers passed."); return 0;
 }

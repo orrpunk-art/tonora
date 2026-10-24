@@ -47,7 +47,7 @@ static void put_track(Buffer *b,const char *label,Message *messages,size_t n,int
     b->data[start-4]=(uint8_t)(length>>24); b->data[start-3]=(uint8_t)(length>>16); b->data[start-2]=(uint8_t)(length>>8); b->data[start-1]=(uint8_t)length;
 }
 size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity) {
-    if(!events || !count || (drum_count && !drums) || (marker_count && !markers) || !out || !isfinite(bpm) || bpm<20 || bpm>400 || numerator<1 || numerator>16 || denominator_power<1 || denominator_power>4 || sharps<-7 || sharps>7 || program<0 || program>127 || !isfinite(length_beats) || length_beats<=0) return 0;
+    if((count && !events) || (!count && !drum_count) || (drum_count && !drums) || (marker_count && !markers) || !out || !isfinite(bpm) || bpm<20 || bpm>400 || numerator<1 || numerator>16 || denominator_power<1 || denominator_power>4 || sharps<-7 || sharps>7 || program<0 || program>127 || !isfinite(length_beats) || length_beats<=0) return 0;
     for(size_t i=0;i<count;i++) if(events[i].midi<0 || events[i].midi>127 || !isfinite(events[i].beat) || events[i].beat<0 || !isfinite(events[i].duration) || events[i].duration<=0 || events[i].hand>1) return 0;
     for(size_t i=0;i<drum_count;i++) if(drums[i].drum<0 || drums[i].drum>127 || !isfinite(drums[i].beat) || drums[i].beat<0 || !isfinite(drums[i].velocity)) return 0;
     for(size_t i=0;i<marker_count;i++) if(!markers[i].name || !isfinite(markers[i].beat) || markers[i].beat<0 || (i && markers[i].beat<markers[i-1].beat)) return 0;
