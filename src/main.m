@@ -3148,9 +3148,11 @@ static int ComputerKeyOffset(unsigned short code) {
 }
 /* A section that grows from another one becomes its own when its chords are changed by hand. */
 - (void)detachIfChanged:(KvSection *)x {
-    if(!x->source || x->derive==KV_DERIVE_NONE || x->derive==KV_DERIVE_TRANSITION) return;
     BOOL same=x->count==self.progression.count; for(NSUInteger k=0;same && k<self.progression.count;k++) if(x->codes[k]!=self.progression[k].intValue) same=NO;
-    if(!same) { x->source=0; x->derive=KV_DERIVE_NONE; }
+    if(same) return;
+    if(x->kind==KV_SECTION_TRANSITION) { x->kind=KV_SECTION_VERSE; x->beat=KV_SECTION_BEAT_SONG; x->source=0; x->derive=KV_DERIVE_NONE; x->name[0]=0; [self.arranger setNeedsDisplay:YES];   // a transition takes its chords from its neighbours: given its own, it is a section of its own
+        self.status.stringValue=T(@"Переход стал секцией со своими аккордами"); return; }
+    if(x->source && x->derive!=KV_DERIVE_NONE) { x->source=0; x->derive=KV_DERIVE_NONE; }
 }
 static BOOL SameTexture(KvArrangement a,KvArrangement b) {
     return a.style==b.style && a.length==b.length && a.fills==b.fills && a.seed==b.seed && a.generated==b.generated && a.blocks==b.blocks && a.arpeggio==b.arpeggio && a.arpeggio_pattern==b.arpeggio_pattern && a.division==b.division && a.strings==b.strings;
@@ -3222,6 +3224,7 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
         s.source=(uint32_t)Number(d,@"source"); s.derive=(KvDerive)Number(d,@"derive"); s.vary=(uint32_t)Number(d,@"vary");
         { NSArray *map=[d[@"map"] isKindOfClass:NSArray.class]?d[@"map"]:@[]; for(int k=0;k<8;k++) s.map[k]=k<(int)map.count && [map[k] isKindOfClass:NSNumber.class]?MAX(0,MIN(7,[map[k] intValue])):0; }
         if(s.derive<0 || s.derive>=KV_DERIVE_KINDS) { s.derive=KV_DERIVE_NONE; s.source=0; }
+        if(s.kind==KV_SECTION_TRANSITION && s.count>1) { s.kind=KV_SECTION_VERSE; s.beat=KV_SECTION_BEAT_SONG; s.derive=KV_DERIVE_NONE; s.source=0; }   // a transition given chords by hand (1.6.0) is a section of its own
         s.lift=(int)Number(d,@"lift"); s.transition=(KvTransitionKind)Number(d,@"transition"); s.edited=Number(d,@"edited")!=0;
         s.length=Real(d,@"beats",0); s.start=Real(d,@"start",0); if(!(s.length==0 || (s.length>=.125 && s.length<=512))) s.length=0; if(!(s.start>=0 && s.start<64)) s.start=0; NSArray *regions=[d[@"regions"] isKindOfClass:NSArray.class]?d[@"regions"]:@[];   // a section damaged by builds 31–35 (a transition's length could run away) plays whole again
         for(int t=0;t<KV_TRACKS;t++) { NSDictionary *r=t<(int)regions.count && [regions[t] isKindOfClass:NSDictionary.class]?regions[t]:@{};
@@ -3500,8 +3503,13 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     NSArray<NSNumber *> *list=form[@"slots"]; if(!self.song->count || !list.count) return;
     int slots[KV_FORM_SLOTS]; size_t count=MIN(list.count,(NSUInteger)KV_FORM_SLOTS); for(size_t k=0;k<count;k++) slots[k]=list[k].intValue;
     [self pushSongUndo]; KvSong *song=[self liveSong]; NSInteger editing=self.editingSection; size_t verse=0; BOOL found=NO;
-    if(editing>=0 && editing<(NSInteger)song->count && song->sections[editing].kind==KV_SECTION_VERSE) { verse=(size_t)editing; found=YES; }
-    for(size_t i=0;!found && i<song->count;i++) if(song->sections[i].kind==KV_SECTION_VERSE) { verse=i; found=YES; }
+    // The material the form grows from: the verse being edited, else the first verse, else a section of the user's own chords
+    // (not grown from another one, not a transition) — never a transition's single borrowed chord.
+    BOOL (^own)(NSInteger)=^BOOL(NSInteger i) { return i>=0 && i<(NSInteger)song->count && !song->sections[i].source && song->sections[i].kind!=KV_SECTION_TRANSITION; };
+    if(own(editing) && song->sections[editing].kind==KV_SECTION_VERSE) { verse=(size_t)editing; found=YES; }
+    for(size_t i=0;!found && i<song->count;i++) if(own((NSInteger)i) && song->sections[i].kind==KV_SECTION_VERSE) { verse=i; found=YES; }
+    if(!found && own(editing)) { verse=(size_t)editing; found=YES; }
+    for(size_t i=0;!found && i<song->count;i++) if(own((NSInteger)i)) { verse=i; found=YES; }
     if(!found) verse=(size_t)MAX(0,MIN((NSInteger)song->count-1,editing));
     KvSong *work=malloc(sizeof(KvSong)); if(!work) { [self.songUndo removeLastObject]; return; }
     *work=*song; uint32_t verseId=song->sections[verse].id;
@@ -5660,6 +5668,11 @@ int main(int argc, const char *argv[]) {
               NSInteger transition=-1; for(size_t i=0;i<root.song->count && transition<0;i++) if(root.song->sections[i].kind==KV_SECTION_TRANSITION) transition=(NSInteger)i;
               if(transition>=0) { [root arrangerSelect:transition]; double beats=kv_song_beats(root.song); for(int k=0;k<200;k++) { [root songWithWorking]; kv_song_refresh_transitions(root.song); }
                   KV_CHECK(kv_song_valid(root.song) && fabs(kv_song_beats(root.song)-beats)<1e-6,@"A selected transition keeps its length (it once grew without end)"); }
+              if(transition>=0) { int wasCount=root.generateCount; root.generateCount=4; [root arrangerSelect:transition]; [root generateProgression:nil]; root.generateCount=wasCount; [root songWithWorking];   // new chords on a selected transition
+                  NSData *notes=[root arrangerNotes:transition]; KV_CHECK(root.song->sections[transition].kind==KV_SECTION_VERSE && root.song->sections[transition].count==4 && notes.length>0,@"Chords given to a transition make it a section of its own, and it plays"); }
+              { const KvForm *forms; kv_song_forms(&forms); [root arrangerSelect:0]; NSDictionary *dance=nil; for(NSDictionary *f in [root arrangerForms]) if([f[@"name"] isEqualToString:@"Танцевальная"]) dance=f;   // a form without verses grows from the user's own chords
+                  if(dance) { [root arrangerApplyForm:dance]; [root arrangerApplyForm:dance]; BOOL fine=root.song->count>0; for(size_t i=0;i<root.song->count;i++) { if(![root arrangerNotes:(NSInteger)i].length) fine=NO; if(root.song->sections[i].kind==KV_SECTION_CHORUS && root.song->sections[i].count<2) fine=NO; }
+                      KV_CHECK(fine,@"The dance form twice: every section plays the user's chords, never one borrowed chord"); } }
               [root.meterChoice selectItemAtIndex:KV_METER_4_4]; [root meterChanged:root.meterChoice]; }
             // A strings texture stays with its section through a piano detour: the piano plays it as two hands, the strings get it back.
             if(root.stringsAvailable) { [root stopPlayback:nil]; [root showView:0]; kv_song_reset(root.song); [root.sectionTracks removeAllObjects]; [root.songUndo removeAllObjects];

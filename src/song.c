@@ -147,7 +147,7 @@ bool kv_section_notes(const KvSong *song,size_t index,KvPerformance *out) {
         for(size_t v=0;v<chords[c].count;v++) chords[c].midi[v]+=song->keyboard_base-60;
     }
     KvArrangement a=s->arrangement; a.meter=song->meter; a.preview=false; a.seconds_per_beat=60.0/song->bpm;
-    if(s->kind==KV_SECTION_TRANSITION && s->transition==KV_TRANSITION_BREAK) return break_notes(song,index,chords,out);
+    if(s->kind==KV_SECTION_TRANSITION && s->transition==KV_TRANSITION_BREAK && s->count==1) return break_notes(song,index,chords,out);   // the break strikes one chord
     if(!kv_arrange_with(chords,s->count,song->keyboard_base,song->key,a,out)) return false;
     if(s->kind==KV_SECTION_TRANSITION && s->transition==KV_TRANSITION_RISE)   // a crescendo up to the next section
         for(size_t i=0;i<out->count;i++) out->events[i].velocity=(float)fmin(1,fmax(.4,.5+.5*out->events[i].beat/out->total_beats));
@@ -562,9 +562,10 @@ bool kv_song_apply_form(KvSong *song,const int *slots,size_t count,size_t verse,
     if(!old || !result || !made) { free(old); free(result); free(made); return false; }
     *old=*song;
     const KvSection *v=&old->sections[verse],*chorus=NULL;
-    for(size_t i=0;i<old->count && !chorus;i++) if(old->sections[i].kind==KV_SECTION_CHORUS) chorus=&old->sections[i];
+    for(size_t i=0;i<old->count && !chorus;i++) if(old->sections[i].kind==KV_SECTION_CHORUS && (old->sections[i].edited || !old->sections[i].source)) chorus=&old->sections[i];   // the user's own chorus stays; one grown from the verse grows again
     KvSection refrain=chorus?*chorus:kv_section_chorus(old,v,seed);
     bool used[KV_SONG_SECTIONS]={false},kept[KV_SONG_SECTIONS]={false}; uint32_t source[KV_SONG_SECTIONS]={0}; size_t n=0;
+    bool verses=false,placed=false; for(size_t k=0;k<count;k++) if(slots[k]==KV_SECTION_VERSE) verses=true;   // a form without verses: its first chorus plays the material itself
     for(size_t k=0;k<count && n<KV_SONG_SECTIONS;k++) {
         int slot=slots[k]; KvSection x; uint32_t from=0; bool keep=false,transition=false; const KvSection *prev=n?&made[n-1]:NULL;
         if(slot==KV_FORM_BUILD || (slot>=KV_FORM_TRANSITION && slot<KV_FORM_TRANSITION+KV_TRANSITION_KINDS)) {
@@ -576,7 +577,10 @@ bool kv_song_apply_form(KvSong *song,const int *slots,size_t count,size_t verse,
             for(size_t i=0;slot!=KV_FORM_DROP && !keep && i<old->count;i++) if(!used[i] && old->sections[i].edited && old->sections[i].kind==kind) { x=old->sections[i]; used[i]=keep=true; }
             if(!keep) switch(kind) {
                 case KV_SECTION_VERSE: x=*v; from=v->id; break;
-                case KV_SECTION_CHORUS: x=refrain; from=chorus?chorus->id:0; break;
+                case KV_SECTION_CHORUS:
+                    if(!verses && !placed) { x=*v; x.kind=KV_SECTION_CHORUS; x.name[0]=0; x.source=0; x.derive=KV_DERIVE_NONE; from=v->id; placed=true; }
+                    else { x=refrain; from=chorus?chorus->id:0; }
+                    break;
                 case KV_SECTION_PIT: x=kv_section_pit(old,v); x.vary=mix(seed+(uint32_t)k); break;   // each its own variant of the role
                 case KV_SECTION_INTRO: x=kv_section_intro(old,v); x.vary=mix(seed+(uint32_t)k); break;
                 case KV_SECTION_OUTRO: x=kv_section_outro(old,v); x.vary=mix(seed+(uint32_t)k); break;   // the verse's last chords closing on the tonic

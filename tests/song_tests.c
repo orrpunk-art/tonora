@@ -187,6 +187,16 @@ int main(void) {
           t.sections[1].edited=true; t.sections[0].codes[1]=5; kv_song_rederive(&t); CHECK(t.sections[1].codes[1]==6); }
         // Removing the verse: what grew from it grows from the other verse.
         { KvSong t=song; KvSection v2=*v; CHECK(kv_song_insert(&t,1,&v2)); CHECK(kv_song_insert(&t,2,&chorus)); uint32_t second=t.sections[1].id; CHECK(kv_song_remove(&t,0)); CHECK(t.sections[1].source==second); }
+        // A form without verses (the dance form): its first drop plays the material itself, the others grow from it; every section plays.
+        { KvSong t=song; const KvForm *forms; kv_song_forms(&forms); uint32_t copy_of[KV_SONG_SECTIONS]; size_t dance=3;
+          CHECK(kv_song_apply_form(&t,forms[dance].slots,forms[dance].count,0,7,copy_of) && kv_song_valid(&t));
+          const KvSection *first=NULL; size_t drops=0,grown=0;
+          for(size_t i=0;i<t.count;i++) if(t.sections[i].kind==KV_SECTION_CHORUS) { drops++; if(!first) first=&t.sections[i]; else if(t.sections[i].source==first->id) grown++; }
+          CHECK(first && !first->source && first->count==4 && !memcmp(first->codes,pop5,sizeof(pop5)) && drops>=2 && grown==drops-1);
+          for(size_t i=0;i<t.count;i++) { KvPerformance p; CHECK(kv_section_notes(&t,i,&p) && p.count>0); } }
+        // A break given several chords plays them (its strike and pickup are for one chord).
+        { KvSong t=song; KvSection b=kv_section_transition(&t,&t.sections[0],NULL,KV_TRANSITION_BREAK); b.count=4; memcpy(b.codes,pop5,sizeof(pop5)); b.edited=true; CHECK(kv_song_insert(&t,1,&b));   /* edited: the neighbours do not take its chords back */
+          KvPerformance p; CHECK(kv_section_notes(&t,1,&p) && p.chord_count==4 && p.count>0); }
         song.bpm=120; pit=kv_section_pit(&song,v); CHECK(pit.beat==KV_SECTION_BEAT_QUIET);
         KvSection none=kv_section_outro(&song,NULL); CHECK(none.count==1 && none.codes[0]==0 && !none.source);
     }

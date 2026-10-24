@@ -650,6 +650,7 @@ NSDictionary<NSString *,NSString *> *TNEnglishTable(void) {
         @"Открыть секцию в пиано-ролле · двойной щелчок · Enter":@"Open the section in the piano roll · double-click · Enter",
         @"Убрать сдвиг «%@»":@"Remove the shift of «%@»",
         @"Свернуть":@"Collapse",
+        @"Переход стал секцией со своими аккордами":@"The transition became a section of its own chords",
         @"Припев на новых аккордах":@"Chorus on new chords",
         @"В песне нет куплета, от которого строить припев":@"The song has no verse to build the chorus from",
         @"Нет припевов, которые можно поменять: их ноты правлены вручную":@"No chorus to change: their notes were edited by hand",
