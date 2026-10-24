@@ -216,6 +216,32 @@ int main(void) {
         CHECK(n>=2 && g[0].section.kind==KV_SECTION_CHORUS && g[0].lead_in && g[0].transition.transition==KV_TRANSITION_RISE && g[0].copy_of==song.sections[1].id);
         n=kv_song_suggest(&song,3,7,g); for(size_t i=0;i<n;i++) CHECK(g[i].section.kind!=KV_SECTION_BRIDGE);
     }
+    { // Automation: linear between points, flat outside; points in order (the same beat replaces); full at 64; the volume curve
+      // scales a track's notes and can fade them to silence; points follow their sections when the row changes, or go with them.
+        KvCurve c; memset(&c,0,sizeof(c)); CHECK(kv_curve_at(&c,3,.7f)==.7f);
+        CHECK(kv_curve_set(&c,8,200)==0 && kv_curve_set(&c,0,100)==0 && c.points[1].beat==8);
+        CHECK(fabsf(kv_curve_at(&c,4,0)-150)<1e-3f && kv_curve_at(&c,-1,0)==100 && kv_curve_at(&c,20,0)==200);
+        CHECK(kv_curve_set(&c,8,180)==1 && c.count==2 && c.points[1].value==180);
+        CHECK(kv_curve_remove(&c,0) && c.count==1 && c.points[0].beat==8 && !kv_curve_remove(&c,5));
+        static KvCurve full; memset(&full,0,sizeof(full)); for(int i=0;i<KV_CURVE_POINTS;i++) kv_curve_set(&full,i,1);
+        CHECK(full.count==KV_CURVE_POINTS && kv_curve_set(&full,100,1)==KV_CURVE_POINTS && kv_curve_set(&full,-1,1)==KV_CURVE_POINTS);
+        static KvSong song,before; song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR));
+        kv_song_insert(&song,0,&verse); kv_song_insert(&song,1,&verse); double second=kv_section_start(&song,1);
+        static KvPerformance loud,soft; CHECK(kv_section_part(&song,1,NULL,0,kv_section_beats(&song,1),&loud));
+        kv_curve_set(&song.volume[KV_TRACK_MELODY],second,.5f); CHECK(kv_song_valid(&song) && kv_section_part(&song,1,NULL,0,kv_section_beats(&song,1),&soft));
+        double rl=0,rs=0,ll=0,ls=0; size_t rc=0; for(size_t i=0;i<loud.count;i++) { if(loud.events[i].hand) rl+=loud.events[i].velocity; else ll+=loud.events[i].velocity; }
+        for(size_t i=0;i<soft.count;i++) { if(soft.events[i].hand) rs+=soft.events[i].velocity; else ls+=soft.events[i].velocity; }
+        CHECK(rl>0 && fabs(rs-.5*rl)<1e-3 && fabs(ls-ll)<1e-6);
+        kv_curve_set(&song.volume[KV_TRACK_MELODY],second,0); CHECK(kv_section_part(&song,1,NULL,0,kv_section_beats(&song,1),&soft));
+        rc=0; ls=0; for(size_t i=0;i<soft.count;i++) { if(soft.events[i].hand) rc++; else ls+=soft.events[i].velocity; } CHECK(rc==0 && fabs(ls-ll)<1e-6);
+        memset(&song.volume[KV_TRACK_MELODY],0,sizeof(KvCurve)); kv_curve_set(&song.tempo,second+4,90); kv_curve_set(&song.tempo,kv_song_beats(&song)+2,70);
+        before=song; kv_song_move(&song,1,0); kv_song_follow(&song,&before);
+        CHECK(song.tempo.count==2 && fabs(song.tempo.points[0].beat-4)<1e-9 && fabs(song.tempo.points[1].beat-(kv_song_beats(&song)+2))<1e-9);
+        before=song; kv_song_remove(&song,0); kv_song_follow(&song,&before);
+        CHECK(song.tempo.count==1 && fabs(song.tempo.points[0].beat-(kv_song_beats(&song)+2))<1e-9 && kv_song_valid(&song));
+        song.volume[0].count=1; song.volume[0].points[0]=(KvPoint){0,2}; CHECK(!kv_song_valid(&song));
+        song.volume[0].points[0]=(KvPoint){0,1}; song.tempo.points[0].value=10; CHECK(!kv_song_valid(&song));
+    }
     { // Bridge: four bars away from the tonic, back to the dominant, in every key and chord length.
         for(int index=0;index<12;index++) for(int minor=0;minor<2;minor++) for(int l=0;l<KV_LENGTH_COUNT;l++) {
             KvKey key={index,minor!=0,0,0,false}; KvSong song=song_in(key,KV_METER_4_4);

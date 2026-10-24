@@ -84,19 +84,26 @@ int main(void){
     { // A song: more notes than one plan holds, drums on channel 10 in a fourth track, section markers; read back without the drums.
         static KvPianoEvent notes[600]; for(int i=0;i<600;i++) notes[i]=(KvPianoEvent){.midi=48+i%24,.beat=i*.25,.duration=.25,.velocity=.7f,.hand=(unsigned)(i%2)};
         KvHit drums[3]={{0,36,1},{1,38,.8f},{2,42,.5f}}; KvMidiMarker marks[2]={{0,"Verse"},{64,"Chorus"}};
-        static uint8_t file[1<<16]; size_t size=kv_midi_encode_song(notes,600,drums,3,marks,2,150,100,4,2,0,false,0,"Song",file,sizeof(file));
+        static uint8_t file[1<<16]; size_t size=kv_midi_encode_song(notes,600,drums,3,marks,2,150,100,NULL,0,4,2,0,false,0,"Song",file,sizeof(file));
         CHECK(size>0 && file[11]==4);   // four tracks
         bool verse=false,chorus=false; for(size_t i=0;i+6<size;i++) { if(!memcmp(file+i,"Verse",5) && file[i-2]==0x06) verse=true; if(!memcmp(file+i,"Chorus",6) && file[i-2]==0x06) chorus=true; }
         CHECK(verse && chorus);
         bool percussion=false; for(size_t i=0;i+2<size;i++) if(file[i]==0x99 && file[i+1]==38) percussion=true; CHECK(percussion);
         static KvMidiSong back; CHECK(kv_midi_decode(file,size,&back) && back.count==KV_PERFORMANCE_CAPACITY && back.dropped==600-KV_PERFORMANCE_CAPACITY);
         for(size_t i=0;i<back.count;i++) CHECK(back.notes[i].midi>=48 && back.notes[i].midi<72);   // no drum among them
-        CHECK(!kv_midi_encode_song(notes,600,drums,3,(KvMidiMarker[]){{64,"B"},{0,"A"}},2,150,100,4,2,0,false,0,"Song",file,sizeof(file)));   // markers out of order
+        CHECK(!kv_midi_encode_song(notes,600,drums,3,(KvMidiMarker[]){{64,"B"},{0,"A"}},2,150,100,NULL,0,4,2,0,false,0,"Song",file,sizeof(file)));   // markers out of order
         CHECK(!kv_midi_encode_events(notes,600,150,100,4,2,0,false,0,"Song",file,sizeof(file)));   // the plan entry point keeps its limit
         // The drums alone (an empty piano track), but not nothing at all.
-        size=kv_midi_encode_song(NULL,0,drums,3,marks,2,8,100,4,2,0,false,0,"Drums",file,sizeof(file));
+        size=kv_midi_encode_song(NULL,0,drums,3,marks,2,8,100,NULL,0,4,2,0,false,0,"Drums",file,sizeof(file));
         CHECK(size>0 && file[11]==4 && kv_midi_decode(file,size,&back) && back.count==0);
-        CHECK(!kv_midi_encode_song(NULL,0,NULL,0,marks,2,8,100,4,2,0,false,0,"Empty",file,sizeof(file)));
+        CHECK(!kv_midi_encode_song(NULL,0,NULL,0,marks,2,8,100,NULL,0,4,2,0,false,0,"Empty",file,sizeof(file)));
+        // A tempo map: a change at each of its beats, between the markers in time order; one out of order is refused.
+        KvMidiTempo ramp[3]={{0,100},{32,120},{96,80}}; size=kv_midi_encode_song(notes,600,drums,3,marks,2,150,100,ramp,3,4,2,0,false,0,"Ramp",file,sizeof(file));
+        size_t changes=0; for(size_t i=0;i+5<size;i++) if(file[i]==0xff && file[i+1]==0x51 && file[i+2]==3) changes++;
+        CHECK(size>0 && changes==4);   // the start, then three
+        bool order=false; for(size_t i=0;i+6<size;i++) if(!memcmp(file+i,"Verse",5)) { for(size_t j=i;j+5<size;j++) if(file[j]==0xff && file[j+1]==0x51 && file[j+2]==3 && (((uint32_t)file[j+3]<<16)|((uint32_t)file[j+4]<<8)|file[j+5])==500000) { order=true; break; } break; }
+        CHECK(order);   // 120 BPM at beat 32 comes after the marker at 0
+        CHECK(!kv_midi_encode_song(notes,600,drums,3,marks,2,150,100,(KvMidiTempo[]){{32,120},{0,90}},2,4,2,0,false,0,"Bad",file,sizeof(file)));
     }
     puts("MIDI file: header, three tracks, tempo, signatures, note pairs, hold to the bar line, chord naming, songs with drums and markers passed."); return 0;
 }

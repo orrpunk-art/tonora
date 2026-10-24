@@ -15,7 +15,9 @@ size_t kv_midi_encode_events(const KvPianoEvent *events,size_t count,double leng
 /* A whole song: any number of notes; drums (beat from the song's start, General MIDI notes) on channel 10 in a fourth track;
    markers (meta event 6, in time order) in the conductor track. */
 typedef struct { double beat; const char *name; } KvMidiMarker;
-size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity);
+/* A tempo change for the conductor track: from `beat` on, `bpm` (in order; the song starts at `bpm` of the call). */
+typedef struct { double beat,bpm; } KvMidiTempo;
+size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,const KvMidiTempo *tempos,size_t tempo_count,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity);
 bool kv_midi_write(const KvPerformance *performance,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,const char *path);
 /* A Standard MIDI File read back (format 0 or 1, ticks per quarter note). Every length is checked against the data:
    a damaged or unsupported file returns false and never reads past `size`. Notes are in time order with beat and

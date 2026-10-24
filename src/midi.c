@@ -32,7 +32,7 @@ size_t kv_midi_encode(const KvPerformance *p,double bpm,int numerator,int denomi
 }
 size_t kv_midi_encode_events(const KvPianoEvent *events,size_t count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity) {
     if(count>KV_PERFORMANCE_CAPACITY) return 0;
-    return kv_midi_encode_song(events,count,NULL,0,NULL,0,length_beats,bpm,numerator,denominator_power,sharps,minor,program,title,out,capacity);
+    return kv_midi_encode_song(events,count,NULL,0,NULL,0,length_beats,bpm,NULL,0,numerator,denominator_power,sharps,minor,program,title,out,capacity);
 }
 static void put_track(Buffer *b,const char *label,Message *messages,size_t n,int channel,int program,uint32_t total) {
     qsort(messages,n,sizeof(Message),compare);
@@ -46,7 +46,9 @@ static void put_track(Buffer *b,const char *label,Message *messages,size_t n,int
     uint32_t length=(uint32_t)(b->size-start);
     b->data[start-4]=(uint8_t)(length>>24); b->data[start-3]=(uint8_t)(length>>16); b->data[start-2]=(uint8_t)(length>>8); b->data[start-1]=(uint8_t)length;
 }
-size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity) {
+size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *drums,size_t drum_count,const KvMidiMarker *markers,size_t marker_count,double length_beats,double bpm,const KvMidiTempo *tempos,size_t tempo_count,int numerator,int denominator_power,int sharps,bool minor,int program,const char *title,uint8_t *out,size_t capacity) {
+    if(tempo_count && !tempos) return 0;
+    for(size_t i=0;i<tempo_count;i++) if(!isfinite(tempos[i].beat) || tempos[i].beat<0 || !isfinite(tempos[i].bpm) || tempos[i].bpm<20 || tempos[i].bpm>400 || (i && tempos[i].beat<tempos[i-1].beat)) return 0;
     if((count && !events) || (!count && !drum_count) || (drum_count && !drums) || (marker_count && !markers) || !out || !isfinite(bpm) || bpm<20 || bpm>400 || numerator<1 || numerator>16 || denominator_power<1 || denominator_power>4 || sharps<-7 || sharps>7 || program<0 || program>127 || !isfinite(length_beats) || length_beats<=0) return 0;
     for(size_t i=0;i<count;i++) if(events[i].midi<0 || events[i].midi>127 || !isfinite(events[i].beat) || events[i].beat<0 || !isfinite(events[i].duration) || events[i].duration<=0 || events[i].hand>1) return 0;
     for(size_t i=0;i<drum_count;i++) if(drums[i].drum<0 || drums[i].drum>127 || !isfinite(drums[i].beat) || drums[i].beat<0 || !isfinite(drums[i].velocity)) return 0;
@@ -59,7 +61,16 @@ size_t kv_midi_encode_song(const KvPianoEvent *events,size_t count,const KvHit *
     uint32_t micro=(uint32_t)llround(60000000.0/bpm); uint8_t tempo[3]={(uint8_t)(micro>>16),(uint8_t)(micro>>8),(uint8_t)micro}; meta(&b,0,0x51,tempo,3);
     uint8_t timesig[4]={(uint8_t)numerator,(uint8_t)denominator_power,(uint8_t)(denominator_power==3?12:24),8}; meta(&b,0,0x58,timesig,4);
     uint8_t keysig[2]={(uint8_t)(int8_t)sharps,(uint8_t)(minor?1:0)}; meta(&b,0,0x59,keysig,2);
-    { uint32_t tick=0; for(size_t i=0;i<marker_count;i++) { uint32_t at=(uint32_t)llround(markers[i].beat*KV_MIDI_PPQ); meta(&b,at-tick,0x06,markers[i].name,strlen(markers[i].name)); tick=at; } }   // section markers
+    { // Section markers and tempo changes, in time order.
+        uint32_t tick=0; size_t m=0,t=0;
+        while(m<marker_count || t<tempo_count) {
+            bool marker=m<marker_count && (t>=tempo_count || markers[m].beat<=tempos[t].beat);
+            uint32_t at=(uint32_t)llround((marker?markers[m].beat:tempos[t].beat)*KV_MIDI_PPQ);
+            if(marker) { meta(&b,at-tick,0x06,markers[m].name,strlen(markers[m].name)); m++; }
+            else { uint32_t us=(uint32_t)llround(60000000.0/tempos[t].bpm); uint8_t change[3]={(uint8_t)(us>>16),(uint8_t)(us>>8),(uint8_t)us}; meta(&b,at-tick,0x51,change,3); t++; }
+            tick=at;
+        }
+    }
     track_end(&b,start);
     Message *messages=malloc((count>drum_count?count:drum_count)*2*sizeof(Message)); if(!messages) return 0;
     uint32_t total=(uint32_t)llround(length_beats*KV_MIDI_PPQ);

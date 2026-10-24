@@ -36,6 +36,10 @@ typedef struct {
     double start;              /* beats into the pass where the section begins (a cut or a trim), 0 … pass */
     KvRegion regions[KV_TRACKS];
 } KvSection;
+/* Automation (spec 1.5 §6а): points in song beats, in order; linear between them, flat before the first and after the last. */
+enum { KV_CURVE_POINTS=64 };
+typedef struct { double beat; float value; } KvPoint;
+typedef struct { KvPoint points[KV_CURVE_POINTS]; size_t count; } KvCurve;
 typedef struct {
     KvKey key; KvMeter meter; double bpm;
     int keyboard_base, extension;   /* register (36…84, a C) and chord complexity 0…4, as on the circle */
@@ -44,7 +48,17 @@ typedef struct {
     float track_level[KV_TRACKS];             /* 0…1.2 over the regions' levels */
     bool track_mute[KV_TRACKS],track_solo[KV_TRACKS];
     double cycle_from,cycle_to;               /* beats; the cycle the loop plays, none when to ≤ from */
+    KvCurve tempo;                            /* BPM 20…300 over the song; empty: bpm */
+    KvCurve volume[KV_TRACKS];                /* each track's level 0…1.2 over the song, on top of the rest; empty: 1 */
 } KvSong;
+/* The curve's value at a beat (`otherwise` when it has no points). */
+float kv_curve_at(const KvCurve *curve,double beat,float otherwise);
+/* Adds a point, in order (one at the same beat is replaced): its index, or KV_CURVE_POINTS when the curve is full or it is bad. */
+size_t kv_curve_set(KvCurve *curve,double beat,float value);
+bool kv_curve_remove(KvCurve *curve,size_t index);
+/* After a row edit (`before` the song as it was): the points move with the sections they lie in, by id, as Logic's automation
+   follows moved regions; a removed section's points go; those after the song's end keep their distance to it. */
+void kv_song_follow(KvSong *after,const KvSong *before);
 /* An empty song: no sections, every track at full level, no cycle. */
 void kv_song_reset(KvSong *song);
 

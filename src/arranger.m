@@ -2,7 +2,7 @@
 #import "controls.h"
 
 /* Rows from the top (flipped): a line for the summary, the ruler, the arrangement track, three tracks, the overview. */
-static const CGFloat KvRulerTop=30,KvRulerHeight=18,KvMarkerTop=52,KvMarkerHeight=22,KvTracksTop=80,KvTrackGap=6,KvOverviewHeight=14,KvHeaderWidth=118,KvInset=8,KvGhostHeight=34,KvTransitionWidth=28;
+static const CGFloat KvRulerTop=30,KvRulerHeight=18,KvMarkerTop=52,KvMarkerHeight=22,KvTracksTop=80,KvTrackGap=6,KvOverviewHeight=14,KvHeaderWidth=118,KvInset=8,KvGhostHeight=34,KvTransitionWidth=28,KvTempoHeight=36,KvCurveHeight=40;
 static const CGFloat KvLaneX=KvHeaderWidth+12;
 static NSString *Translated(const char *text) { return T([NSString stringWithUTF8String:text]); }
 /* The colour of a section's kind: verses the accent, choruses orange, breakdowns teal, transitions purple, bridges lilac, intro and outro grey. */
@@ -37,6 +37,8 @@ static TNSlider *Level(id target,SEL action,NSInteger tag,double low,double high
 static NSTextField *Caption(NSString *text,CGFloat size,NSFontWeight weight,NSColor *color) {
     NSTextField *label=[NSTextField labelWithString:text]; label.font=[NSFont systemFontOfSize:size weight:weight]; label.textColor=color; label.lineBreakMode=NSLineBreakByTruncatingTail; return label;
 }
+/* NSRectFill copies the colour's alpha into the view (a hole); this blends it over what is drawn. */
+static void Fill(NSRect rect) { NSRectFillUsingOperation(rect,NSCompositingOperationSourceOver); }
 static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSColor *color,BOOL mono) {
     NSMutableParagraphStyle *style=[NSMutableParagraphStyle new]; style.lineBreakMode=NSLineBreakByTruncatingTail;
     NSFont *font=mono?[NSFont monospacedSystemFontOfSize:size weight:weight]:[NSFont systemFontOfSize:size weight:weight];
@@ -102,32 +104,42 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
 @property(nonatomic,readwrite) NSButton *zoomOutButton,*zoomInButton,*wholeSongButton;
 @property(nonatomic,readwrite) NSPopUpButton *structureChoice;
 @property(nonatomic) NSTextField *snapLabel;
+@property(nonatomic,readwrite) NSButton *tempoButton;
+@property(nonatomic,readwrite) NSArray<NSButton *> *volumeButtons;
+@property(nonatomic) NSUInteger volumeLanes;       /* a bit per track whose volume lane shows */
+@property(nonatomic) BOOL curvesSeen;              /* lanes opened once for the curves a song came with */
+@property(nonatomic) int editCurve;                /* the curve being edited: −2 none, −1 tempo, 0…2 volume */
+@property(nonatomic,readwrite) NSInteger selectedPoint;
+@property(nonatomic) BOOL draggingPoint,onCurve;
 @property(nonatomic,readwrite) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readwrite) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @property(nonatomic,readwrite) NSArray<NSButton *> *trackMutes,*trackSolos,*regionMutes;
 @property(nonatomic,readwrite) NSArray<NSSlider *> *trackLevels,*regionLevels;
 @end
 
-@implementation KvArranger
+@implementation KvArranger { KvCurve _draft; }   /* _draft: the curve as a drag leaves it, shown until the owner takes it */
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (instancetype)initWithFrame:(NSRect)frame {
     if((self=[super initWithFrame:frame])) {
         _selected=-1; _pressed=-1; _cutBeat=-1; _cutSection=-1; _dropIndex=-1; _hoverSection=_hoverGhost=_hoverSeam=_ghostsFor=-1; _swapTarget=_anchor=_hoverRegion=_hoverButton=-1; _hoverTrack=-1;
-        _notesCache=[NSMutableDictionary dictionary]; _hitsCache=[NSMutableDictionary dictionary];
+        _notesCache=[NSMutableDictionary dictionary]; _hitsCache=[NSMutableDictionary dictionary]; _editCurve=-2; _selectedPoint=-1;
         [self setAccessibilityRole:NSAccessibilityGroupRole]; [self setAccessibilityLabel:T(@"Аранжировщик")];
         // Track headers.
         NSArray *names=@[T(@"Мелодия"),T(@"Бас"),T(@"Ударные")],*kinds=@[T(@"правая рука"),T(@"левая рука"),T(@"бит секций")];
-        NSMutableArray *labels=[NSMutableArray array],*subs=[NSMutableArray array],*mutes=[NSMutableArray array],*solos=[NSMutableArray array],*levels=[NSMutableArray array];
+        NSMutableArray *labels=[NSMutableArray array],*subs=[NSMutableArray array],*mutes=[NSMutableArray array],*solos=[NSMutableArray array],*levels=[NSMutableArray array],*curves=[NSMutableArray array];
         for(int t=0;t<KV_TRACKS;t++) {
             NSTextField *name=Caption(names[t],13,NSFontWeightSemibold,NSColor.labelColor),*kind=Caption(kinds[t],10,NSFontWeightRegular,NSColor.secondaryLabelColor);
             TNButton *mute=Toggle(@"M",[NSString stringWithFormat:T(@"Выключить дорожку «%@» во всей песне"),names[t]],self,@selector(trackChanged:),t);
             TNButton *solo=Toggle(@"S",[NSString stringWithFormat:T(@"Только дорожка «%@»"),names[t]],self,@selector(trackChanged:),t);
             TNSlider *level=Level(self,@selector(trackChanged:),t,0,120,[NSString stringWithFormat:T(@"Громкость дорожки «%@»"),names[t]]);
-            for(NSView *view in @[name,kind,mute,solo,level]) [self addSubview:view];
+            TNButton *curve=Toggle(@"A",[NSString stringWithFormat:T(@"Кривая громкости «%@» · двойной щелчок — точка, ⌫ — удалить"),names[t]],self,@selector(volumeLaneToggled:),t);
+            for(NSView *view in @[name,kind,mute,solo,level,curve]) [self addSubview:view]; [curves addObject:curve];
             [labels addObject:name]; [subs addObject:kind]; [mutes addObject:mute]; [solos addObject:solo]; [levels addObject:level];
         }
-        _trackNames=labels; _trackKinds=subs; _trackMutes=mutes; _trackSolos=solos; _trackLevels=levels;
+        _trackNames=labels; _trackKinds=subs; _trackMutes=mutes; _trackSolos=solos; _trackLevels=levels; _volumeButtons=curves;
+        _tempoButton=Toggle(@"⌁",T(@"Дорожка темпа: кривая темпа песни · двойной щелчок — точка"),self,@selector(tempoLaneToggled:),0); [self addSubview:_tempoButton];
+        { NSImage *wave=TNIcon(@"waveform.path",13); if(wave) { _tempoButton.image=wave; _tempoButton.title=@""; } }
         _takeButton=[TNButton buttonWithTitle:T(@"Взять текущую последовательность") target:self action:@selector(take:)]; _takeButton.bezelStyle=NSBezelStyleRounded; _takeButton.bordered=NO;
         _takeButton.font=[NSFont systemFontOfSize:13 weight:NSFontWeightSemibold]; ((TNButton *)_takeButton).hint=T(@"Последовательность с круга становится первой секцией · ⇧⌘A");
         _exportButton=Icon(@"square.and.arrow.down",@"↓",T(@"Экспорт MIDI ▾ · вся песня (⇧⌘E) или одна дорожка: мелодия, бас, ударные"),self,@selector(exportMenu:));
@@ -253,17 +265,48 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
 }
 - (double)snapped:(double)beat flags:(NSEventModifierFlags)flags { double grid=[self snapGrid:flags]; return grid>0?round(beat/grid)*grid:beat; }
 - (CGFloat)overviewTop { return NSHeight(self.bounds)-KvOverviewHeight-4; }
-- (CGFloat)trackHeight { return MAX(40,floor(([self overviewTop]-8-KvTracksTop-2*KvTrackGap)/KV_TRACKS)); }
-- (NSRect)laneRect:(int)track { CGFloat h=[self trackHeight]; return NSMakeRect(KvLaneX,KvTracksTop+track*(h+KvTrackGap),[self laneWidth],h); }
+- (CGFloat)markerTop { return KvMarkerTop+(self.showTempo?KvTempoHeight+4:0); }
+- (CGFloat)tracksTop { return KvTracksTop+(self.showTempo?KvTempoHeight+4:0); }
+- (BOOL)showsVolume:(int)track { return track>=0 && track<KV_TRACKS && (self.volumeLanes&(1u<<track)); }
+- (void)setShowsVolume:(BOOL)shown track:(int)track {
+    if(track<0 || track>=KV_TRACKS) return; self.volumeLanes=shown?self.volumeLanes|(1u<<track):self.volumeLanes&~(1u<<track);
+    self.volumeButtons[track].state=shown?NSControlStateValueOn:NSControlStateValueOff; self.needsLayout=YES; self.needsDisplay=YES;
+}
+- (void)setShowTempo:(BOOL)showTempo { _showTempo=showTempo; self.tempoButton.state=showTempo?NSControlStateValueOn:NSControlStateValueOff; self.needsLayout=YES; self.needsDisplay=YES; }
+- (CGFloat)curvesHeight { CGFloat h=0; for(int t=0;t<KV_TRACKS;t++) if([self showsVolume:t]) h+=KvCurveHeight+4; return h; }
+- (CGFloat)trackHeight { return MAX(40,floor(([self overviewTop]-8-[self tracksTop]-2*KvTrackGap-[self curvesHeight])/KV_TRACKS)); }
+- (NSRect)laneRect:(int)track {
+    CGFloat h=[self trackHeight],y=[self tracksTop];
+    for(int t=0;t<track;t++) y+=h+KvTrackGap+([self showsVolume:t]?KvCurveHeight+4:0);
+    return NSMakeRect(KvLaneX,y,[self laneWidth],h);
+}
+- (NSRect)curveRect:(int)curve {
+    if(curve<0) return self.showTempo?NSMakeRect(KvLaneX,KvMarkerTop,[self laneWidth],KvTempoHeight):NSZeroRect;
+    if(![self showsVolume:curve]) return NSZeroRect;
+    NSRect lane=[self laneRect:curve]; return NSMakeRect(KvLaneX,NSMaxY(lane)+3,[self laneWidth],KvCurveHeight);
+}
+/* A curve's range on screen: the tempo 40…240 BPM, a volume 0…120 %. */
+- (double)curveLow:(int)curve { return curve<0?40:0; }
+- (double)curveHigh:(int)curve { return curve<0?240:1.2; }
+- (NSPoint)pointOfCurve:(int)curve value:(double)value beat:(double)beat {
+    NSRect r=[self curveRect:curve]; double low=[self curveLow:curve],high=[self curveHigh:curve],f=MAX(0,MIN(1,(value-low)/(high-low)));
+    return NSMakePoint([self xOfBeat:beat],NSMaxY(r)-4-(CGFloat)f*(NSHeight(r)-8));
+}
+- (double)valueOfCurve:(int)curve atY:(CGFloat)y {
+    NSRect r=[self curveRect:curve]; double low=[self curveLow:curve],high=[self curveHigh:curve],f=(NSMaxY(r)-4-y)/(NSHeight(r)-8),v=low+MAX(0,MIN(1,f))*(high-low);
+    return curve<0?round(v):round(v*100)/100;   // whole BPM, whole percent
+}
+- (const KvCurve *)curve:(int)curve { const KvSong *s=[self song]; if(!s) return NULL; if(curve==self.editCurve && self.draggingPoint) return &_draft; return curve<0?&s->tempo:&s->volume[curve]; }
+- (int)curveAtPoint:(NSPoint)p { for(int c=-1;c<KV_TRACKS;c++) if(NSPointInRect(p,NSInsetRect([self curveRect:c],0,-2))) return c; return -2; }
 - (CGFloat)tracksBottom { return NSMaxY([self laneRect:KV_TRACKS-1]); }
 - (NSRect)spanOf:(NSInteger)index {   /* x and width of a section */
     const KvSong *s=[self song]; if(!s || index<0 || index>=(NSInteger)s->count) return NSZeroRect;
     double start=kv_section_start(s,(size_t)index); CGFloat x=[self xOfBeat:start];
     return NSMakeRect(x,0,MAX(6,[self xOfBeat:start+kv_section_beats(s,(size_t)index)]-x-2),0);
 }
-- (NSRect)rectOfSection:(NSInteger)index { NSRect r=[self spanOf:index]; r.origin.y=KvMarkerTop; r.size.height=KvMarkerHeight; return r; }
+- (NSRect)rectOfSection:(NSInteger)index { NSRect r=[self spanOf:index]; r.origin.y=[self markerTop]; r.size.height=KvMarkerHeight; return r; }
 - (NSRect)rectOfRegion:(NSInteger)index track:(int)track { NSRect r=[self spanOf:index],lane=[self laneRect:track]; r.origin.y=NSMinY(lane)+2; r.size.height=NSHeight(lane)-4; return r; }
-- (NSRect)columnOf:(NSInteger)index { NSRect r=[self spanOf:index]; r.origin.y=KvMarkerTop; r.size.height=[self tracksBottom]-KvMarkerTop; return r; }
+- (NSRect)columnOf:(NSInteger)index { NSRect r=[self spanOf:index]; r.origin.y=[self markerTop]; r.size.height=[self tracksBottom]-[self markerTop]; return r; }
 - (NSInteger)sectionAtPoint:(NSPoint)p {
     const KvSong *s=[self song]; if(!s || p.x<KvLaneX) return -1;
     for(NSInteger i=0;i<(NSInteger)s->count;i++) if(NSPointInRect(p,NSInsetRect([self columnOf:i],-1,0))) return i;
@@ -294,15 +337,15 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     for(int t=0;t<KV_TRACKS;t++) {
         NSRect lane=[self laneRect:t]; CGFloat y=NSMinY(lane);
         self.trackNames[t].frame=NSMakeRect(KvInset,y+4,KvHeaderWidth-KvInset,17); self.trackKinds[t].frame=NSMakeRect(KvInset,y+21,KvHeaderWidth-KvInset,14);
-        BOOL roomy=NSHeight(lane)>=72; CGFloat row=roomy?y+38:y+4,left=roomy?KvInset:KvHeaderWidth-56;
-        self.trackMutes[t].frame=NSMakeRect(left,row,28,24); self.trackSolos[t].frame=NSMakeRect(left+30,row,28,24);
+        BOOL roomy=NSHeight(lane)>=72; CGFloat row=roomy?y+38:y+22,left=KvInset,high=roomy?24:18;   // short lanes: the buttons right under the name
+        self.trackMutes[t].frame=NSMakeRect(left,row,28,high); self.trackSolos[t].frame=NSMakeRect(left+30,row,28,high); self.volumeButtons[t].frame=NSMakeRect(left+60,row,28,high);
         self.trackLevels[t].frame=NSMakeRect(KvInset,y+NSHeight(lane)-22,KvHeaderWidth-KvInset,18); self.trackLevels[t].hidden=NSHeight(lane)<64;
-        if(!roomy) self.trackKinds[t].hidden=YES;
+        self.trackKinds[t].hidden=!roomy || self.trackNames[t].hidden;
     }
     self.takeButton.frame=NSMakeRect(round(KvLaneX+[self laneWidth]/2-150),round(NSMidY(self.bounds)+4),300,32);
     self.exportButton.frame=NSMakeRect(NSWidth(self.bounds)-KvInset-34,0,34,26);
     // Toolbar: tools over the headers; snap and zoom over the tracks; the song's summary after them (drawn).
-    self.toolChoice.frame=NSMakeRect(0,0,96,26);
+    self.toolChoice.frame=NSMakeRect(0,0,88,26); self.tempoButton.frame=NSMakeRect(92,1,26,24);
     CGFloat x=KvLaneX,label=self.snapLabel.hidden?0:ceil([self.snapLabel.stringValue sizeWithAttributes:@{NSFontAttributeName:self.snapLabel.font}].width)+4;
     if(label) { self.snapLabel.frame=NSMakeRect(x,5,label,16); x+=label+2; }
     CGFloat snap=self.snapChoice.itemArray.firstObject.image?106:92; self.snapChoice.frame=NSMakeRect(x,0,snap,26); x+=snap+8;
@@ -330,7 +373,12 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     if(!has) _selection=NSMakeRange(0,0);
     else if(!NSLocationInRange((NSUInteger)self.selected,_selection) || NSMaxRange(_selection)>s->count) { _selection=NSMakeRange((NSUInteger)self.selected,1); _anchor=self.selected; }
     self.takeButton.hidden=!empty; self.exportButton.hidden=empty;
-    for(NSArray *group in @[self.trackNames,self.trackKinds,self.trackMutes,self.trackSolos,self.trackLevels,@[self.toolChoice,self.snapChoice,self.zoomOutButton,self.zoomInButton,self.wholeSongButton,self.structureChoice]]) for(NSView *view in group) view.hidden=empty;
+    for(NSArray *group in @[self.trackNames,self.trackKinds,self.trackMutes,self.trackSolos,self.trackLevels,@[self.toolChoice,self.snapChoice,self.zoomOutButton,self.zoomInButton,self.wholeSongButton,self.structureChoice,self.tempoButton],self.volumeButtons]) for(NSView *view in group) view.hidden=empty;
+    if(!empty && !self.curvesSeen) {   // a song that comes with automation shows its lanes once
+        self.curvesSeen=YES; if(s->tempo.count) self.showTempo=YES;
+        for(int t=0;t<KV_TRACKS;t++) if(s->volume[t].count) [self setShowsVolume:YES track:t];
+    }
+    if(self.editCurve>=-1 && !self.draggingPoint) { const KvCurve *c=[self curve:self.editCurve]; if(!c || self.selectedPoint>=(NSInteger)c->count) self.selectedPoint=-1; }
     self.snapLabel.hidden=empty || self.snapChoice.itemArray.firstObject.image!=nil;
     [self rebuildStructureMenu];
     for(NSView *view in self.sectionPanel.subviews) view.hidden=!has;
@@ -378,7 +426,7 @@ static NSCursor *PencilCursor(void) { static NSCursor *cursor; if(!cursor) curso
     return self.ghosts;
 }
 static const CGFloat KvLeadWidth=24;
-- (CGFloat)ghostTop { return KvTracksTop+2; }
+- (CGFloat)ghostTop { return [self tracksTop]+2; }
 - (NSArray<NSValue *> *)ghostRectsAfter:(NSInteger)index {
     NSArray<NSDictionary *> *ghosts=[self ghostsAfter:index]; if(!ghosts.count) return @[];
     NSMutableArray<NSValue *> *rects=[NSMutableArray array]; CGFloat x=MAX(KvLaneX,NSMinX([self rectOfSection:index])),start=x;
@@ -397,7 +445,7 @@ static const CGFloat KvLeadWidth=24;
 - (NSRect)leadRectOf:(NSRect)ghost { return NSMakeRect(NSMinX(ghost)-KvLeadWidth-4,NSMinY(ghost),KvLeadWidth,NSHeight(ghost)); }
 /* The seam after section i on the arrangement track: the gap to the next one, when neither side is a transition. */
 - (NSInteger)seamAtPoint:(NSPoint)p {
-    const KvSong *s=[self song]; if(!s || p.y<KvMarkerTop || p.y>KvMarkerTop+KvMarkerHeight) return -1;
+    const KvSong *s=[self song]; if(!s || p.y<[self markerTop] || p.y>[self markerTop]+KvMarkerHeight) return -1;
     for(NSInteger i=0;i+1<(NSInteger)s->count;i++) {
         CGFloat edge=NSMinX([self rectOfSection:i+1])-1;
         if(fabs(p.x-edge)<=5 && s->sections[i].kind!=KV_SECTION_TRANSITION && s->sections[i+1].kind!=KV_SECTION_TRANSITION) return i;
@@ -413,7 +461,7 @@ static const CGFloat KvLeadWidth=24;
     NSInteger section=self.hoverSection,ghost=-1,seam=[self seamAtPoint:p],under=[self markerAtPoint:p];
     if(seam>=0) section=-1;
     else if(under>=0 && !self.dragging && !self.corner) section=under;
-    else if(section>=0 && p.y>=KvMarkerTop+KvMarkerHeight && p.y<=[self ghostTop]+KvGhostHeight+4) {   // moving down onto the ghosts keeps them
+    else if(section>=0 && p.y>=[self markerTop]+KvMarkerHeight && p.y<=[self ghostTop]+KvGhostHeight+4) {   // moving down onto the ghosts keeps them
         NSArray<NSValue *> *rects=[self ghostRectsAfter:section]; CGFloat left=CGFLOAT_MAX,right=-CGFLOAT_MAX;
         for(NSUInteger i=0;i<rects.count;i++) { NSRect r=rects[i].rectValue; left=MIN(left,NSMinX(r)-KvLeadWidth-4); right=MAX(right,NSMaxX(r));
             if(NSPointInRect(p,NSUnionRect(r,[self leadRectOf:r]))) ghost=(NSInteger)i; }
@@ -427,7 +475,7 @@ static const CGFloat KvLeadWidth=24;
         if(ghost>=0) { NSArray *ghosts=[self ghostsAfter:section]; NSRect r=[[self ghostRectsAfter:section][ghost] rectValue]; TNHintShow(self,r,ghosts[ghost][@"tip"],NO); }
         else TNHintHide(self);
     }
-    if(seam>=0 && changed) TNHintShow(self,NSMakeRect(NSMinX([self rectOfSection:seam+1])-10,KvMarkerTop,16,KvMarkerHeight),T(@"Вставить переход · ⌥-щелчок — выбрать вид"),NO);
+    if(seam>=0 && changed) TNHintShow(self,NSMakeRect(NSMinX([self rectOfSection:seam+1])-10,[self markerTop],16,KvMarkerHeight),T(@"Вставить переход · ⌥-щелчок — выбрать вид"),NO);
     else if(seam<0 && ghost<0 && changed) TNHintHide(self);
     // The region under the pointer shows its buttons (not while the ghosts are up or a gesture runs).
     NSInteger region=-1,button=-1; int track=-1; const KvSong *s=[self song];
@@ -467,9 +515,9 @@ static const CGFloat KvLeadWidth=24;
     const KvSong *s=[self song];
     if(self.hoverSeam>=0 && s) {
         CGFloat x=NSMinX([self rectOfSection:self.hoverSeam+1])-10;
-        NSBezierPath *pill=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(x,KvMarkerTop-3,17,KvMarkerHeight+6) xRadius:5 yRadius:5];
+        NSBezierPath *pill=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(x,[self markerTop]-3,17,KvMarkerHeight+6) xRadius:5 yRadius:5];
         CGFloat dash[]={4,3}; [pill setLineDash:dash count:2 phase:0]; pill.lineWidth=1.5; [[NSColor.systemPurpleColor colorWithAlphaComponent:.12] setFill]; [pill fill]; [NSColor.systemPurpleColor setStroke]; [pill stroke];
-        Text(@"+",NSMakeRect(x+3,KvMarkerTop+2,12,18),14,NSFontWeightSemibold,NSColor.systemPurpleColor,NO);
+        Text(@"+",NSMakeRect(x+3,[self markerTop]+2,12,18),14,NSFontWeightSemibold,NSColor.systemPurpleColor,NO);
     }
     if(self.hoverSection<0 || self.dragging || self.corner) return;
     NSArray<NSDictionary *> *ghosts=[self ghostsAfter:self.hoverSection]; NSArray<NSValue *> *rects=[self ghostRectsAfter:self.hoverSection];
@@ -477,7 +525,7 @@ static const CGFloat KvLeadWidth=24;
         NSRect r=rects[i].rectValue; NSColor *color=KindColor((KvSectionKind)[ghosts[i][@"kind"] intValue]); BOOL hot=(NSInteger)i==self.hoverGhost;
         CGFloat dash[]={5,4};
         if([ghosts[i][@"leadBeats"] doubleValue]>0) {
-            NSRect lr=[self leadRectOf:r]; [TNCanvas() setFill]; NSRectFill(lr);
+            NSRect lr=[self leadRectOf:r]; [TNCanvas() setFill]; Fill(lr);
             NSBezierPath *lead=[NSBezierPath bezierPathWithRoundedRect:lr xRadius:6 yRadius:6]; [lead setLineDash:dash count:2 phase:0]; lead.lineWidth=1.5;
             if(hot) { [[NSColor.systemPurpleColor colorWithAlphaComponent:.15] setFill]; [lead fill]; } [NSColor.systemPurpleColor setStroke]; [lead stroke];
             NSArray *glyphs=@[@"⤴",@"V7",@"∿",@"‖"]; NSInteger way=MIN(3,MAX(0,[ghosts[i][@"leadKind"] integerValue]));
@@ -502,7 +550,7 @@ static const CGFloat KvLeadWidth=24;
         for(size_t i=0;i<n;i++) {
             int drum=h[i].drum; CGFloat level=drum==KV_DRUM_KICK?.88f:drum<=KV_DRUM_CLAP?.55f:drum>=KV_DRUM_CONGA_HIGH && drum<=KV_DRUM_CONGA_LOW?.7f:.2f;
             CGFloat x=NSMinX(r)+(CGFloat)(h[i].beat*scale),size=2+2*h[i].velocity; if(x>NSMaxX(r)-2) continue;
-            NSRectFill(NSMakeRect(x,top+level*height-size/2,size,size));
+            Fill(NSMakeRect(x,top+level*height-size/2,size,size));
         }
         return;
     }
@@ -513,7 +561,7 @@ static const CGFloat KvLeadWidth=24;
     CGFloat band=track==KV_TRACK_MELODY?height*.85f:height*.6f,offset=track==KV_TRACK_MELODY?0:height*.35f,thick=track==KV_TRACK_MELODY?2:3;
     for(size_t i=0;i<n;i++) if(e[i].hand==hand) {
         CGFloat x=NSMinX(r)+(CGFloat)(e[i].beat*scale),w=MAX(2,(CGFloat)(e[i].duration*scale)-1),y=top+offset+band*(1-(CGFloat)(e[i].midi-low)/(high-low));
-        if(x>NSMaxX(r)-2) continue; NSRectFill(NSMakeRect(x,y,MIN(w,NSMaxX(r)-x-1),thick));
+        if(x>NSMaxX(r)-2) continue; Fill(NSMakeRect(x,y,MIN(w,NSMaxX(r)-x-1),thick));
     }
 }
 - (void)drawRect:(NSRect)dirtyRect {
@@ -525,11 +573,11 @@ static const CGFloat KvLeadWidth=24;
     double bar=[self beatsPerBar],total=kv_song_beats(s),bpm=s->bpm,k=[self scale]; int bars=(int)ceil(total/bar-1e-9),seconds=(int)lround(total*60/bpm);
     NSString *header=[NSString stringWithFormat:@"%@ · %d:%02d · %.0f BPM · %@ · %@",TNBarCount(bars),seconds/60,seconds%60,bpm,Translated(kv_meter_name(s->meter)),Translated(kv_key_title(s->key))];   // the key gives way first
     CGFloat headerX=NSMaxX(self.structureChoice.frame)+12; Text(header,NSMakeRect(headerX,6,NSMinX(self.exportButton.frame)-headerX-6,18),11,NSFontWeightSemibold,NSColor.labelColor,NO);
-    Text(T(@"Аранжировка"),NSMakeRect(KvInset,KvMarkerTop+4,KvHeaderWidth-KvInset,14),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NO);
+    Text(T(@"Аранжировка"),NSMakeRect(KvInset,[self markerTop]+4,KvHeaderWidth-KvInset,14),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NO);
     // Track lanes and their headers' backgrounds.
     BOOL solo=s->track_solo[0] || s->track_solo[1] || s->track_solo[2];
     for(int t=0;t<KV_TRACKS;t++) {
-        NSRect lane=[self laneRect:t]; [[TNSurface() colorWithAlphaComponent:.55] setFill]; NSRectFill(lane);
+        NSRect lane=[self laneRect:t]; [[TNSurface() colorWithAlphaComponent:.55] setFill]; Fill(lane);
         NSRect head=NSMakeRect(0,NSMinY(lane),KvHeaderWidth,NSHeight(lane)); NSBezierPath *card=[NSBezierPath bezierPathWithRoundedRect:head xRadius:8 yRadius:8]; [TNSurface() setFill]; [card fill];
     }
     [NSGraphicsContext saveGraphicsState]; NSRectClip(NSMakeRect(KvLaneX-2,KvRulerTop,w-KvLaneX-KvInset+4,NSHeight(self.bounds)-KvRulerTop));
@@ -539,21 +587,21 @@ static const CGFloat KvLeadWidth=24;
         NSRect band=NSMakeRect([self xOfBeat:cycleFrom],KvRulerTop,[self xOfBeat:cycleTo]-[self xOfBeat:cycleFrom],KvRulerHeight);
         NSColor *tint=[self.owner arrangerCycles] || self.cycling?NSColor.systemOrangeColor:NSColor.systemGrayColor;
         [[tint colorWithAlphaComponent:.35] setFill]; [[NSBezierPath bezierPathWithRoundedRect:band xRadius:4 yRadius:4] fill];
-        [tint setFill]; NSRectFill(NSMakeRect(NSMinX(band),NSMaxY(band)-3,NSWidth(band),3));
+        [tint setFill]; Fill(NSMakeRect(NSMinX(band),NSMaxY(band)-3,NSWidth(band),3));
     }
     // Ruler: bars, then beats and eighths as the zoom allows; a number at each section start and every 1, 2, 4… bars as they fit.
-    [[NSColor.separatorColor colorWithAlphaComponent:.8] setFill]; NSRectFill(NSMakeRect(KvLaneX,KvRulerTop+KvRulerHeight,w-KvLaneX-KvInset,1));
+    [[NSColor.separatorColor colorWithAlphaComponent:.8] setFill]; Fill(NSMakeRect(KvLaneX,KvRulerTop+KvRulerHeight,w-KvLaneX-KvInset,1));
     int every=1; while(every*bar*k<30 && every<64) every*=2;
     NSMutableIndexSet *labelled=[NSMutableIndexSet indexSet]; for(size_t i=0;i<s->count;i++) [labelled addIndex:(NSUInteger)floor(kv_section_start(s,i)/bar+1e-9)];
     int firstBar=MAX(0,(int)floor(self.scrollBeat/bar)),lastBar=(int)ceil([self lastVisibleBeat]/bar)+1; double minor=k*.5>=10?.5:k>=10?1:0;
     CGFloat lastLabel=-100;
     for(int b=firstBar;b<=lastBar;b++) {
-        CGFloat x=[self xOfBeat:b*bar]; [NSColor.separatorColor setFill]; NSRectFill(NSMakeRect(x,KvRulerTop+KvRulerHeight-5,1,5));
-        [[NSColor.separatorColor colorWithAlphaComponent:.18] setFill]; NSRectFill(NSMakeRect(x,KvTracksTop,1,[self tracksBottom]-KvTracksTop));
+        CGFloat x=[self xOfBeat:b*bar]; [NSColor.separatorColor setFill]; Fill(NSMakeRect(x,KvRulerTop+KvRulerHeight-5,1,5));
+        [[NSColor.separatorColor colorWithAlphaComponent:.18] setFill]; Fill(NSMakeRect(x,[self tracksTop],1,[self tracksBottom]-[self tracksTop]));
         for(double m=minor;minor>0 && m<bar-1e-9;m+=minor) {
             CGFloat mx=[self xOfBeat:b*bar+m]; BOOL beat=fabs(m-round(m))<1e-9;
-            [[NSColor.separatorColor colorWithAlphaComponent:beat?.8:.5] setFill]; NSRectFill(NSMakeRect(mx,KvRulerTop+KvRulerHeight-(beat?3:2),1,beat?3:2));
-            if(beat && k>=14) { [[NSColor.separatorColor colorWithAlphaComponent:.08] setFill]; NSRectFill(NSMakeRect(mx,KvTracksTop,1,[self tracksBottom]-KvTracksTop)); }
+            [[NSColor.separatorColor colorWithAlphaComponent:beat?.8:.5] setFill]; Fill(NSMakeRect(mx,KvRulerTop+KvRulerHeight-(beat?3:2),1,beat?3:2));
+            if(beat && k>=14) { [[NSColor.separatorColor colorWithAlphaComponent:.08] setFill]; Fill(NSMakeRect(mx,[self tracksTop],1,[self tracksBottom]-[self tracksTop])); }
         }
         if(([labelled containsIndex:(NSUInteger)b] || b%every==0) && x-lastLabel>22) { Text([NSString stringWithFormat:@"%d",b+1],NSMakeRect(x+2,KvRulerTop+1,40,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NO); lastLabel=x; }
     }
@@ -565,8 +613,8 @@ static const CGFloat KvLeadWidth=24;
         BOOL edited=[self.owner arrangerEdited:i]; NSString *name=[self.owner arrangerName:i];
         CGFloat left=MAX(NSMinX(marker),KvLaneX),shown=NSMaxX(marker)-left;   // a marker scrolled half out keeps its name in view
         if(shown<40) name=[name substringToIndex:MIN((NSUInteger)1,name.length)];
-        Text(name,NSMakeRect(left+6,KvMarkerTop+3,shown-(edited?20:8),16),11,NSFontWeightSemibold,x->kind==KV_SECTION_BRIDGE?NSColor.blackColor:NSColor.whiteColor,NO);
-        if(edited && NSWidth(marker)>=40) Text(@"✎",NSMakeRect(NSMaxX(marker)-15,KvMarkerTop+3,12,16),11,NSFontWeightRegular,NSColor.whiteColor,NO);
+        Text(name,NSMakeRect(left+6,[self markerTop]+3,shown-(edited?20:8),16),11,NSFontWeightSemibold,x->kind==KV_SECTION_BRIDGE?NSColor.blackColor:NSColor.whiteColor,NO);
+        if(edited && NSWidth(marker)>=40) Text(@"✎",NSMakeRect(NSMaxX(marker)-15,[self markerTop]+3,12,16),11,NSFontWeightRegular,NSColor.whiteColor,NO);
         double pass=kv_section_pass_beats(s,x),length=kv_section_beats(s,(size_t)i);
         for(int t=0;t<KV_TRACKS;t++) {
             NSRect r=[self rectOfRegion:i track:t]; BOOL muted=x->regions[t].mute || s->track_mute[t] || (solo && !s->track_solo[t]);
@@ -575,7 +623,7 @@ static const CGFloat KvLeadWidth=24;
                 if(NSWidth(r)>=30) Text(x->regions[t].mute?@"M":@"·",NSMakeRect(NSMinX(r)+6,NSMinY(r)+3,20,14),10,NSFontWeightSemibold,color,NO); continue; }
             [[color colorWithAlphaComponent:.38] setFill]; [box fill]; box.lineWidth=1; [color setStroke]; [box stroke];
             for(double at=pass-fmod(x->start,pass);t==KV_TRACK_MELODY && at<length-1e-9;at+=pass) {   // a notch where the pass begins again
-                CGFloat px=NSMinX(r)+(CGFloat)(at*[self scale]); [[NSColor.labelColor colorWithAlphaComponent:.3] setFill]; NSRectFill(NSMakeRect(px,NSMinY(r)+4,1,NSHeight(r)-8)); }
+                CGFloat px=NSMinX(r)+(CGFloat)(at*[self scale]); [[NSColor.labelColor colorWithAlphaComponent:.3] setFill]; Fill(NSMakeRect(px,NSMinY(r)+4,1,NSHeight(r)-8)); }
             if(t==KV_TRACK_MELODY && NSWidth(r)>=60) Text([self.owner arrangerChords:i],NSMakeRect(NSMinX(r)+6,NSMinY(r)+2,NSWidth(r)-10,14),10,NSFontWeightMedium,NSColor.labelColor,YES);
             [self drawThumbnails:i track:t inRect:r color:color];
             double shift=x->regions[t].shift;
@@ -590,6 +638,7 @@ static const CGFloat KvLeadWidth=24;
     }
     if(self.hoverRegion>=0 && self.hoverRegion<(NSInteger)s->count && self.hoverTrack>=0) [self drawButtonsOf:self.hoverRegion track:self.hoverTrack];
     CGFloat bottom=[self tracksBottom];
+    for(int c=-1;c<KV_TRACKS;c++) [self drawCurve:c];
     // A region being shifted: where its content goes, dashed, and by how much.
     if(self.shifting && self.pressed>=0 && self.pressed<(NSInteger)s->count && self.pressedTrack>=0) {
         NSRect r=[self rectOfRegion:self.pressed track:self.pressedTrack]; double total=s->sections[self.pressed].regions[self.pressedTrack].shift+self.shiftDelta;
@@ -614,12 +663,12 @@ static const CGFloat KvLeadWidth=24;
     // Dragging: where the sections land.
     if(self.dragging && self.dropIndex>=0 && self.swapTarget<0) {
         CGFloat x=self.dropIndex<(NSInteger)s->count?NSMinX([self rectOfSection:self.dropIndex])-2:NSMaxX([self rectOfSection:(NSInteger)s->count-1])+1;
-        [TNAccent() setFill]; NSRectFill(NSMakeRect(x-1,KvMarkerTop-4,3,bottom-KvMarkerTop+8));
+        [TNAccent() setFill]; Fill(NSMakeRect(x-1,[self markerTop]-4,3,bottom-[self markerTop]+8));
         if(self.copying) Text(T(@"копия"),NSMakeRect(x+4,KvRulerTop,60,14),10,NSFontWeightSemibold,TNAccent(),NO);
     }
     // Scissors: the cut a ⌘-click makes, through every track.
     if(self.cutBeat>=0) {
-        CGFloat x=[self xOfBeat:self.cutBeat]; NSBezierPath *line=[NSBezierPath bezierPath]; [line moveToPoint:NSMakePoint(x,KvMarkerTop-2)]; [line lineToPoint:NSMakePoint(x,bottom+2)];
+        CGFloat x=[self xOfBeat:self.cutBeat]; NSBezierPath *line=[NSBezierPath bezierPath]; [line moveToPoint:NSMakePoint(x,[self markerTop]-2)]; [line lineToPoint:NSMakePoint(x,bottom+2)];
         CGFloat dash[]={3,3}; [line setLineDash:dash count:2 phase:0]; line.lineWidth=1.5; [NSColor.labelColor setStroke]; [line stroke];
         double inBar=fmod(self.cutBeat,bar); NSString *where=inBar<1e-6 || inBar>bar-1e-6?[NSString stringWithFormat:T(@"✂ такт %d"),(int)lround(self.cutBeat/bar)+1]
             :[NSString stringWithFormat:T(@"✂ такт %d · доля %@"),(int)floor(self.cutBeat/bar)+1,[NSString stringWithFormat:@"%g",floor(inBar*1000+.5)/1000+1]];
@@ -629,23 +678,65 @@ static const CGFloat KvLeadWidth=24;
     }
     [self drawGhosts];
     [NSGraphicsContext restoreGraphicsState];
+    for(int c=-1;c<KV_TRACKS;c++) [self drawCurveHeader:c];
     // Overview: the whole song in small, the visible part framed.
-    CGFloat oy=[self overviewTop],ow=[self laneWidth]; [[TNSurface() colorWithAlphaComponent:.6] setFill]; NSRectFill(NSMakeRect(KvLaneX,oy,ow,KvOverviewHeight));
+    CGFloat oy=[self overviewTop],ow=[self laneWidth]; [[TNSurface() colorWithAlphaComponent:.6] setFill]; Fill(NSMakeRect(KvLaneX,oy,ow,KvOverviewHeight));
     Text(T(@"Обзор"),NSMakeRect(KvInset,oy,KvHeaderWidth-KvInset,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NO);
     double whole=MAX(total,[self lastVisibleBeat]-self.scrollBeat);
     for(size_t i=0;i<s->count;i++) { CGFloat x0=KvLaneX+(CGFloat)(kv_section_start(s,i)/whole*ow),x1=KvLaneX+(CGFloat)((kv_section_start(s,i)+kv_section_beats(s,i))/whole*ow);
-        [KindColor(s->sections[i].kind) setFill]; NSRectFill(NSMakeRect(x0,oy+2,MAX(1,x1-x0-1),KvOverviewHeight-4)); }
+        [KindColor(s->sections[i].kind) setFill]; Fill(NSMakeRect(x0,oy+2,MAX(1,x1-x0-1),KvOverviewHeight-4)); }
     CGFloat vx=KvLaneX+(CGFloat)(self.scrollBeat/whole*ow),vw=(CGFloat)(([self lastVisibleBeat]-self.scrollBeat)/whole*ow);
     NSBezierPath *view=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(vx,oy,MIN(vw,KvLaneX+ow-vx),KvOverviewHeight) xRadius:3 yRadius:3]; view.lineWidth=1.5; [[NSColor.labelColor colorWithAlphaComponent:.7] setStroke]; [view stroke];
 }
 
+// ---- automation lanes ----
+- (NSString *)curveValueText:(int)c value:(double)v { return c<0?[NSString stringWithFormat:@"%.0f BPM",v]:[NSString stringWithFormat:@"%.0f %%",v*100]; }
+- (void)drawCurve:(int)c {
+    NSRect r=[self curveRect:c]; const KvSong *s=[self song]; if(NSIsEmptyRect(r) || !s) return;
+    [[NSColor.labelColor colorWithAlphaComponent:.06] setFill]; Fill(r);
+    NSColor *color=c<0?NSColor.systemOrangeColor:TNAccent(); const KvCurve *curve=[self curve:c]; double base=c<0?s->bpm:1;
+    if(!curve->count) {
+        NSPoint a=[self pointOfCurve:c value:base beat:self.scrollBeat]; NSBezierPath *line=[NSBezierPath bezierPath]; [line moveToPoint:NSMakePoint(KvLaneX,a.y)]; [line lineToPoint:NSMakePoint(NSMaxX(r),a.y)];
+        CGFloat dash[]={4,4}; [line setLineDash:dash count:2 phase:0]; line.lineWidth=1; [[color colorWithAlphaComponent:.6] setStroke]; [line stroke];
+        Text([NSString stringWithFormat:T(@"%@ · двойной щелчок — точка"),[self curveValueText:c value:base]],NSMakeRect(KvLaneX+6,NSMinY(r)+2,260,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NO);
+        return;
+    }
+    NSBezierPath *path=[NSBezierPath bezierPath]; NSPoint first=[self pointOfCurve:c value:curve->points[0].value beat:curve->points[0].beat];
+    [path moveToPoint:NSMakePoint(KvLaneX-2,first.y)];
+    for(size_t i=0;i<curve->count;i++) [path lineToPoint:[self pointOfCurve:c value:curve->points[i].value beat:curve->points[i].beat]];
+    [path lineToPoint:NSMakePoint(NSMaxX(r)+2,[self pointOfCurve:c value:curve->points[curve->count-1].value beat:0].y)];
+    path.lineWidth=1.5; [color setStroke]; [path stroke];
+    for(size_t i=0;i<curve->count;i++) {
+        NSPoint q=[self pointOfCurve:c value:curve->points[i].value beat:curve->points[i].beat]; BOOL on=c==self.editCurve && (NSInteger)i==self.selectedPoint;
+        NSBezierPath *dot=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(q.x-4,q.y-4,8,8)]; [(on?color:TNCanvas()) setFill]; [dot fill]; dot.lineWidth=1.5; [color setStroke]; [dot stroke];
+        if(on) Text([self curveValueText:c value:curve->points[i].value],NSMakeRect(q.x+7,MAX(NSMinY(r),q.y-14),80,14),10,NSFontWeightSemibold,color,NO);
+    }
+}
+- (void)drawCurveHeader:(int)c {
+    NSRect r=[self curveRect:c]; if(NSIsEmptyRect(r)) return; NSArray *names=@[T(@"Мелодия"),T(@"Бас"),T(@"Ударные")];
+    Text(c<0?T(@"Темп"):[NSString stringWithFormat:T(@"Громкость · %@"),names[c]],NSMakeRect(KvInset,NSMinY(r)+3,KvHeaderWidth-KvInset,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NO);
+}
+- (void)tempoLaneToggled:(NSButton *)sender { self.showTempo=sender.state==NSControlStateValueOn; }
+- (void)volumeLaneToggled:(NSButton *)sender { [self setShowsVolume:sender.state==NSControlStateValueOn track:(int)sender.tag]; }
+- (NSInteger)pointAt:(NSPoint)p curve:(int)c {
+    const KvCurve *curve=[self curve:c]; NSInteger hit=-1;
+    for(size_t i=0;curve && i<curve->count;i++) { NSPoint q=[self pointOfCurve:c value:curve->points[i].value beat:curve->points[i].beat]; if(hypot(p.x-q.x,p.y-q.y)<=6) hit=(NSInteger)i; }
+    return hit;
+}
+- (void)resetCurve:(NSMenuItem *)item { KvCurve none; memset(&none,0,sizeof(none)); self.selectedPoint=-1; [self.owner arrangerSetCurve:(int)item.tag to:&none]; }
+- (void)removePointItem:(NSMenuItem *)item { self.editCurve=(int)item.tag; self.selectedPoint=[item.representedObject integerValue]; [self removeSelectedPoint]; }
+- (BOOL)removeSelectedPoint {
+    if(self.editCurve<-1 || self.selectedPoint<0) return NO;
+    KvCurve copy=*[self curve:self.editCurve]; if(!kv_curve_remove(&copy,(size_t)self.selectedPoint)) return NO;
+    self.selectedPoint=-1; [self.owner arrangerSetCurve:self.editCurve to:&copy]; return YES;
+}
 // ---- mouse ----
 - (void)updateTrackingAreas {
     [super updateTrackingAreas]; if(self.tracking) [self removeTrackingArea:self.tracking];
     self.tracking=[[NSTrackingArea alloc] initWithRect:NSZeroRect options:NSTrackingMouseMoved|NSTrackingMouseEnteredAndExited|NSTrackingActiveInKeyWindow|NSTrackingInVisibleRect owner:self userInfo:nil];
     [self addTrackingArea:self.tracking];
 }
-- (BOOL)onRulerPoint:(NSPoint)p { return p.x>=KvLaneX && p.y>=KvRulerTop-2 && p.y<KvMarkerTop-2; }
+- (BOOL)onRulerPoint:(NSPoint)p { return p.x>=KvLaneX && p.y>=KvRulerTop-2 && p.y<KvRulerTop+KvRulerHeight+3; }
 - (NSString *)lengthText:(double)beats { return TNBarCount(beats/[self beatsPerBar]); }
 /* A shift: whole bars as bars, else beats («+1,5 доли»). */
 - (NSString *)shiftText:(double)beats {
@@ -677,7 +768,7 @@ static const CGFloat KvLeadWidth=24;
 }
 static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=ToolCursor(@"repeat",NO); return cursor; }
 - (void)updateCursorAt:(NSPoint)p flags:(NSEventModifierFlags)flags {
-    NSInteger i=[self sectionAtPoint:p],corner=-1; BOOL inTracks=p.x>=KvLaneX && p.y>=KvMarkerTop && p.y<=[self tracksBottom]; int kind=[self cornerAt:p section:&corner];
+    NSInteger i=[self sectionAtPoint:p],corner=-1; BOOL inTracks=p.x>=KvLaneX && p.y>=[self markerTop] && p.y<=[self tracksBottom]; int kind=[self cornerAt:p section:&corner];
     if(self.cutBeat>=0 || ((flags&NSEventModifierFlagCommand || self.tool==KvToolScissors) && i>=0)) [ScissorsCursor() set];
     else if(self.tool==KvToolPencil && inTracks) [PencilCursor() set];
     else if(kind==1) [LoopCursor() set];
@@ -752,7 +843,14 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
 - (void)menuBeat:(NSMenuItem *)item { NSInteger i=[item.representedObject integerValue]; if(i!=self.selected) [self.owner arrangerSelect:i]; [self.owner arrangerSet:KvSectionFieldBeat value:item.tag]; }
 - (void)menuSelectAll:(id)sender { (void)sender; const KvSong *s=[self song]; if(s && s->count) { self.selection=NSMakeRange(0,s->count); self.needsDisplay=YES; } }
 - (NSMenu *)menuForEvent:(NSEvent *)event {
-    NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; NSInteger i=[self sectionAtPoint:p]; if(i<0) return nil;
+    NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; int c=[self curveAtPoint:p];
+    if(c>=-1) {   // a lane: remove the point under the mouse, or reset the whole curve
+        NSMenu *menu=[[NSMenu alloc] initWithTitle:T(@"Кривая")]; NSInteger hit=[self pointAt:p curve:c];
+        if(hit>=0) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:T(@"Удалить точку · ⌫") action:@selector(removePointItem:) keyEquivalent:@""]; item.target=self; item.tag=c; item.representedObject=@(hit); [menu addItem:item]; }
+        NSMenuItem *reset=[[NSMenuItem alloc] initWithTitle:T(@"Сбросить кривую") action:@selector(resetCurve:) keyEquivalent:@""]; reset.target=self; reset.tag=c; reset.enabled=[self curve:c]->count>0; [menu addItem:reset];
+        return menu;
+    }
+    NSInteger i=[self sectionAtPoint:p]; if(i<0) return nil;
     int track=-1; for(int t=0;t<KV_TRACKS;t++) if(NSPointInRect(p,[self rectOfRegion:i track:t])) track=t;
     if(!NSLocationInRange((NSUInteger)i,self.selection)) { [self.owner arrangerSelect:i]; [self selectAfterOwner:1]; }
     return [self menuForSection:i track:track beat:[self beatAtX:p.x]];
@@ -764,6 +862,17 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     const KvSong *s=[self song]; if(!s || !s->count) return;
     if(flags&NSEventModifierFlagControl && !(flags&NSEventModifierFlagCommand)) { NSMenu *menu=[self menuForEvent:event]; if(menu) [NSMenu popUpContextMenu:menu withEvent:event forView:self]; return; }
     if(p.y>=[self overviewTop] && p.x>=KvLaneX) { self.scrolling=YES; [self scrollOverviewTo:p.x]; return; }
+    int c=[self curveAtPoint:p];
+    if(c>=-1) {   // an automation lane: a double click adds a point, a point is picked and dragged
+        self.editCurve=c; self.onCurve=YES; NSInteger hit=[self pointAt:p curve:c]; const KvCurve *curve=[self curve:c];
+        if(hit<0 && event.clickCount==2) {
+            KvCurve copy=*curve; size_t i=kv_curve_set(&copy,MAX(0,[self snapped:[self beatAtX:p.x] flags:flags]),(float)[self valueOfCurve:c atY:p.y]);
+            if(i<KV_CURVE_POINTS) { self.selectedPoint=(NSInteger)i; [self.owner arrangerSetCurve:c to:&copy]; }
+            self.onCurve=NO; return;
+        }
+        self.selectedPoint=hit; _draft=*curve; self.needsDisplay=YES; return;
+    }
+    if(self.editCurve>=-1) { self.editCurve=-2; self.selectedPoint=-1; self.needsDisplay=YES; }
     if([self onRulerPoint:p]) {   // the ruler: a click moves the playhead, a drag draws the cycle, a double click on the cycle clears it
         double beat=[self beatAtX:p.x];
         if(event.clickCount==2 && s->cycle_to>s->cycle_from && beat>=s->cycle_from && beat<=s->cycle_to) { [self.owner arrangerSetCycleFrom:0 to:0]; self.needsDisplay=YES; return; }
@@ -797,7 +906,7 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     }
     NSInteger i=[self sectionAtPoint:p];
     if(self.tool==KvToolPencil && !(flags&NSEventModifierFlagCommand)) {   // pencil: the circle's progression at the nearest seam, or at the end
-        if(p.x<KvLaneX || p.y<KvMarkerTop || p.y>[self tracksBottom]) return;
+        if(p.x<KvLaneX || p.y<[self markerTop] || p.y>[self tracksBottom]) return;
         NSInteger at=(NSInteger)s->count; if(i>=0) { NSRect r=[self columnOf:i]; at=p.x<NSMidX(r)?i:i+1; }
         [self.owner arrangerDrawAt:at]; [self selectAfterOwner:1]; return;
     }
@@ -831,6 +940,12 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
 - (void)mouseDragged:(NSEvent *)event {
     NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; NSEventModifierFlags flags=event.modifierFlags;
     if(self.scrolling) { [self scrollOverviewTo:p.x]; return; }
+    if(self.onCurve) {   // a point: its time on the snap, between its neighbours, and its value
+        int c=self.editCurve; NSInteger i=self.selectedPoint; const KvCurve *curve=c>=-1?[self curve:c]:NULL; if(!curve || i<0 || i>=(NSInteger)curve->count) return;
+        double low=i>0?_draft.points[i-1].beat+1e-3:0,high=i+1<(NSInteger)_draft.count?_draft.points[i+1].beat-1e-3:1e6;
+        _draft.points[i]=(KvPoint){MAX(low,MIN(high,[self snapped:[self beatAtX:p.x] flags:flags])),(float)[self valueOfCurve:c atY:p.y]};
+        self.draggingPoint=YES; self.needsDisplay=YES; return;
+    }
     if(self.onRuler) {
         if(!self.cycling && fabs(p.x-self.downPoint.x)<4) return;
         double beat=[self rulerBeatAt:p.x flags:flags]; self.cycling=YES;
@@ -864,6 +979,7 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
 - (void)mouseUp:(NSEvent *)event {
     (void)event; const KvSong *s=[self song]; NSInteger from=self.pressed; self.pressed=-1;
     if(self.scrolling) { self.scrolling=NO; return; }
+    if(self.onCurve) { self.onCurve=NO; if(self.draggingPoint) { KvCurve moved=_draft; [self.owner arrangerSetCurve:self.editCurve to:&moved]; self.draggingPoint=NO; } self.needsDisplay=YES; return; }
     if(self.onRuler) {
         self.onRuler=NO;
         if(self.cycling) { self.cycling=NO; if(self.cycleTo>self.cycleFrom+1e-9) [self.owner arrangerSetCycleFrom:self.cycleFrom to:self.cycleTo]; self.needsDisplay=YES; return; }
@@ -930,6 +1046,7 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
         if(command) [self.owner arrangerMove:self.selected to:to copy:NO]; else [self.owner arrangerSelect:to];   // ⌥⌘← ⌥⌘→ move the section
         [self selectAfterOwner:1]; return;
     }
+    if((code==51 || code==117) && !command && [self removeSelectedPoint]) return;   // ⌫ on a point of a curve
     if(count && self.selected>=0 && !command) {
         if(code==51 || code==117) { [self removeSection:self.selected]; return; }
         if(code==36 || code==76) { [self.owner arrangerOpenInRoll:self.selected]; return; }

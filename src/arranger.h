@@ -28,6 +28,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerTrimStart:(NSInteger)index beats:(double)beats; /* the start corner: + later in the pass, − earlier */
 - (void)arrangerShiftRegion:(NSInteger)index track:(int)track shift:(double)shift;   /* a region dragged on its track: beats, ±32 */
 - (void)arrangerExport:(NSInteger)what;           /* MIDI: 0 the song, 1 the melody, 2 the bass, 3 the drums */
+- (void)arrangerSetCurve:(int)curve to:(const KvCurve *)points;   /* automation: −1 the tempo, 0…2 a track's volume */
 - (void)arrangerRemove:(NSInteger)index;
 - (void)arrangerSet:(KvSectionField)field value:(NSInteger)value;   /* of the selected section */
 - (void)arrangerSetTrack:(int)track mute:(int)mute solo:(int)solo level:(double)level;   /* −1 (level < 0): unchanged */
@@ -89,6 +90,15 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 @property(nonatomic,readonly) NSPopUpButton *snapChoice;
 @property(nonatomic,readonly) NSButton *zoomOutButton,*zoomInButton,*wholeSongButton;
 @property(nonatomic,readonly) NSPopUpButton *structureChoice;   /* «Структура ▾»: forms, «Сохранить форму…», another variant */
+/* Automation lanes (spec 1.5 §6а): the tempo under the ruler (⌁), a volume lane under each track («A»). */
+@property(nonatomic) BOOL showTempo;
+- (BOOL)showsVolume:(int)track;
+- (void)setShowsVolume:(BOOL)shown track:(int)track;
+- (NSRect)curveRect:(int)curve;                     /* −1 the tempo lane, 0…2 a track's volume lane; NSZeroRect when hidden */
+- (NSPoint)pointOfCurve:(int)curve value:(double)value beat:(double)beat;   /* where a value sits in its lane */
+@property(nonatomic,readonly) NSButton *tempoButton;
+@property(nonatomic,readonly) NSArray<NSButton *> *volumeButtons;
+@property(nonatomic,readonly) NSInteger selectedPoint;   /* of the curve last touched, −1 none */
 @property(nonatomic,readonly) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @property(nonatomic,readonly) NSArray<NSButton *> *trackMutes,*trackSolos,*regionMutes;   /* per track */

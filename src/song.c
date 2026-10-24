@@ -27,11 +27,56 @@ bool kv_section_valid(const KvSection *s) {
     return a->style>=0 && a->style<KV_PATTERN_COUNT && a->length>=0 && a->length<KV_LENGTH_COUNT && a->fills>=0 && a->fills<KV_FILL_COUNT
         && a->arpeggio_pattern>=0 && a->arpeggio_pattern<KV_ARP_COUNT && a->division>=0 && a->division<KV_DIV_COUNT && a->strings>=0 && a->strings<KV_STRINGS_COUNT;
 }
+static bool curve_valid(const KvCurve *c,float low,float high) {
+    if(c->count>KV_CURVE_POINTS) return false;
+    for(size_t i=0;i<c->count;i++) if(!isfinite(c->points[i].beat) || c->points[i].beat<0 || !isfinite(c->points[i].value) || c->points[i].value<low-1e-6f || c->points[i].value>high+1e-6f || (i && c->points[i].beat<=c->points[i-1].beat)) return false;
+    return true;
+}
+float kv_curve_at(const KvCurve *c,double beat,float otherwise) {
+    if(!c || !c->count) return otherwise;
+    if(beat<=c->points[0].beat) return c->points[0].value;
+    for(size_t i=1;i<c->count;i++) if(beat<c->points[i].beat) {
+        const KvPoint *a=&c->points[i-1],*b=&c->points[i]; return a->value+(float)((beat-a->beat)/(b->beat-a->beat))*(b->value-a->value); }
+    return c->points[c->count-1].value;
+}
+size_t kv_curve_set(KvCurve *c,double beat,float value) {
+    if(!c || !isfinite(beat) || beat<0 || !isfinite(value)) return KV_CURVE_POINTS;
+    size_t i=0; while(i<c->count && c->points[i].beat<beat-1e-9) i++;
+    if(i<c->count && fabs(c->points[i].beat-beat)<=1e-9) { c->points[i].value=value; return i; }
+    if(c->count>=KV_CURVE_POINTS) return KV_CURVE_POINTS;
+    memmove(&c->points[i+1],&c->points[i],(c->count-i)*sizeof(KvPoint)); c->points[i]=(KvPoint){beat,value}; c->count++; return i;
+}
+bool kv_curve_remove(KvCurve *c,size_t index) {
+    if(!c || index>=c->count) return false;
+    memmove(&c->points[index],&c->points[index+1],(c->count-index-1)*sizeof(KvPoint)); c->count--; return true;
+}
+void kv_song_follow(KvSong *after,const KvSong *before) {
+    if(!after || !before) return;
+    double was=kv_song_beats(before),now=kv_song_beats(after);
+    KvCurve *curves[1+KV_TRACKS]={&after->tempo,&after->volume[0],&after->volume[1],&after->volume[2]};
+    for(int c=0;c<1+KV_TRACKS;c++) {
+        KvCurve moved; moved.count=0;
+        for(size_t k=0;k<curves[c]->count;k++) {
+            KvPoint p=curves[c]->points[k]; double beat;
+            if(p.beat>=was-1e-9) beat=p.beat-was+now;   // past the end: as far from the end
+            else {
+                double offset=0; size_t i=kv_song_section_at(before,p.beat,&offset),j=0; if(i>=before->count) continue;
+                while(j<after->count && after->sections[j].id!=before->sections[i].id) j++;
+                if(j==after->count) continue;   // its section is gone
+                beat=kv_section_start(after,j)+fmin(offset,kv_section_beats(after,j));
+            }
+            kv_curve_set(&moved,beat,p.value);
+        }
+        *curves[c]=moved;
+    }
+}
 bool kv_song_valid(const KvSong *song) {
     if(!song || song->meter<0 || song->meter>=KV_METER_COUNT || !isfinite(song->bpm) || song->bpm<20 || song->bpm>300) return false;
     if(song->keyboard_base<36 || song->keyboard_base>84 || song->keyboard_base%12 || song->extension<0 || song->extension>4 || song->count>KV_SONG_SECTIONS) return false;
     for(int t=0;t<KV_TRACKS;t++) if(!isfinite(song->track_level[t]) || song->track_level[t]<0 || song->track_level[t]>1.2f+1e-6f) return false;
     if(!isfinite(song->cycle_from) || !isfinite(song->cycle_to) || song->cycle_from<0) return false;
+    if(!curve_valid(&song->tempo,20,300)) return false;
+    for(int t=0;t<KV_TRACKS;t++) if(!curve_valid(&song->volume[t],0,1.2f)) return false;
     for(size_t i=0;i<song->count;i++) {
         if(!kv_section_valid(&song->sections[i]) || song->sections[i].start>=kv_section_pass_beats(song,&song->sections[i])) return false;
         for(size_t j=0;j<i;j++) if(song->sections[j].id==song->sections[i].id) return false;
@@ -126,7 +171,7 @@ bool kv_section_part(const KvSong *song,size_t index,const KvPerformance *edited
     if(!ok || cycle<=0 || from<0 || from>=total-1e-9 || end<=from) { free(pass); return false; }
     memset(out,0,sizeof(*out)); out->chord_count=pass->chord_count; out->beats_per_chord=pass->beats_per_chord;
     out->beats_per_bar=kv_meter_bar(song->meter); out->total_beats=end-from;
-    double begin=fmod(s->start,cycle); if(begin<0) begin+=cycle;
+    double begin=fmod(s->start,cycle),origin=kv_section_start(song,index); if(begin<0) begin+=cycle;
     for(int track=KV_TRACK_MELODY;track<=KV_TRACK_BASS;track++) {
         if(!kv_region_audible(song,index,track)) continue;
         unsigned hand=track==KV_TRACK_MELODY?1:0; double shift=s->regions[track].shift;
@@ -138,7 +183,10 @@ bool kv_section_part(const KvSong *song,size_t index,const KvPerformance *edited
             double inside=k*cycle-begin+e.beat,at=inside+shift;
             if(inside<-1e-9 || inside>=total-1e-9 || at<-1e-9 || at>=total-1e-9 || at<from-1e-9 || at>=end-1e-9) continue;
             if(out->count>=KV_PERFORMANCE_CAPACITY) { free(pass); return false; }
-            e.duration=fmin(fmin(e.duration,total-inside),total-at); e.beat=fmax(0,at-from); e.velocity=fminf(1,fmaxf(.4f,e.velocity*gain));
+            // The levels keep a note audible (0.4 at least); the track's volume curve, on top, may fade it out entirely.
+            float level=fminf(1,fmaxf(.4f,e.velocity*gain))*kv_curve_at(&song->volume[track],origin+at,1);
+            if(level<.02f) continue;
+            e.duration=fmin(fmin(e.duration,total-inside),total-at); e.beat=fmax(0,at-from); e.velocity=fminf(1,level);
             out->events[out->count++]=e;
         }
     }
