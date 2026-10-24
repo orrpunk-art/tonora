@@ -16,6 +16,8 @@ Native app for macOS 12 and later, Universal (Apple Silicon and Intel). The musi
 - **Progressions.** An eight-slot sequence, a generator (`⌘N`) that writes new chords in the current key and mode, and ready-made progressions: pop, jazz, classical, minor.
 - **Textures.** Block chords, a two-hand piano part in nine styles (ballad, Alberti, waltz, dark jazz, trip-hop, ambient…) with variations and fills, arpeggios in five patterns, and four strings textures (chorale, cantilena, ostinato, pizzicato).
 - **Four instruments:** Salamander grand piano, Yamaha CP80, Hohner Pianet T and VSCO 2 strings with legato, spiccato, pizzicato and mod-wheel dynamics. Reverb and a tempo-synced delay.
+- **Metronome and beats** to play along on a MIDI keyboard (`⌘K`): a click on beats, eighths, triplets or sixteenths, or a beat — pop, ballad, bossa nova and shuffle on recorded percussion, hip-hop, trip-hop and house on a built-in drum machine, or one that suits the pattern's style. It runs on its own or locks to the sequence, with an optional one-bar count-in.
+- **256-voice polyphony** with voice stealing, and a sustain pedal that lets a re-struck key ring.
 - **Piano roll** to edit the generated part note by note: snap to grid, drag, stretch, quantize, undo, slowed-down playback.
 - **MIDI everywhere.** Save a `.mid` file, drag a clip straight onto a DAW track, send notes live to the virtual «Tonora» port, play from a MIDI keyboard (one-key chords optional), or import a MIDI file — key, meter, tempo and chords are detected.
 - **Learning aids:** animated hands with fingering, the computer keyboard as a piano (`M`), a help card with every shortcut and a page on how the circle works (`⌘/`).
@@ -56,6 +58,7 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 | `⌘N` · `⇧⌘N` | new chords · extend the sequence |
 | `⌘Z` · `⌘R` | bring back the previous sequence · new pattern variation |
 | `⌘C` · `⌘O` | copy the MIDI clip · import a MIDI file (or drop a `.mid` on the window) |
+| `⌘K` | metronome on / off (Esc stops it with the music) |
 | `⌘,` · `⌘/` | sound and language · all shortcuts and help |
 | `M` | play from the computer keyboard: `A`…`'` white keys, `W E T Y U O P` black keys, `Z X` octave, `C V` velocity |
 
@@ -82,6 +85,7 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 - **Salamander Grand Piano V3** — Alexander Holm, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [source](https://github.com/sfzinstruments/SalamanderGrandPiano)
 - **Yamaha CP80, Hohner Pianet T** — Greg Sullivan, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [source](https://github.com/sfzinstruments/GregSullivan.E-Pianos)
 - **Strings: VS Chamber Orchestra 2 Community Edition** — Versilian Studios (Sam Gossner, Simon Dalzell), CC0 · [source](https://github.com/sgossner/VSCO-2-CE)
+- **Percussion: Versilian Community Sample Library** — Versilian Studios, CC0 · [source](https://github.com/sgossner/VCSL)
 - **Reverb: Verblib / Freeverb** — Philip Bennefall, Jezar at Dreampoint, public domain / Unlicense · [source](https://github.com/blastbay/verblib)
 
 Compact subsets of the recordings are bundled. Full licence texts, authorship and SHA-256 manifests are in `assets/` and inside the app (Tonora → Instruments — authorship and licences).
