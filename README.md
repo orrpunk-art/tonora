@@ -16,6 +16,8 @@ Native app for macOS 12 and later, Universal (Apple Silicon and Intel). The musi
 - **Progressions.** An eight-slot sequence, a generator (`⌘N`) that writes new chords in the current key and mode, and ready-made progressions: pop, jazz, classical, minor.
 - **Textures.** Block chords, a two-hand piano part in nine styles (ballad, Alberti, waltz, dark jazz, trip-hop, ambient…) with variations and fills, arpeggios in five patterns, and four strings textures (chorale, cantilena, ostinato, pizzicato).
 - **Four instruments:** Salamander grand piano, Yamaha CP80, Hohner Pianet T and VSCO 2 strings with legato, spiccato, pizzicato and mod-wheel dynamics. Reverb and a tempo-synced delay.
+- **Arranger** (`⌘3`): a progression from the circle (`⇧⌘A`) becomes a section of a song. Hover a section and the arranger suggests what comes next: a chorus led in by a rise, a breakdown, the verse again, an outro; between two sections, a transition. Sections move, copy, cut on a bar line (`⌘`-click) and repeat, each with its own texture, level, register and beat; a double-click opens one in the piano roll. The song plays through without gaps and exports to MIDI with drums and section markers (`⇧⌘E`).
+- **`.tonora` song files** (`⌘O`, `⌘S`): key, texture, sound, edits and the whole song in one file that opens with a double-click.
 - **Metronome and beats** to play along on a MIDI keyboard (`⌘K`): a click on beats, eighths, triplets or sixteenths, or a beat on a live drum kit — pop, ballad, bossa nova, shuffle, hip-hop, trip-hop, house, or one that suits the pattern's style. It runs on its own or locks to the sequence, with an optional one-bar count-in.
 - **256-voice polyphony** with voice stealing, and a sustain pedal that lets a re-struck key ring.
 - **Piano roll** to edit the generated part note by note: snap to grid, drag, stretch, quantize, undo, slowed-down playback.
@@ -76,6 +78,7 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 | `src/mixer.c`, `src/piano.c`, `src/effects.c`, `src/audio.c` | 64-voice sampler, sample banks, reverb and delay, AudioQueue output |
 | `src/midi.c`, `src/midiio.m` | MIDI files, CoreMIDI in and out |
 | `src/main.m` | the window: circle, inspector, keyboard, sequence, FX, self-test |
+| `src/song.c`, `src/arranger.m` | a song of sections: chorus, breakdown, transitions, suggestions; the arranger's lane |
 | `src/pianoroll.m`, `src/controls.m` | piano roll; Tonora's own controls, glyphs and hover labels |
 | `src/strings_en.m` | English interface strings (the Russian text in the code is the key) |
 | `assets/` | instrument recordings with their licences and checksums |
