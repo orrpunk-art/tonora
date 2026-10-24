@@ -67,6 +67,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
         else if(c->type==16) kv_mixer_beat(a->mixer,c->hits,c->count,c->voices!=0);
         else if(c->type==17) { if(!kv_mixer_queue(a->mixer,&c->performance,c->rhythm,c->hits,c->count,c->seconds)) atomic_store(&a->error,1); }
         else if(c->type==18) kv_mixer_phase(a->mixer,c->seconds);
+        else if(c->type==19) kv_mixer_hands(a->mixer,c->values[0],c->values[1]);
         else if(kv_mixer_play(a->mixer,c->notes,c->count,c->voices,c->seconds,c->instrument,c->type==2)) {
             a->muted=false; atomic_store(&a->start,kv_mixer_start(a->mixer)); atomic_store(&a->playing,true);
         } else atomic_store(&a->error,1);
@@ -228,6 +229,7 @@ bool kv_audio_set_beat(KvAudio *a,const KvHit *hits,size_t count,bool electronic
 bool kv_audio_phase(KvAudio *a,double beats) { return a && isfinite(beats) && beats>=0 && beats<=16 && send(a,(struct Command){.type=18,.seconds=beats}); }
 bool kv_audio_count_in(KvAudio *a,double beats) { return a && isfinite(beats) && beats>=0 && beats<=16 && send(a,(struct Command){.type=15,.seconds=beats}); }
 double kv_audio_rhythm_beat(KvAudio *a) { return a?atomic_load(&a->rhythm_beat):-1; }
+bool kv_audio_set_hands(KvAudio *a,double left,double right) { return a && isfinite(left) && isfinite(right) && send(a,(struct Command){.type=19,.values={(float)left,(float)right}}); }
 bool kv_audio_set_pedal(KvAudio *a,bool down) { return a && send(a,(struct Command){.type=13,.count=down}); }
 bool kv_audio_set_dynamics(KvAudio *a,double dynamics,double expression) {
     return a && isfinite(dynamics) && isfinite(expression) && send(a,(struct Command){.type=12,.values={(float)fmax(0,fmin(1,dynamics)),(float)fmax(0,fmin(1,expression))}});

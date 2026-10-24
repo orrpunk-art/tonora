@@ -69,6 +69,9 @@ bool kv_song_valid(const KvSong *song);
 /* Time, in quarter-note beats from the song's start. A section lasts `length`, or one pass × repeats. */
 double kv_section_chord_beats(const KvSong *song,const KvSection *section);
 double kv_section_pass_beats(const KvSong *song,const KvSection *section);
+/* A section with a length of its own (a cut, a stretch) keeps its share of passes when its pass changes (a new chord length or
+   texture): length and start scale by new/old, so «×1» stays one pass and a cut stays its fraction. old_pass: before the change. */
+void kv_section_keep_passes(const KvSong *song,KvSection *section,double old_pass);
 double kv_section_beats(const KvSong *song,size_t index);
 double kv_section_start(const KvSong *song,size_t index);
 double kv_song_beats(const KvSong *song);

@@ -378,7 +378,7 @@ int main(int argc,char **argv) {
     // the beats use (soft and loud, two takes); a count-in is clicked and the beat comes in with the sequence.
     { size_t at[64]; float peak[64];
       KvMixer *r=kv_mixer_create(); CHECK(r); kv_mixer_humanize(r,false);
-      kv_mixer_rhythm(r,true,KV_GRID_BEATS,KV_METER_4_4,.6,.6f); uint64_t origin=kv_mixer_clock(r);
+      kv_mixer_rhythm(r,false,KV_GRID_BEATS,KV_METER_4_4,.6,.6f); uint64_t origin=kv_mixer_clock(r);   // the click off: the drums alone start the grid
       KvHit two[2]={{0,KV_DRUM_KICK,1},{2,KV_DRUM_KICK,.75f}}; kv_mixer_beat(r,two,2,true);
       size_t n=clicks(r,(size_t)(26460*4.5),at,peak,64);
       CHECK(n==3 && at[0]<=origin+1 && llabs((long long)at[1]-(long long)(origin+2*26460))<=1 && llabs((long long)at[2]-(long long)(origin+4*26460))<=1 && peak[0]>peak[1]);

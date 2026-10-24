@@ -44,11 +44,13 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
 @property(nonatomic) double anchorBeat,anchorDuration; @property(nonatomic) int anchorMidi;
 @property(nonatomic) int lastAuditioned;
 @property(nonatomic,readwrite) NSPopUpButton *sectionChoice;
+@property(nonatomic,readwrite) NSButton *collapseButton;
 @end
 @implementation KvPianoRoll
 - (instancetype)initWithFrame:(NSRect)frame {
     if((self=[super initWithFrame:frame])) {
-        _gridBeats=.25; _speed=1; _zoom=1; _rowHeight=14; _topPitch=85; _playheadBeat=-1; _splitNote=60; _hoverIndex=-1;
+        _gridBeats=.25; _speed=1; _zoom=1; _rowHeight=14; _topPitch=85; _playheadBeat=-1; _splitNote=60; _hoverIndex=-1; _onlyHand=-1;
+        _collapseButton=[TNButton buttonWithTitle:T(@"Свернуть") target:self action:@selector(collapse:)]; _collapseButton.bezelStyle=NSBezelStyleRounded; _collapseButton.bordered=NO; ((TNButton *)_collapseButton).hint=T(@"Свернуть ролл · Esc"); _collapseButton.hidden=YES; [self addSubview:_collapseButton];
         _resetButton=RollIcon(@"arrow.counterclockwise",@"↺",T(@"Вернуть дорожку из рисунка · ручные правки сбросятся"),self,@selector(resetTrack:)); [self addSubview:_resetButton];
         _sectionChoice=[[TNPopup alloc] initWithFrame:NSZeroRect pullsDown:NO]; _sectionChoice.target=self; _sectionChoice.action=@selector(sectionPicked:); _sectionChoice.hidden=YES;
         [_sectionChoice setAccessibilityLabel:T(@"Секция песни")]; [self addSubview:_sectionChoice];
@@ -129,7 +131,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
 - (void)fitView {
     CGFloat areaH=NSHeight([self noteAreaRect]); if(areaH<40) { self.fitted=NO; return; }
     self.rowHeight=MAX(10,MIN(18,floor(areaH/30)));
-    int low=108,high=21; if(self.track) for(size_t i=0;i<self.track->count;i++) { int m=self.track->events[i].midi; if(m<low) low=m; if(m>high) high=m; }
+    int low=108,high=21; if(self.track) for(size_t i=0;i<self.track->count;i++) { int m=self.track->events[i].midi; if(![self shown:i]) continue; if(m<low) low=m; if(m>high) high=m; }
     if(low>high) { low=48; high=84; }
     double rows=areaH/self.rowHeight; self.topPitch=round(([self vForMidi:low]+[self vForMidi:high])/2.0+rows/2+.5); [self clampView]; self.fitted=YES;
 }
@@ -157,7 +159,8 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
     self.zoomOut.frame=NSMakeRect(x,y,34,h); x+=38; self.zoomIn.frame=NSMakeRect(x,y,34,h); x+=38; self.followButton.frame=NSMakeRect(x,y,34,h); x+=46;
     self.scaleButton.frame=NSMakeRect(x,y,34,h); x+=38; self.foldButton.frame=NSMakeRect(x,y,34,h); x+=38; self.helpButton.frame=NSMakeRect(x,y,34,h); x+=46; self.dragHandle.frame=NSMakeRect(x,y,78,h); x+=86;
     self.stats.frame=NSMakeRect(x,y+6,MAX(40,NSWidth(self.bounds)-x-8),18);
-    self.sectionChoice.frame=NSMakeRect(x,y,MAX(40,NSWidth(self.bounds)-x-8),h); self.stats.hidden=!self.sectionChoice.hidden;
+    CGFloat right=NSWidth(self.bounds)-8; if(!self.collapseButton.hidden) { self.collapseButton.frame=NSMakeRect(right-84,y,84,h); right-=92; }
+    self.sectionChoice.frame=NSMakeRect(x,y,MAX(40,right-x),h); self.stats.hidden=!self.sectionChoice.hidden;
     [self clampView];
 }
 - (void)updateToolbar {
@@ -175,12 +178,14 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
         [self.sectionChoice selectItemAtIndex:[self.owner pianoRollSection:self]+1]; self.sectionChoice.toolTip=self.stats.stringValue;
     }
     if(self.sectionChoice.hidden!=!sections.count) { self.sectionChoice.hidden=!sections.count; self.needsLayout=YES; }
+    BOOL docked=[self.owner respondsToSelector:@selector(pianoRollDocked:)] && [self.owner pianoRollDocked:self];
+    if(self.collapseButton.hidden==docked) { self.collapseButton.hidden=!docked; self.needsLayout=YES; }
     [self.speedChoice selectItemAtIndex:self.speed>=1?0:self.speed>=.75?1:self.speed>=.5?2:3];
 }
 - (BOOL)isSelectedAt:(NSUInteger)index { return index<KV_PERFORMANCE_CAPACITY && _selected[index]; }
 - (NSUInteger)selectedCount { NSUInteger n=0; if(self.track) for(size_t i=0;i<self.track->count;i++) if(_selected[i]) n++; return n; }
 - (void)setSelected:(BOOL)selected at:(NSUInteger)index { if(index<KV_PERFORMANCE_CAPACITY) _selected[index]=selected; [self updateToolbar]; self.needsDisplay=YES; }
-- (void)selectAll { if(self.track) for(size_t i=0;i<self.track->count;i++) _selected[i]=YES; [self updateToolbar]; self.needsDisplay=YES; }
+- (void)selectAll { if(self.track) for(size_t i=0;i<self.track->count;i++) _selected[i]=[self shown:i]; [self updateToolbar]; self.needsDisplay=YES; }
 - (void)deselectAll { memset(_selected,0,sizeof(_selected)); [self updateToolbar]; self.needsDisplay=YES; }
 /* Keep the track sorted, each note inside the sequence and tagged with the chord it starts in; selection follows the notes. */
 - (void)normalize {
@@ -294,6 +299,10 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
 }
 // ---- toolbar actions ----
 - (void)sectionPicked:(NSPopUpButton *)sender { [self.owner pianoRoll:self openSection:sender.indexOfSelectedItem-1]; }
+- (void)collapse:(id)sender { (void)sender; [self.owner pianoRoll:self openSection:-1]; }
+/* One hand of the track (the arranger's melody or bass region): the other is shown dimmed, never picked, selected or fitted. */
+- (BOOL)shown:(size_t)index { return self.onlyHand<0 || !self.track || index>=self.track->count || (int)self.track->events[index].hand==self.onlyHand; }
+- (void)setOnlyHand:(int)onlyHand { _onlyHand=onlyHand; if(self.track) for(size_t i=0;i<self.track->count;i++) if(![self shown:i]) _selected[i]=NO; self.fitted=NO; [self updateToolbar]; self.needsDisplay=YES; }
 - (void)resetTrack:(id)sender { (void)sender; [self.owner pianoRollResetRequested:self]; }
 - (void)gridChanged:(NSPopUpButton *)sender { static const double grids[]={1,.5,.25,1.0/3,0}; self.gridBeats=grids[MIN(4,MAX(0,sender.indexOfSelectedItem))]; [self updateToolbar]; self.needsDisplay=YES; }
 - (void)speedChanged:(NSPopUpButton *)sender { static const double speeds[]={1,.75,.5,.25}; self.speed=speeds[MIN(3,MAX(0,sender.indexOfSelectedItem))]; [self.owner pianoRoll:self speedChanged:self.speed]; }
@@ -349,7 +358,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
 - (NSUInteger)noteIndexAtPoint:(NSPoint)point edge:(BOOL *)edge {
     if(!self.track) return NSNotFound;
     for(size_t i=self.track->count;i-->0;) {
-        NSRect r=[self rectForNote:i];
+        NSRect r=[self rectForNote:i]; if(![self shown:i]) continue;
         if(NSPointInRect(point,NSInsetRect(r,-1,0))) { if(edge) *edge=point.x>=NSMaxX(r)-MIN(7,NSWidth(r)/2); return i; }
     }
     return NSNotFound;
@@ -414,7 +423,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
     NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];
     if(self.dragMode==DRAG_MARQUEE) {
         self.marquee=NSMakeRect(MIN(p.x,self.dragStart.x),MIN(p.y,self.dragStart.y),fabs(p.x-self.dragStart.x),fabs(p.y-self.dragStart.y));
-        for(size_t i=0;i<self.track->count;i++) _selected[i]=NSIntersectsRect(self.marquee,[self rectForNote:i]);
+        for(size_t i=0;i<self.track->count;i++) _selected[i]=[self shown:i] && NSIntersectsRect(self.marquee,[self rectForNote:i]);
         [self updateToolbar]; self.needsDisplay=YES; return;
     }
     if(self.dragMode==DRAG_PENDING) {
@@ -487,6 +496,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
 }
 - (void)keyDown:(NSEvent *)event {
     if([self.owner pianoRollPlayKey:event]) return;   // computer keyboard mode takes the note keys (and M)
+    if(event.keyCode==53 && !self.collapseButton.hidden) { [self collapse:nil]; return; }   // Esc puts the docked roll away
     NSEventModifierFlags flags=event.modifierFlags; unsigned short code=event.keyCode;
     if(flags&NSEventModifierFlagCommand) {
         if(code==44) { [self.owner pianoRollToggleShortcuts:self]; return; } // ⌘/
@@ -571,6 +581,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
         unsigned char role=_roles[i]; anyRole|=role!=KV_ROLE_CHORD;
         NSColor *base=role==KV_ROLE_PASSING?TNPassing():role==KV_ROLE_ANTICIPATION?TNAnticipation():e.hand?TNAccent():[NSColor colorWithCalibratedRed:0 green:.55 blue:.42 alpha:1];
         NSBezierPath *path=[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(r,.5,.5) xRadius:1.5 yRadius:1.5];
+        if(![self shown:i]) { [[base colorWithAlphaComponent:.14] setFill]; [path fill]; continue; }   // the other hand, out of reach
         [[base colorWithAlphaComponent:.45+.55*e.velocity] setFill]; [path fill];
         [[base blendedColorWithFraction:.35 ofColor:NSColor.blackColor] setStroke]; path.lineWidth=1; [path stroke];
         if(_selected[i]) { NSBezierPath *ring=[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(r,-1,-1) xRadius:2.5 yRadius:2.5]; [NSColor.labelColor setStroke]; ring.lineWidth=1.5; [ring stroke]; }

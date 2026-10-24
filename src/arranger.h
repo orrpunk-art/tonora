@@ -20,6 +20,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (double)arrangerPlayheadBeat;                    /* in the song, −1 when it does not play */
 - (void)arrangerSelect:(NSInteger)index;
 - (void)arrangerOpenInRoll:(NSInteger)index;
+- (void)arrangerOpenInRoll:(NSInteger)index track:(int)track;   /* the roll on one track's hand; −1 both */
 - (void)arrangerMove:(NSInteger)from to:(NSInteger)to copy:(BOOL)copy;
 - (void)arrangerCut:(NSInteger)index atBeat:(double)beat;   /* beat inside the section, already an allowed cut */
 - (void)arrangerMoveRange:(NSRange)range to:(NSInteger)to copy:(BOOL)copy;   /* to: a seam among the sections, 0…count */
@@ -83,6 +84,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 @property(nonatomic,readonly) NSInteger hoverSection,hoverGhost,hoverSeam;
 /* Selection (spec 1.5 §4): a click one section, ⇧-click a range, ⌘A all; the owner's `selected` is the one in the inspector. */
 @property(nonatomic) NSRange selection;
+@property(nonatomic) int selectedTrack;            /* the track whose region was clicked, −1 the whole section (the marker) */
 @property(nonatomic,readonly) NSInteger hoverRegion,hoverButton;   /* the region under the pointer (its buttons show), the button */
 @property(nonatomic,readonly) int hoverTrack;
 - (NSArray<NSValue *> *)buttonRectsOf:(NSInteger)index track:(int)track;   /* ✎ ✂ ⧉ ✕ of a hovered region; empty when too small */

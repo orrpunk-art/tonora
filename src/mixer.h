@@ -21,7 +21,7 @@ bool kv_mixer_preview(KvMixer *mixer,int midi,double duration,int instrument);
 /* Keyboard keys: a held note sounds until released (velocity 0…1); release(-1) lets go of every held key. */
 bool kv_mixer_hold(KvMixer *mixer,int midi,float velocity,int instrument);
 void kv_mixer_release(KvMixer *mixer,int midi);
-void kv_mixer_stop(KvMixer *mixer);
+void kv_mixer_stop(KvMixer *mixer);   /* the sequence, its queued part and its drums; the click stays as switched */
 /* Bowed strings: the articulation choice (re-decides the strokes of a playing sequence), the dynamics 0…1 (mod wheel:
    soft↔loud recordings and level) and the expression 0…1 (CC11: level only). */
 void kv_mixer_articulation(KvMixer *mixer,KvArticulation articulation);
@@ -30,18 +30,19 @@ void kv_mixer_dynamics(KvMixer *mixer,float dynamics,float expression);
 void kv_mixer_pedal(KvMixer *mixer,bool down);
 /* Voices in use, fading ones included (tests and diagnostics). */
 unsigned kv_mixer_voices(const KvMixer *mixer);
-/* The rhythm layer: a metronome click on a grid of the beat. While on it runs by itself — from the moment it is switched on,
-   or from the first beat of a sequence that starts (again at each loop) — at seconds_per_beat; bar and pulse come from the
-   meter (kv_meter_bar, kv_meter_pulse: 6/8 clicks every eighth, louder on its two dotted quarters). A new tempo keeps the beat. The click is dry:
-   it is left out of the stereo render and read with kv_mixer_dry, to be mixed after the effects. volume 0…1. */
+/* The rhythm layer: a grid of the beat that runs while the click or a drum beat is on — from the moment the first is switched
+   on, or from the first beat of a sequence that starts (again at each loop) — at seconds_per_beat; bar and pulse come from the
+   meter (kv_meter_bar, kv_meter_pulse: 6/8 clicks every eighth, louder on its two dotted quarters). A new tempo keeps the beat.
+   kv_mixer_rhythm switches the click; kv_mixer_beat the drums; both may sound at once. The layer is dry: it is left out of the
+   stereo render and read with kv_mixer_dry, to be mixed after the effects. volume 0…1 (the click's and the drums'). */
 typedef enum { KV_GRID_BEATS, KV_GRID_EIGHTHS, KV_GRID_TRIPLETS, KV_GRID_SIXTEENTHS, KV_GRID_COUNT } KvGrid;
 void kv_mixer_rhythm(KvMixer *mixer,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,float volume);
 /* The next sequence starts after this many beats; the metronome counts them in (one bar of the meter, as a rule). */
 void kv_mixer_count_in(KvMixer *mixer,double beats);
 /* Beats since the rhythm's origin (bar position: fmod(beat, kv_meter_bar)), −1 while it is off. */
 double kv_mixer_rhythm_beat(const KvMixer *mixer);
-/* Instead of the click: one bar of drum hits (kv_beat_bar) repeated on the rhythm's grid, on the recorded kit (kv_mixer_drums)
-   or the built-in electronic one; count 0 returns to the click. A count-in is always clicked; the beat starts with the sequence. */
+/* The drums: one bar of hits (kv_beat_bar) repeated on the rhythm's grid, on the recorded kit (kv_mixer_drums) or the built-in
+   electronic one; count 0 switches them off. A count-in is always clicked, the drums start with the sequence. */
 void kv_mixer_beat(KvMixer *mixer,const KvHit *hits,size_t count,bool electronic);
 /* The recorded kit: a bank on General MIDI drum notes, layers 0-1 soft and 2-3 loud takes. Without it every beat is electronic. */
 void kv_mixer_drums(KvMixer *mixer,const KvPianoBank *bank);
@@ -51,14 +52,16 @@ unsigned kv_mixer_drum_voices(const KvMixer *mixer);
 /* The dry part (the click) of the last render, stereo interleaved; frames beyond KV_DRY_FRAMES carry no click. */
 const float *kv_mixer_dry(const KvMixer *mixer);
 /* The part after the playing performance (a song's next section): it starts on the frame the current one ends, without a gap,
-   while the current voices ring on; humanizing, tempo and instrument stay. rhythm: −1 leaves the rhythm layer as it is, 0 switches
-   it off, 1 on with `hits` (count 0: the click); the layer restarts at `phase` beats into its bar on the part's first frame. One part waits at a time: a new
+   while the current voices ring on; humanizing, tempo and instrument stay. rhythm: −1 leaves the drums as they are, 0 switches
+   them off, 1 plays `hits` (the click is untouched); the layer restarts at `phase` beats into its bar on the part's first frame. One part waits at a time: a new
    call replaces it. kv_mixer_part counts the parts started since the last kv_mixer_performance (0 while the first plays). */
 bool kv_mixer_queue(KvMixer *mixer,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count,double phase);
 /* Where in the bar the next kv_mixer_performance begins, in beats past a downbeat (a song played from inside a bar); the queued
    parts carry their own phase. Both accept any playable performance (kv_performance_playable), notes or none. */
 void kv_mixer_phase(KvMixer *mixer,double beats);
 unsigned kv_mixer_part(const KvMixer *mixer);
+/* A live gain on the sequenced voices of each hand (0 the left, 1 the right): the arranger's track mute, solo and level without rebuilding the part. */
+void kv_mixer_hands(KvMixer *mixer,float left,float right);
 void kv_mixer_humanize(KvMixer *mixer,bool enabled);
 void kv_mixer_loop(KvMixer *mixer,bool enabled);
 void kv_mixer_interval(KvMixer *mixer,double seconds);

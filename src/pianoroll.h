@@ -32,6 +32,7 @@
 - (NSInteger)pianoRollSection:(KvPianoRoll *)roll;
 - (void)pianoRoll:(KvPianoRoll *)roll openSection:(NSInteger)index;
 - (int)pianoRollFirstBar:(KvPianoRoll *)roll;
+- (BOOL)pianoRollDocked:(KvPianoRoll *)roll;   /* under the arranger's tracks: a «Свернуть» button and Esc put it away (openSection:−1) */
 @end
 @interface KvPianoRoll : NSView
 @property(nonatomic,weak) id<KvPianoRollOwner> owner;
@@ -41,6 +42,7 @@
 @property(nonatomic) double speed;          /* playback speed shown in the toolbar */
 @property(nonatomic) int splitNote;         /* new notes below this pitch belong to the left hand */
 @property(nonatomic) BOOL edited;           /* shown in the toolbar: the track differs from the arrangement */
+@property(nonatomic) int onlyHand;          /* −1 both hands; 0 or 1: the other hand is dimmed and out of reach (a track opened from the arranger) */
 @property(nonatomic) BOOL showHelp;         /* the window's shortcuts card (⌘/), opened from the roll */
 @property(nonatomic) BOOL showScale;        /* highlight the rows of the selected scale (Ableton's Scale); remembered */
 @property(nonatomic) BOOL fold;             /* only the scale's rows (or, without the scale, rows with notes) plus rows holding notes; F; remembered */
@@ -55,6 +57,7 @@
 - (BOOL)isSelectedAt:(NSUInteger)index;
 @property(nonatomic,readonly) KvMidiDragHandle *dragHandle;
 @property(nonatomic,readonly) NSPopUpButton *sectionChoice;   /* shown instead of the note count while a section of the song is open */
+@property(nonatomic,readonly) NSButton *collapseButton;       /* while docked under the arranger */
 - (void)selectAll;
 - (void)deselectAll;
 - (void)deleteSelected;

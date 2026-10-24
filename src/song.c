@@ -97,6 +97,11 @@ double kv_section_beats(const KvSong *song,size_t index) {
 double kv_section_start(const KvSong *song,size_t index) {
     double t=0; for(size_t i=0;song && i<index && i<song->count;i++) t+=kv_section_beats(song,i); return t;
 }
+void kv_section_keep_passes(const KvSong *song,KvSection *s,double old_pass) {
+    if(!song || !s || !(s->length>0) || !(old_pass>0)) return;
+    double now=kv_section_pass_beats(song,s); if(fabs(now-old_pass)<1e-9) return;
+    s->length*=now/old_pass; s->start*=now/old_pass;
+}
 double kv_song_beats(const KvSong *song) { return song?kv_section_start(song,song->count):0; }
 size_t kv_song_section_at(const KvSong *song,double beat,double *offset) {
     double t=0; size_t i=0;

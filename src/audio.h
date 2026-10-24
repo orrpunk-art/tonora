@@ -40,6 +40,8 @@ bool kv_audio_set_articulation(KvAudio *audio,KvArticulation articulation);
 bool kv_audio_set_dynamics(KvAudio *audio,double dynamics,double expression);
 /* Sustain pedal down or up (CC64): a key struck again under it rings on its previous strike. */
 bool kv_audio_set_pedal(KvAudio *audio,bool down);
+/* The arranger's tracks live: a gain on each hand's sequenced notes (see kv_mixer_hands). */
+bool kv_audio_set_hands(KvAudio *audio,double left,double right);
 /* The metronome (see kv_mixer_rhythm): on/off, grid, meter, tempo and volume 0…1; idempotent, a new tempo keeps the beat. */
 bool kv_audio_set_rhythm(KvAudio *audio,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,double volume);
 /* The next kv_audio_performance starts after `beats` beats, counted in by the metronome. */
