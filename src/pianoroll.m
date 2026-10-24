@@ -43,12 +43,15 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
 /* The note under the cursor when the drag began: its original start, pitch and length (indices change while sorting). */
 @property(nonatomic) double anchorBeat,anchorDuration; @property(nonatomic) int anchorMidi;
 @property(nonatomic) int lastAuditioned;
+@property(nonatomic,readwrite) NSPopUpButton *sectionChoice;
 @end
 @implementation KvPianoRoll
 - (instancetype)initWithFrame:(NSRect)frame {
     if((self=[super initWithFrame:frame])) {
         _gridBeats=.25; _speed=1; _zoom=1; _rowHeight=14; _topPitch=85; _playheadBeat=-1; _splitNote=60; _hoverIndex=-1;
         _resetButton=RollIcon(@"arrow.counterclockwise",@"↺",T(@"Вернуть дорожку из рисунка · ручные правки сбросятся"),self,@selector(resetTrack:)); [self addSubview:_resetButton];
+        _sectionChoice=[[TNPopup alloc] initWithFrame:NSZeroRect pullsDown:NO]; _sectionChoice.target=self; _sectionChoice.action=@selector(sectionPicked:); _sectionChoice.hidden=YES;
+        [_sectionChoice setAccessibilityLabel:T(@"Секция песни")]; [self addSubview:_sectionChoice];
         _gridChoice=[[TNPopup alloc] initWithFrame:NSZeroRect pullsDown:NO];
         for(NSArray *item in @[@[T(@"Сетка 1/4"),@"1/4"],@[T(@"Сетка 1/8"),@"1/8"],@[T(@"Сетка 1/16"),@"1/16"],@[T(@"Сетка 1/8 · триоль"),@"1/8T"],@[T(@"Без сетки"),T(@"Своб.")]]) { [_gridChoice addItemWithTitle:item[0]]; _gridChoice.lastItem.representedObject=item[1]; }
         [_gridChoice selectItemAtIndex:2]; _gridChoice.target=self; _gridChoice.action=@selector(gridChanged:); _gridChoice.toolTip=T(@"Шаг привязки при добавлении, перемещении и растяжении нот"); [self addSubview:_gridChoice];
@@ -154,6 +157,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
     self.zoomOut.frame=NSMakeRect(x,y,34,h); x+=38; self.zoomIn.frame=NSMakeRect(x,y,34,h); x+=38; self.followButton.frame=NSMakeRect(x,y,34,h); x+=46;
     self.scaleButton.frame=NSMakeRect(x,y,34,h); x+=38; self.foldButton.frame=NSMakeRect(x,y,34,h); x+=38; self.helpButton.frame=NSMakeRect(x,y,34,h); x+=46; self.dragHandle.frame=NSMakeRect(x,y,78,h); x+=86;
     self.stats.frame=NSMakeRect(x,y+6,MAX(40,NSWidth(self.bounds)-x-8),18);
+    self.sectionChoice.frame=NSMakeRect(x,y,MAX(40,NSWidth(self.bounds)-x-8),h); self.stats.hidden=!self.sectionChoice.hidden;
     [self clampView];
 }
 - (void)updateToolbar {
@@ -164,6 +168,13 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
     NSString *scaleHint=[NSString stringWithFormat:T(@"%@ гамму%@"),self.showScale?T(@"Подсветка: убрать"):T(@"Подсветить"),scale.length?[@" · " stringByAppendingString:scale]:@""];
     if(![self.scaleButton.hint isEqualToString:scaleHint]) self.scaleButton.hint=scaleHint;
     self.deleteButton.enabled=selected>0; self.quantizeButton.enabled=selected>0 && self.gridBeats>0;
+    NSArray<NSString *> *sections=[self.owner respondsToSelector:@selector(pianoRollSections:)]?[self.owner pianoRollSections:self]:nil;
+    if(sections.count) {   // the open section and the way back, in place of the note count (which becomes its hover text)
+        [self.sectionChoice removeAllItems]; [self.sectionChoice addItemWithTitle:T(@"← Аранжировщик · ⇧⌘A")]; self.sectionChoice.lastItem.representedObject=T(@"← Аранжировщик");
+        for(NSString *name in sections) { [self.sectionChoice addItemWithTitle:name]; self.sectionChoice.lastItem.representedObject=[name componentsSeparatedByString:@" · "].firstObject; }
+        [self.sectionChoice selectItemAtIndex:[self.owner pianoRollSection:self]+1]; self.sectionChoice.toolTip=self.stats.stringValue;
+    }
+    if(self.sectionChoice.hidden!=!sections.count) { self.sectionChoice.hidden=!sections.count; self.needsLayout=YES; }
     [self.speedChoice selectItemAtIndex:self.speed>=1?0:self.speed>=.75?1:self.speed>=.5?2:3];
 }
 - (BOOL)isSelectedAt:(NSUInteger)index { return index<KV_PERFORMANCE_CAPACITY && _selected[index]; }
@@ -282,6 +293,7 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
     [self commit];
 }
 // ---- toolbar actions ----
+- (void)sectionPicked:(NSPopUpButton *)sender { [self.owner pianoRoll:self openSection:sender.indexOfSelectedItem-1]; }
 - (void)resetTrack:(id)sender { (void)sender; [self.owner pianoRollResetRequested:self]; }
 - (void)gridChanged:(NSPopUpButton *)sender { static const double grids[]={1,.5,.25,1.0/3,0}; self.gridBeats=grids[MIN(4,MAX(0,sender.indexOfSelectedItem))]; [self updateToolbar]; self.needsDisplay=YES; }
 - (void)speedChanged:(NSPopUpButton *)sender { static const double speeds[]={1,.75,.5,.25}; self.speed=speeds[MIN(3,MAX(0,sender.indexOfSelectedItem))]; [self.owner pianoRoll:self speedChanged:self.speed]; }
@@ -545,7 +557,8 @@ static NSString *const KvFollowOffHint=@"Вид стоит на месте · н
     double grid=self.gridBeats>0?self.gridBeats:.25,ppb=[self pixelsPerBeat];
     if(grid*ppb>=6) for(double b=0;b<total+1e-9;b+=grid) { CGFloat x=round([self xForBeat:b])+.5; if(x<area.origin.x-1 || x>NSMaxX(area)) continue; [[NSColor.labelColor colorWithAlphaComponent:.05] setFill]; RollFill(NSMakeRect(x,area.origin.y,1,area.size.height)); }
     for(double b=0;b<=total+1e-9;b+=1) { CGFloat x=round([self xForBeat:b])+.5; if(x<area.origin.x-1 || x>NSMaxX(area)+1) continue; BOOL barline=fabs(fmod(b+1e-9,bar))<1e-6; [(barline?strong:line) setFill]; RollFill(NSMakeRect(x,KvToolbarH+(barline?0:KvRulerH-6),1,NSHeight(self.bounds)-KvToolbarH-(barline?0:KvRulerH-6))); }
-    for(double b=0,n=1;b<total-1e-9;b+=bar,n++) RollText([NSString stringWithFormat:@"%.0f",n],NSMakeRect([self xForBeat:b]+4,KvToolbarH+2,40,12),10,NSFontWeightSemibold,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+    double first=[self.owner respondsToSelector:@selector(pianoRollFirstBar:)]?[self.owner pianoRollFirstBar:self]:1;   // a song's section counts the song's bars
+    for(double b=0,n=first;b<total-1e-9;b+=bar,n++) RollText([NSString stringWithFormat:@"%.0f",n],NSMakeRect([self xForBeat:b]+4,KvToolbarH+2,40,12),10,NSFontWeightSemibold,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
     if(t) { NSArray<NSString *> *names=[self.owner pianoRollChordNames:self]; double bpc=t->beats_per_chord;
         for(size_t c=0;c<t->chord_count && c<names.count;c++) { CGFloat x0=[self xForBeat:c*bpc],x1=[self xForBeat:(c+1)*bpc]; [[TNAccent() colorWithAlphaComponent:c%2?.07:.12] setFill]; RollFill(NSMakeRect(x0,KvToolbarH+KvRulerH-12,x1-x0,12)); RollText(names[c],NSMakeRect(x0+4,KvToolbarH+KvRulerH-13,x1-x0-8,12),10,NSFontWeightSemibold,TNAccent(),NSTextAlignmentLeft); } }
     // Notes, clipped to the note area so a partly scrolled top row never covers the ruler.

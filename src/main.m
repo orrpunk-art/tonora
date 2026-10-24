@@ -1819,6 +1819,25 @@ static NSString *Describe(NSView *view) {
     if(tonic) *tonic=((scale[0]%12)+12)%12; return mask;
 }
 - (NSString *)pianoRollScaleName:(KvPianoRoll *)roll { (void)roll; return self.heading.stringValue; }
+- (NSArray<NSString *> *)pianoRollSections:(KvPianoRoll *)roll {
+    (void)roll; if(self.editingSection<0) return nil;
+    const KvSong *song=[self songWithWorking]; double bar=kv_meter_bar(song->meter); NSMutableArray *names=[NSMutableArray array];
+    for(size_t i=0;i<song->count;i++) {
+        int first=(int)floor(kv_section_start(song,i)/bar+1e-9)+1,last=(int)ceil((kv_section_start(song,i)+kv_section_beats(song,i))/bar-1e-9);
+        [names addObject:[NSString stringWithFormat:@"%@ · %@",[self arrangerName:(NSInteger)i],first==last?[NSString stringWithFormat:T(@"такт %d"),first]:[NSString stringWithFormat:T(@"такты %d–%d"),first,last]]];
+    }
+    return names;
+}
+- (NSInteger)pianoRollSection:(KvPianoRoll *)roll { (void)roll; return self.editingSection; }
+- (void)pianoRoll:(KvPianoRoll *)roll openSection:(NSInteger)index {
+    (void)roll; if(index<0) { [self showView:2]; return; }
+    [self editSection:index]; [self.roll reload]; [self.window makeFirstResponder:self.roll];
+    self.status.stringValue=[NSString stringWithFormat:T(@"Пиано-ролл · секция «%@» · ⇧⌘A — обратно в аранжировщик"),[self arrangerName:index]];
+}
+- (int)pianoRollFirstBar:(KvPianoRoll *)roll {
+    (void)roll; if(self.editingSection<0 || self.editingSection>=(NSInteger)self.song->count) return 1;
+    return (int)floor(kv_section_start([self songWithWorking],(size_t)self.editingSection)/kv_meter_bar(self.meter)+1e-9)+1;
+}
 - (void)pianoRollResetRequested:(KvPianoRoll *)roll {
     (void)roll; if(self.trackEdited) [self pushTrackUndo];
     self.trackEdited=NO; [self buildTrack]; [self saveState]; [self updateTransport]; [self restartTrackIfPlaying];
@@ -3315,7 +3334,9 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
         case 126: [self.mode selectItemAtIndex:0]; [self modeChanged:self.mode]; break;
         case 49: [self togglePlayback:self]; break;
         case 17: [self playTonic:self]; break;
-        case 53: [self stopPlayback:nil]; if(self.metronomeOn) [self toggleMetronome:nil]; break;
+        case 53:   // Esc: stop everything; in a section's roll with nothing playing, back to the arranger
+            if(self.viewMode==1 && self.editingSection>=0 && !kv_audio_is_playing(self.audio) && !self.metronomeOn) { [self showView:2]; break; }
+            [self stopPlayback:nil]; if(self.metronomeOn) [self toggleMetronome:nil]; break;
         default: [super keyDown:event];
     }
 }
@@ -4388,6 +4409,12 @@ int main(int argc, const char *argv[]) {
               [root undoSequence:nil]; KV_CHECK(root.song->count==4,@"Arranger: ⌘Z brings it back"); [root redoTrack:nil]; KV_CHECK(root.song->count==3,@"Arranger: ⇧⌘Z removes it again");
               // Notes edited in the roll stay with their section.
               [root arrangerOpenInRoll:1]; KV_CHECK(root.viewMode==1 && root.editingSection==1 && !root.roll.hidden,@"Arranger: double-click opens the section in the roll");
+              KV_CHECK(!root.roll.sectionChoice.hidden && root.roll.sectionChoice.numberOfItems==(NSInteger)root.song->count+1 && root.roll.sectionChoice.indexOfSelectedItem==2,@"Arranger: the roll lists the song's sections, the open one chosen");
+              KV_CHECK([root pianoRollFirstBar:root.roll]==(int)(kv_section_start(root.song,1)/4)+1,@"Arranger: the roll counts the song's bars");
+              [root pianoRoll:root.roll openSection:0]; KV_CHECK(root.viewMode==1 && root.editingSection==0 && root.roll.sectionChoice.indexOfSelectedItem==1,@"Arranger: the list opens another section in the roll");
+              [root pianoRoll:root.roll openSection:1];
+              for(NSNumber *width in @[@1120,@1728]) for(NSNumber *height in @[@680,@1000]) { root.frame=NSMakeRect(0,0,width.doubleValue,height.doubleValue); [root layout]; [root.roll layout]; NSString *problem=[root layoutProblem]; KV_CHECK(!problem && NSWidth(root.roll.sectionChoice.frame)>=100,([NSString stringWithFormat:@"Section roll layout %@x%@: %@",width,height,problem])); }
+              root.frame=NSMakeRect(0,0,1240,760); [root layout];
               KV_CHECK([root.roll addNoteAtBeat:1 midi:96 duration:.5] && root.trackEdited,@"Arranger: a note added in the roll edits the section");
               [root sendToArranger:nil]; KV_CHECK(root.viewMode==2 && root.song->sections[1].edited && [root arrangerEdited:1],@"Arranger: ⇧⌘A returns to the lane, the section marked edited");
               [root arrangerSelect:0]; KV_CHECK(!root.trackEdited,@"Arranger: another section has its own notes");
@@ -4417,7 +4444,8 @@ int main(int argc, const char *argv[]) {
               [root saveState]; KvRoot *again=[[KvRoot alloc] initWithFrame:root.frame];
               KV_CHECK(again.song->count==3 && again.song->sections[1].edited && again.viewMode==2 && again.song->sections[0].lift==12,@"Arranger: the song survives a restart");
               [again stopPlayback:nil];
-              [root showView:0]; KV_CHECK(root.editingSection==-1 && [root.progression isEqualToArray:second],@"Arranger: the circle has the draft back"); }
+              [root showView:0]; KV_CHECK(root.editingSection==-1 && [root.progression isEqualToArray:second],@"Arranger: the circle has the draft back");
+              [root showView:1]; KV_CHECK(root.roll.sectionChoice.hidden && ![root pianoRollSections:root.roll] && [root pianoRollFirstBar:root.roll]==1,@"Arranger: the draft's roll has no section list"); [root showView:0]; }
             // Arranger suggestions: ghosts under the hovered section, kept while the mouse moves onto them, with an explanation;
             // a click inserts the chorus led in by a rise; a seam takes a transition; other choruses differ; a ghost can be heard.
             { [root stopPlayback:nil]; [root showView:0];

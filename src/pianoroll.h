@@ -25,6 +25,13 @@
 - (NSString *)pianoRollScaleName:(KvPianoRoll *)roll;
 /* Pitch-class set of each chord of the progression (bit 0 = C), to tell chord tones from passing notes and anticipations. */
 - (NSArray<NSNumber *> *)pianoRollChordMasks:(KvPianoRoll *)roll;
+@optional
+/* A section of the song is open: the song's sections by name (nil for the draft), the open one, switching (−1: back to the
+   arranger), and the song's number of the first bar shown. */
+- (NSArray<NSString *> *)pianoRollSections:(KvPianoRoll *)roll;
+- (NSInteger)pianoRollSection:(KvPianoRoll *)roll;
+- (void)pianoRoll:(KvPianoRoll *)roll openSection:(NSInteger)index;
+- (int)pianoRollFirstBar:(KvPianoRoll *)roll;
 @end
 @interface KvPianoRoll : NSView
 @property(nonatomic,weak) id<KvPianoRollOwner> owner;
@@ -47,6 +54,7 @@
 - (NSUInteger)selectedCount;
 - (BOOL)isSelectedAt:(NSUInteger)index;
 @property(nonatomic,readonly) KvMidiDragHandle *dragHandle;
+@property(nonatomic,readonly) NSPopUpButton *sectionChoice;   /* shown instead of the note count while a section of the song is open */
 - (void)selectAll;
 - (void)deselectAll;
 - (void)deleteSelected;
