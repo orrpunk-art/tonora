@@ -34,6 +34,7 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 @property(nonatomic) NSInteger selected;           /* the owner sets it; −1 none */
 @property(nonatomic) double scrollBeat;            /* first beat shown */
 - (void)reload;                                    /* the song or the selection changed */
+- (void)updatePlayhead;                            /* each frame while something plays: moves the playhead line only */
 - (NSRect)rectOfSection:(NSInteger)index;          /* in view coordinates (self-test, hit testing) */
 - (double)beatAtX:(CGFloat)x;
 - (CGFloat)xOfBeat:(double)beat;

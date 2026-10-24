@@ -55,6 +55,17 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 - (int)noteOfFinger:(int)finger hand:(int)hand;   /* 0 = thumb; −1 when the finger is up */
 - (int)pressedFingersForHand:(int)hand;
 - (BOOL)handsVisible;
+- (NSRect)handBox:(int)hand;
+- (void)drawHand:(int)hand inRect:(NSRect)box;
+@end
+/* One hand beside the circle, a view of its own: a moving finger repaints the hand, never the circle. */
+@interface KvHandView : NSView
+@property(nonatomic,weak) KvCircle *circle; @property(nonatomic) int hand;
+@end
+@implementation KvHandView
+- (BOOL)isFlipped { return YES; }
+- (NSView *)hitTest:(NSPoint)point { (void)point; return nil; }   // clicks go to the circle under it
+- (void)drawRect:(NSRect)dirtyRect { (void)dirtyRect; NSRect box=[self.circle handBox:self.hand]; [self.circle drawHand:self.hand inRect:NSOffsetRect(box,-NSMinX(self.frame),-NSMinY(self.frame))]; }
 @end
 @interface KvPiano : NSView {
     float _levels[128];
@@ -330,7 +341,20 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 /* Over the current key or the centre the circle explains itself; over another key it suggests the modulation. */
 static NSString *const KvCircleHint=@"Клик выбирает тонику — нажатый сектор остаётся выделенным в любом ладу. Светлые сектора с номерами — аккорды выбранного лада, пунктир — тот же тон на другом кольце. Лад меняется в списке «Лад» и не сдвигает тонику.";
 @implementation KvCircle
-- (instancetype)initWithFrame:(NSRect)frame { if((self=[super initWithFrame:frame])) { for(int h=0;h<2;h++) for(int f=0;f<5;f++) _fingerNote[h][f]=-1; _hoverIndex=-1; } return self; }
+- (instancetype)initWithFrame:(NSRect)frame {
+    if((self=[super initWithFrame:frame])) {
+        for(int h=0;h<2;h++) for(int f=0;f<5;f++) _fingerNote[h][f]=-1; _hoverIndex=-1;
+        for(int h=0;h<2;h++) { KvHandView *view=[[KvHandView alloc] initWithFrame:NSZeroRect]; view.circle=self; view.hand=h; [self addSubview:view]; }
+    }
+    return self;
+}
+- (NSArray<KvHandView *> *)handViews { NSMutableArray *views=[NSMutableArray array]; for(NSView *view in self.subviews) if([view isKindOfClass:KvHandView.class]) [views addObject:view]; return views; }
+- (void)setFrameSize:(NSSize)size { [super setFrameSize:size]; self.needsLayout=YES; }
+- (void)layout {
+    [super layout]; BOOL visible=[self handsVisible];
+    for(KvHandView *view in [self handViews]) { NSRect box=[self handBox:view.hand]; view.hidden=!visible;
+        if(visible) view.frame=NSIntegralRect(NSMakeRect(NSMinX(box)-26,NSMinY(box)-NSHeight(box)*.35,NSWidth(box)+52,NSHeight(box)*1.35+40)); }
+}
 - (void)updateTrackingAreas {
     [super updateTrackingAreas]; if(self.hoverArea) [self removeTrackingArea:self.hoverArea];
     self.hoverArea=[[NSTrackingArea alloc] initWithRect:NSZeroRect options:NSTrackingMouseMoved|NSTrackingMouseEnteredAndExited|NSTrackingActiveInKeyWindow|NSTrackingInVisibleRect owner:self userInfo:nil]; [self addTrackingArea:self.hoverArea];
@@ -355,21 +379,30 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
 /* A finger that moves from one key to another lifts and presses again, so every note is a visible stroke. */
 - (void)setHand:(int)hand fingers:(const int *)notes {
     if(hand<0 || hand>1) return;
-    for(int f=0;f<5;f++) { int note=notes?notes[f]:-1; if(note>=0 && _fingerNote[hand][f]>=0 && note!=_fingerNote[hand][f]) _fingerLevel[hand][f]=fminf(_fingerLevel[hand][f],.25f); _fingerNote[hand][f]=note; }
+    BOOL changed=NO;
+    for(int f=0;f<5;f++) { int note=notes?notes[f]:-1; if(note>=0 && _fingerNote[hand][f]>=0 && note!=_fingerNote[hand][f]) _fingerLevel[hand][f]=fminf(_fingerLevel[hand][f],.25f); changed|=_fingerNote[hand][f]!=note; _fingerNote[hand][f]=note; }
+    if(changed) [self invalidateHand:hand];   // the caption names the held notes
 }
 - (int)pressedFingersForHand:(int)hand { int n=0; for(int f=0;f<5;f++) if(_fingerNote[hand][f]>=0) n++; return n; }
 - (int)noteOfFinger:(int)finger hand:(int)hand { return hand>=0 && hand<2 && finger>=0 && finger<5?_fingerNote[hand][finger]:-1; }
-- (void)retriggerNote:(int)midi { for(int h=0;h<2;h++) for(int f=0;f<5;f++) if(_fingerNote[h][f]==midi) { _fingerLevel[h][f]=fminf(_fingerLevel[h][f],.25f); self.needsDisplay=YES; } }
+- (void)retriggerNote:(int)midi { for(int h=0;h<2;h++) for(int f=0;f<5;f++) if(_fingerNote[h][f]==midi) { _fingerLevel[h][f]=fminf(_fingerLevel[h][f],.25f); [self invalidateHand:h]; } }
+/* What a moving finger repaints: the two hands with their captions, never the circle between them. */
+- (NSRect)handBox:(int)hand {
+    CGFloat w=[self handWidth]; NSPoint c; CGFloat r; [self geometry:&c radius:&r]; CGFloat h=w*1.25,y=c.y-h/2;
+    return NSMakeRect(hand?c.x+r+12:c.x-r-12-w,y,w,h);
+}
+- (void)invalidateHands { for(KvHandView *view in [self handViews]) view.needsDisplay=YES; }
+- (void)invalidateHand:(int)hand { for(KvHandView *view in [self handViews]) if(view.hand==hand) view.needsDisplay=YES; }
 - (void)advanceFingers {
     NSTimeInterval now=NSProcessInfo.processInfo.systemUptime; double dt=_lastFrame?fmin(.05,now-_lastFrame):1.0/60; _lastFrame=now;
-    BOOL changed=NO,reduce=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+    BOOL changed[2]={NO,NO},reduce=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
     for(int h=0;h<2;h++) for(int f=0;f<5;f++) {
         float target=_fingerNote[h][f]>=0?1:0,old=_fingerLevel[h][f];
         _fingerLevel[h][f]=reduce?target:old+(target-old)*(1-exp(-dt/(target?.012:.06)));
         if(fabsf(_fingerLevel[h][f]-target)<.002) _fingerLevel[h][f]=target;
-        if(fabsf(old-_fingerLevel[h][f])>.001) changed=YES;
+        if(fabsf(old-_fingerLevel[h][f])>.001) changed[h]=YES;
     }
-    if(changed) self.needsDisplay=YES;
+    for(int h=0;h<2;h++) if(changed[h]) [self invalidateHand:h];
 }
 - (CGFloat)handWidth {
     NSPoint c; CGFloat r; [self geometry:&c radius:&r];
@@ -412,12 +445,6 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
     Text(hand?T(@"Правая"):T(@"Левая"),NSMakeRect(box.origin.x-10,NSMaxY(palm)+4,w+20,14),10,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentCenter);
     Text(names.count?[names componentsJoinedByString:@" "]:@"",NSMakeRect(box.origin.x-24,NSMaxY(palm)+18,w+48,14),10,NSFontWeightSemibold,Accent(),NSTextAlignmentCenter);
 }
-- (void)drawHands {
-    CGFloat w=[self handWidth]; if(!w) return;
-    NSPoint c; CGFloat r; [self geometry:&c radius:&r]; CGFloat h=w*1.25,y=c.y-h/2;
-    [self drawHand:0 inRect:NSMakeRect(c.x-r-12-w,y,w,h)];
-    [self drawHand:1 inRect:NSMakeRect(c.x+r+12,y,w,h)];
-}
 - (BOOL)acceptsFirstResponder { return YES; }
 - (void)keyDown:(NSEvent *)event { [self.owner keyDown:event]; }
 - (void)geometry:(NSPoint *)center radius:(CGFloat *)radius {
@@ -436,17 +463,17 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
     NSPoint c; CGFloat r; [self geometry:&c radius:&r];
     CGFloat middle=r*0.69, core=r*0.35;
     KvKey key=self.owner.key;
+    KvChord chords[7]; BOOL has[7]; for(int degree=0;degree<7;degree++) has[degree]=kv_chord_extended(key,degree,(int)self.owner.chordExtension,&chords[degree]);   // once, not per sector
     for(int i=0;i<12;i++) for(int ring=0;ring<2;ring++) {
         NSBezierPath *path=[self sector:i inner:ring?core:middle outer:ring?middle:r center:c];
         NSColor *fill=TNSurface();
-        int scale[8]; kv_scale(key,scale);
         // The sector the user picked stays the tonic in every mode; the mode only changes which chords light up.
         BOOL selected=i==key.circle_index && ring==key.minor;
         KvKey sectorKey={i,ring==1,0,0};
         BOOL related=NO, activeChord=NO; const char *degreeLabel=NULL; char degreeText[24];
         for(int degree=0;degree<7;degree++) {
-            KvChord chord;
-            if(!kv_chord_extended(key,degree,(int)self.owner.chordExtension,&chord)) continue;
+            KvChord chord=chords[degree];
+            if(!has[degree]) continue;
             int third=chord.midi[1]-chord.midi[0], fifth=chord.midi[2]-chord.midi[0];
             if(fifth==7 && kv_tonic(sectorKey)==chord.midi[0]%12 && sectorKey.minor==(third==3)) {
                 related=YES; snprintf(degreeText,sizeof(degreeText),"%s",chord.degree); degreeLabel=degreeText;
@@ -482,7 +509,6 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
     Text(S(kv_key_label(key)),NSMakeRect(c.x-core,top,core*2,hb),big,NSFontWeightSemibold,Ink(),NSTextAlignmentCenter);
     Text(S(kv_mode_name(key)),NSMakeRect(c.x-core+6,top+hb,core*2-12,hs),small,NSFontWeightRegular,NSColor.secondaryLabelColor,NSTextAlignmentCenter);
     Text(@"♪",NSMakeRect(c.x-glyph,top+hb+hs,glyph*2,hg),glyph,NSFontWeightMedium,Accent(),NSTextAlignmentCenter);
-    [self drawHands];
 }
 - (void)mouseDown:(NSEvent *)event {
     [self.window makeFirstResponder:self.owner]; TNHintHide(self); _hoverIndex=-1; _common[0]=_common[1]=0;
@@ -520,6 +546,7 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
     static NSString *const letters[18]={@"A",@"W",@"S",@"E",@"D",@"F",@"T",@"G",@"Y",@"H",@"U",@"J",@"K",@"O",@"L",@"P",@";",@"'"};
     for(int pass=0;pass<2;pass++) for(int midi=[self.owner keyboardViewStart];midi<[self.owner keyboardViewStart]+[self.owner keyboardCount];midi++) {
         BOOL black=[self isBlack:midi]; if(black!=(pass==1)) continue;
+        if(![self needsToDrawRect:[self rectFor:midi]]) continue;   // untouched by what changed
         NSRect rect=NSInsetRect([self rectFor:midi],0.75,0.75);
         NSBezierPath *path=[NSBezierPath bezierPathWithRoundedRect:rect xRadius:4 yRadius:4];
         BOOL selected=[self.owner keyboardHighlights:midi];
@@ -582,9 +609,17 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
     self.pressed=found; [self.owner midiNote:found velocity:100 on:YES];
 }
 - (void)mouseUp:(NSEvent *)event { (void)event; if(self.pressed>=0) [self.owner midiNote:self.pressed velocity:0 on:NO]; self.pressed=-1; }
-- (void)retrigger:(int)midi { if(midi<0 || midi>127) return; _levels[midi]=fminf(_levels[midi],.25f); _litAt[midi]=NSProcessInfo.processInfo.systemUptime; self.needsDisplay=YES; }
+- (void)retrigger:(int)midi { if(midi<0 || midi>127) return; _levels[midi]=fminf(_levels[midi],.25f); _litAt[midi]=NSProcessInfo.processInfo.systemUptime; [self invalidateKey:midi]; }
+/* A key that changes repaints itself (and whatever its rectangle overlaps), not the whole keyboard. */
+- (void)invalidateKey:(int)midi {
+    int start=[self.owner keyboardViewStart]; if(midi<start || midi>=start+[self.owner keyboardCount]) return;
+    [self setNeedsDisplayInRect:NSInsetRect([self rectFor:midi],-1,-1)];
+}
 - (float)levelOf:(int)midi { return midi>=0 && midi<128?_levels[midi]:0; }
-- (void)setRoles:(const unsigned char *)roles { if(roles) memcpy(_role,roles,sizeof(_role)); else memset(_role,0,sizeof(_role)); self.needsDisplay=YES; }
+- (void)setRoles:(const unsigned char *)roles {
+    unsigned char next[128]; if(roles) memcpy(next,roles,sizeof(next)); else memset(next,0,sizeof(next));
+    for(int midi=0;midi<128;midi++) if(next[midi]!=_role[midi]) { _role[midi]=next[midi]; [self invalidateKey:midi]; }
+}
 - (unsigned char)roleOf:(int)midi { return midi>=0 && midi<128?_role[midi]:0; }
 - (void)setActiveNotes:(NSArray<NSNumber *> *)notes {
     BOOL previous[128]; memcpy(previous,_active,sizeof(previous)); memset(_active,0,sizeof(_active)); memset(_sustain,0,sizeof(_sustain));
@@ -601,9 +636,9 @@ static NSString *const KvCircleHint=@"Клик выбирает тонику —
         float target=(_sustain[midi] || (_active[midi] && now-_litAt[midi]<.065))?1:0,old=_levels[midi];
         _levels[midi]=reduce?target:old+(target-old)*(1-exp(-dt/(target?.008:.025)));
         if(fabsf(_levels[midi]-target)<.002) _levels[midi]=target;
-        if(fabsf(old-_levels[midi])>.001) changed=YES;
+        if(fabsf(old-_levels[midi])>.001) { changed=YES; [self invalidateKey:midi]; }
     }
-    if(changed) self.needsDisplay=YES;
+    (void)changed;
 }
 - (void)resetCursorRects { [self addCursorRect:self.bounds cursor:NSCursor.pointingHandCursor]; }
 - (BOOL)isAccessibilityElement { return YES; }
@@ -1015,7 +1050,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
             BOOL busy=kv_audio_is_playing(root.audio) || root.metronomeOn || root.visualPlayback || root.songPlaying;
             root.idleTicks=busy?0:root.idleTicks+1;
             if(root.idleTicks>120) { if(root.idleTicks%60==0 && root.audio) kv_audio_suspend(root.audio); if(root.idleTicks%6) return; }
-            [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers]; [root updateMidiOut]; [root updateTransportIfChanged]; [root updateBeatDots]; [root updateSongPlayback];
+            [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers]; [root updateMidiOut]; [root updateTransportIfChanged]; [root updateBeatDots]; [root updateSongPlayback]; if(root.viewMode==2) [root.arranger updatePlayhead];
             [root reconcilePlayback];
             if(!root.roll.hidden) {
                 double beat=[root isPlayingProgression]?[root playheadBeat]:-1;
@@ -3383,7 +3418,6 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
         }
     }
     [self queueSongPart:self.songPart+1];
-    if(self.viewMode==2) self.arranger.needsDisplay=YES;
 }
 - (void)endSong { self.songPlaying=NO; self.songOrder=nil; self.songOrderBeats=nil; self.songPart=0; self.songQueued=0; self.sentBeat=-2; [self applyRhythm]; if(self.viewMode==2) self.arranger.needsDisplay=YES; }
 - (void)keyDown:(NSEvent *)event {

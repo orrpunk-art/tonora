@@ -24,6 +24,14 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     button.hint=tip; return button;
 }
 
+/* The playhead: a thin view that moves each frame, so the lane under it is not repainted. */
+@interface KvPlayheadView : NSView
+@end
+@implementation KvPlayheadView
+- (NSView *)hitTest:(NSPoint)point { (void)point; return nil; }
+- (BOOL)wantsUpdateLayer { return YES; }
+- (void)updateLayer { self.layer.backgroundColor=NSColor.systemOrangeColor.CGColor; }
+@end
 @interface KvArranger ()
 @property(nonatomic) NSTrackingArea *tracking;
 @property(nonatomic) NSInteger pressed;            /* section under the mouse at mouseDown, −1 none */
@@ -37,6 +45,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
 @property(nonatomic,readwrite) NSInteger hoverSection,hoverGhost,hoverSeam;   /* the section whose ghosts show, the ghost and the seam under the mouse */
 @property(nonatomic) NSArray<NSDictionary *> *ghosts; @property(nonatomic) NSInteger ghostsFor;
 @property(nonatomic) BOOL auditioning;
+@property(nonatomic) KvPlayheadView *playhead;
 @property(nonatomic,readwrite) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readwrite) NSButton *openButton,*revertButton,*removeButton,*takeButton,*exportButton;
 @end
@@ -68,6 +77,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
         _exportButton=Icon(@"square.and.arrow.down",@"↓",T(@"Экспорт MIDI песни… · ⇧⌘E · все секции, бит на 10-м канале, маркеры секций"),nil,NSSelectorFromString(@"exportSong:"));
         _info=[NSTextField labelWithString:@""]; _info.font=[NSFont systemFontOfSize:12 weight:NSFontWeightMedium]; _info.textColor=NSColor.secondaryLabelColor; _info.lineBreakMode=NSLineBreakByTruncatingTail;
         for(NSView *view in @[_kindChoice,_repeatsChoice,_levelChoice,_beatChoice,_liftChoice,_transitionChoice,_openButton,_revertButton,_removeButton,_takeButton,_exportButton,_info]) [self addSubview:view];
+        _playhead=[[KvPlayheadView alloc] initWithFrame:NSZeroRect]; _playhead.wantsLayer=YES; _playhead.hidden=YES; [self addSubview:_playhead];
     }
     return self;
 }
@@ -109,6 +119,12 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     self.removeButton.frame=NSMakeRect(right-34,y-2,34,32); self.revertButton.frame=NSMakeRect(right-74,y-2,34,32); self.openButton.frame=NSMakeRect(right-114,y-2,34,32);
     self.takeButton.frame=NSMakeRect(round(NSMidX(self.bounds)-150),round(NSMidY(self.bounds)+4),300,32);
     self.exportButton.frame=NSMakeRect(right-34,0,34,28);
+}
+- (void)updatePlayhead {
+    double beat=[self.owner arrangerPlayheadBeat]; CGFloat x=beat>=0?round([self xOfBeat:beat]):-1;
+    BOOL shown=beat>=0 && x>=KvInset-1 && x<=NSWidth(self.bounds)-KvInset+1;
+    if(self.playhead.hidden!=!shown) self.playhead.hidden=!shown;
+    NSRect frame=NSMakeRect(x-1,48,2,KvDynamicsTop+30-48); if(shown && !NSEqualRects(frame,self.playhead.frame)) self.playhead.frame=frame;
 }
 - (void)reload {
     self.ghosts=nil; self.ghostsFor=-1;
@@ -283,8 +299,6 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
     }
     [TNAccent() setStroke]; [levels stroke];
     [self drawGhosts];
-    double playhead=[self.owner arrangerPlayheadBeat];
-    if(playhead>=0) { CGFloat x=[self xOfBeat:playhead]; [NSColor.systemOrangeColor setFill]; NSRectFill(NSMakeRect(x-1,48,2,KvDynamicsTop+30-48)); }
     [NSGraphicsContext restoreGraphicsState];
     Text(T(@"Наведите на секцию — что дальше · двойной щелчок — в ролл · перетаскивание — переставить, с ⌥ — копия · ⌘-щелчок — разрезать · правый край — повторы"),NSMakeRect(KvInset,KvDynamicsTop+36,w-2*KvInset,14),10,NSFontWeightRegular,NSColor.tertiaryLabelColor,NO);
 }
