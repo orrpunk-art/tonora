@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="940" viewBox="0 0 1240 940" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" font-size="12">
+<defs><style>
+.t{fill:#e8e9f0}.s{fill:#9a9db3}.mono{font-family:Menlo,monospace}.btn{fill:#2b2f40;stroke:#3a3f55}.pri{fill:#6c74e6}
+.verse{fill:#6c74e6}.chorus{fill:#e09a3c}.pit{fill:#3aa7a0}.trans{fill:#c06ad4}.grey{fill:#6e7489}.bridge{fill:#d4a0e0}
+</style></defs>
+<rect width="1240" height="940" fill="#1b1d27"/>
+<text x="40" y="36" class="t" font-weight="700" font-size="16">Артборд 5 · инструменты и жесты (по образцу Logic Pro, Tracks area)</text>
+
+<!-- A region anatomy -->
+<text x="40" y="70" class="t" font-weight="600">A · Регион под курсором</text>
+<rect x="40" y="86" width="300" height="100" rx="6" fill="#e09a3c" opacity=".45" stroke="#fff" stroke-width="1.5"/>
+<text x="48" y="100" fill="#fff" font-size="10" font-weight="600">Припев · ×2</text>
+<g font-size="11"><rect x="236" y="90" width="98" height="20" rx="5" fill="#1b1d27" opacity=".85"/><text x="246" y="104" class="t">✎</text><text x="266" y="104" class="t">✂</text><text x="286" y="104" class="t">⧉</text><text x="308" y="104" class="t">✕</text></g>
+<g fill="#fff" opacity=".85"><rect x="50" y="130" width="12" height="2"/><rect x="66" y="122" width="10" height="2"/><rect x="80" y="138" width="14" height="2"/><rect x="98" y="126" width="10" height="2"/><rect x="190" y="130" width="12" height="2"/><rect x="206" y="122" width="10" height="2"/><rect x="220" y="138" width="14" height="2"/><rect x="238" y="126" width="10" height="2"/></g>
+<line x1="190" y1="87" x2="190" y2="185" stroke="#fff" stroke-dasharray="3 3" opacity=".6"/>
+<g font-size="10" class="s">
+<text x="350" y="100">кнопки при наведении: ✎ ролл · ✂ разрезать здесь · ⧉ дублировать · ✕ удалить</text>
+<text x="350" y="122">правый верхний угол ↻ — повторы прогрессии (как Loop в Logic), насечка на каждом проходе</text>
+<text x="350" y="144">правый нижний угол ⟷ — длина в тактах: короче — обрезка хвоста, длиннее — ещё проход</text>
+<text x="350" y="166">левый нижний угол — обрезка начала (секция начинается с другого аккорда)</text>
+<text x="350" y="186">перетаскивание за середину — переставить · с ⌥ — копия · на другой регион — поменять местами</text>
+</g>
+
+<!-- B tools -->
+<text x="40" y="226" class="t" font-weight="600">B · Инструменты (панель над дорожками и клавиши)</text>
+<g font-size="11">
+<rect x="40" y="240" width="340" height="26" rx="7" fill="#262a3a"/>
+<rect x="42" y="242" width="86" height="22" rx="5" class="pri"/><text x="85" y="257" fill="#fff" text-anchor="middle">▸ Указатель · T</text>
+<text x="190" y="257" class="s" text-anchor="middle">✂ Ножницы · I</text><text x="306" y="257" class="s" text-anchor="middle">✎ Карандаш · P</text>
+<g class="s" font-size="10">
+<text x="40" y="290">Указатель (T): выбор, перетаскивание, углы регионов. Ножницы: щелчок режет регион по привязке. Карандаш: щелчок в пустом месте дорожки создаёт секцию из текущего лупа.</text>
+<text x="40" y="308">Зажатый ⌘ временно даёт ножницы (курсор ✂), как Command-click tool в Logic. Esc — обратно к указателю.</text>
+</g>
+<rect x="40" y="326" width="110" height="26" rx="7" class="btn"/><text x="52" y="343" class="t">Привязка: Такт</text>
+<g class="s" font-size="10"><text x="160" y="343">Умная (по масштабу) · Такт · Доля · 1/8 · Без привязки. Привязка действует на ножницы, углы и перетаскивание; ⌃ при жесте — без привязки.</text></g>
+<rect x="40" y="362" width="26" height="26" rx="7" class="btn"/><text x="53" y="379" class="s" text-anchor="middle">−</text>
+<rect x="70" y="362" width="26" height="26" rx="7" class="btn"/><text x="83" y="379" class="s" text-anchor="middle">+</text>
+<rect x="100" y="362" width="90" height="26" rx="7" class="btn"/><text x="145" y="379" class="t" text-anchor="middle">Вся песня · Z</text>
+<g class="s" font-size="10"><text x="200" y="379">⌘ + колесо или щипок — зум к курсору; ⌘← ⌘→ — шаг; Z — вся песня; сетка линейки мельчает: такты → доли → восьмые.</text></g>
+</g>
+
+<!-- C ruler -->
+<text x="40" y="420" class="t" font-weight="600">C · Линейка</text>
+<rect x="40" y="432" width="560" height="20" fill="#20232f"/><rect x="160" y="432" width="180" height="20" fill="#e09a3c" opacity=".25"/>
+<g class="s" font-size="10"><text x="42" y="446">1</text><text x="162" y="446">5</text><text x="282" y="446">9</text><text x="402" y="446">13</text><text x="522" y="446">17</text></g>
+<line x1="230" y1="428" x2="230" y2="456" stroke="#ff7a2f" stroke-width="2"/>
+<g class="s" font-size="10"><text x="40" y="474">щелчок — плейхед сюда, ▶ или Пробел играет отсюда · перетаскивание по линейке — цикл (повтор ↻ зацикливает его) · двойной щелчок — снять цикл</text></g>
+
+<!-- D structure -->
+<text x="40" y="600" class="t" font-weight="600">D · Структура ▾ — собрать песню из лупа</text>
+<g font-size="11">
+<rect x="40" y="614" width="300" height="150" rx="8" fill="#2b2f40" stroke="#3a3f55"/>
+<text x="52" y="634" class="t">Поп · И–К–Пр–К–Пр–Б–Пр–Пр</text>
+<text x="52" y="654" class="t">С ямой · И–К–Пр–Я–К–Пр–Пр–Кц</text>
+<text x="52" y="674" class="t">Баллада · И–К–К–Пр–К–Пр–Б–Пр–Кц</text>
+<text x="52" y="694" class="t">Танцевальная · И–Билд–Дроп–Я–Билд–Дроп–Кц</text>
+<text x="52" y="714" class="t">Короткая · К–Пр–К–Пр</text>
+<line x1="52" y1="726" x2="328" y2="726" stroke="#3a3f55"/>
+<text x="52" y="746" class="s">Другой вариант той же формы · ⌘R</text>
+</g>
+<g class="s" font-size="10">
+<text x="40" y="784">Куплет — выбранная секция (или первый куплет песни), припев — уже существующий или новый;</text>
+<text x="40" y="800">бридж, яма, интро, концовка и переходы генерируются; между соседями ставятся переходы по таблице.</text>
+<text x="40" y="816">Повторный выбор формы заменяет сгенерированные секции и не трогает правленные вручную.</text>
+</g>
+
+<!-- E beat vs click -->
+<text x="40" y="856" class="t" font-weight="600">E · Метроном и бит — одно исключает другое</text>
+<g class="s" font-size="10">
+<text x="40" y="876">Транспорт ⏱ — только клик метронома (⌘K) и отсчёт. Бит — регион на дорожке «Ударные» у каждой секции;</text>
+<text x="40" y="892">на круге «Ударные» — бит черновика в том же меню, где был бит. Пока бит звучит, клик молчит (кроме отсчёта).</text>
+<text x="40" y="908">M на дорожке «Бас» в секции «Яма» убирает левую руку; M на «Ударные» — бит; громкость — по дорожке и по региону.</text>
+</g>
+
+<!-- F sizes -->
+<text x="40" y="510" class="t" font-weight="600">F · Читаемость</text>
+<g class="s" font-size="10">
+<text x="40" y="530">Минимум 18 pt на такт, имя секции не короче 6 символов, иначе показывается значок типа. Переход в 1 такт при любом масштабе не уже 28 pt.</text>
+<text x="40" y="546">Миниатюры нот: правая рука — штрихи по высоте в 60 % региона, бас — толще и ниже, ударные — точки по инструментам (бочка внизу, хай-хэт вверху).</text>
+<text x="40" y="562">При ширине региона меньше 40 pt миниатюры и подписи скрываются, остаётся цвет и значок типа.</text>
+</g>
+<text x="40" y="930" class="s" font-size="10">Цвета типов как в 1.4; новый тип «Бридж» — сиреневый светлый. Все жесты дублируются пунктами контекстного меню региона (правый щелчок).</text>
+</svg>
