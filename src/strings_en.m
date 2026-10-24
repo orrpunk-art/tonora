@@ -7,6 +7,7 @@ NSDictionary<NSString *,NSString *> *TNEnglishTable(void) {
         @"Настройки…":@"Settings…",
         @"Настройки":@"Settings",
         @"Интерфейс перестраивается сразу. Последовательность, звук и тональность сохраняются.":@"The interface switches at once. The sequence, sound and key are kept.",
+        @"Струнные · остинато спиккато — другие струнные фактуры в списке «Фактура»":@"Strings · spiccato ostinato — the other strings textures are in the «Texture» list",
         @"Правая":@"Right",
         @"Левая":@"Left",
         @"Квартоквинтовый круг. Стрелки влево и вправо выбирают тональность, вверх и вниз — мажор или минор, с Option — лад. Пробел — играть или остановить последовательность; T — тоника; 1–7 — ступени.":@"Circle of fifths. Left and right arrows choose the key, up and down switch major and minor, with Option the mode. Space plays or stops the sequence; T plays the tonic; 1–7 the degrees.",

@@ -2050,9 +2050,16 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
 - (void)instrumentChanged:(NSPopUpButton *)sender {
     NSInteger instrument=sender.indexOfSelectedItem;
     if(kv_audio_set_instrument(self.audio,(int)instrument)) {
-        self.instrument=instrument;
-        // Strings textures belong to the strings: another instrument falls back to block chords and says so.
-        if(self.performanceMode>=3 && ![self stringsChosen]) { [self changeArrangement:^{ self.performanceMode=1; }]; self.status.stringValue=T(@"Струнная фактура доступна только у струнных — включено фортепиано, две руки"); }
+        // Like a new key or chord, a new instrument does not stop the music: playback goes on from the current chord.
+        BOOL wasStrings=[self stringsChosen],stringsTexture=self.performanceMode>=3;
+        [self changeArrangement:^{
+            self.instrument=instrument;
+            // The strings start with their most telling texture, the spiccato ostinato; another instrument leaves the strings textures for two hands.
+            if([self stringsChosen] && !wasStrings) { self.performanceMode=3+KV_STRINGS_OSTINATO-KV_STRINGS_CHORALE; }
+            else if(self.performanceMode>=3 && ![self stringsChosen]) self.performanceMode=1;
+        }];
+        if([self stringsChosen] && !wasStrings) self.status.stringValue=T(@"Струнные · остинато спиккато — другие струнные фактуры в списке «Фактура»");
+        else if(stringsTexture && ![self stringsChosen]) self.status.stringValue=T(@"Струнная фактура доступна только у струнных — включено фортепиано, две руки");
         [self updateSoundPanelRows]; self.needsLayout=YES; [self refresh]; [self saveState];
     }
     else self.status.stringValue=T(@"Не удалось выбрать инструмент");
@@ -2914,7 +2921,16 @@ int main(int argc, const char *argv[]) {
             KV_CHECK(root.stringsAvailable || getenv("TONORA_NO_STRINGS"),@"Bowed strings are bundled");
             if(root.stringsAvailable) { [root.instrumentChoice selectItemAtIndex:KV_INSTRUMENT_STRINGS]; [root instrumentChanged:root.instrumentChoice];
                 KvRoot *again=[[KvRoot alloc] initWithFrame:root.frame]; KV_CHECK(again.instrument==KV_INSTRUMENT_STRINGS,@"Strings stay chosen after a restart"); [again stopPlayback:nil];
-                [root.instrumentChoice selectItemAtIndex:0]; [root instrumentChanged:root.instrumentChoice]; }
+                [root.instrumentChoice selectItemAtIndex:0]; [root instrumentChanged:root.instrumentChoice];
+                // A new instrument while playing: the music goes on in the new sound; the strings come in as the spiccato ostinato.
+                [root.performanceChoice selectItemWithTag:1]; [root performanceChanged:root.performanceChoice]; [root playProgression:nil];
+                KV_CHECK([root isPlayingProgression],@"Instrument switch: playback starts");
+                [root.instrumentChoice selectItemAtIndex:KV_INSTRUMENT_STRINGS]; [root instrumentChanged:root.instrumentChoice];
+                KV_CHECK([root isPlayingProgression] && root.instrument==KV_INSTRUMENT_STRINGS && root.performanceMode==3+KV_STRINGS_OSTINATO-KV_STRINGS_CHORALE,@"Instrument switch: the strings keep playing, as the spiccato ostinato");
+                KV_CHECK([root.status.stringValue containsString:@"остинато"],@"Instrument switch: the status says the strings play the ostinato");
+                [root.instrumentChoice selectItemAtIndex:1]; [root instrumentChanged:root.instrumentChoice];
+                KV_CHECK([root isPlayingProgression] && root.instrument==1 && root.performanceMode==1,@"Instrument switch: back to a keyboard, still playing, as two hands");
+                [root.instrumentChoice selectItemAtIndex:0]; [root instrumentChanged:root.instrumentChoice]; [root stopPlayback:nil]; }
             root.humanizeControl.selectedSegment=0; [root humanizeChanged:root.humanizeControl];
             KV_CHECK(root.humanize,@"Humanization enabled by default / control");
             KV_CHECK(kv_audio_error(root.audio)==0,@"Realtime engine has no callback errors");
