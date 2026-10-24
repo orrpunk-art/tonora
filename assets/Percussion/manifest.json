@@ -1,6 +1,14 @@
 {
-  "repository": "sgossner/VCSL",
-  "commit": "c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e",
+  "sources": {
+    "rusty": {
+      "repository": "sfzinstruments/karoryfer.big-rusty-drums",
+      "commit": "f07ce00df34a46b6b08375be56fe116cf15782bc"
+    },
+    "vcsl": {
+      "repository": "sgossner/VCSL",
+      "commit": "c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e"
+    }
+  },
   "layers": [
     "soft 1",
     "soft 2",
@@ -8,9 +16,9 @@
     "loud 2"
   ],
   "sounds": {
-    "36": "cajon-bass",
+    "36": "kick",
     "37": "side-stick",
-    "38": "cajon-slap",
+    "38": "snare",
     "39": "clap",
     "42": "hihat-closed",
     "46": "hihat-open",
@@ -21,235 +29,580 @@
   },
   "files": [
     {
-      "file": "036-cajon-bass-1.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit2_mp_rr1.wav",
-      "source_sha256": "aa8836ba7ff3f79a4e6ce82b8a42e0c17321fd44300403a05a47012a5173bfc9",
-      "sha256": "03416d05bfac5bd223fece9da1eec680e916929e03b534dae62301747cd7cf96",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit2_mp_rr1.wav"
+      "file": "036-kick-1.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/kick/k_vl8_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "6ceac70ec47243b86201889371724315336937ad5c11b2380ccad3f686ea60de",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/kick/k_vl8_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/oh/k_vl8_rr1.flac",
+          "gain": 0.5,
+          "source_sha256": "c5578143ed73133bd7fd920712b1fc7fd95a9fc8df7d1657563322d0e36b5cc0",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/oh/k_vl8_rr1.flac"
+        }
+      ],
+      "sha256": "594742f58ff2525a6283e15249edae46a3c2a08227d70188a68caa904d2b6a21"
     },
     {
-      "file": "036-cajon-bass-2.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit2_mp_rr2.wav",
-      "source_sha256": "802697b43b68b32c37e717367871164c22508d0baa7310582abbd44ed168756c",
-      "sha256": "3762e22f8ad679769c1beffc52f075a88f9dcad127dfb9db36bcf248f47121a4",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit2_mp_rr2.wav"
+      "file": "036-kick-2.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/kick/k_vl8_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "3022cbddbff314116434e8d4405c5f0fb58c0dec0c0c06dbc32faa55107d3212",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/kick/k_vl8_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/oh/k_vl8_rr2.flac",
+          "gain": 0.5,
+          "source_sha256": "b9e274ac3c202f548935d74d6afd5619b852525449e98e140c3e9d98f033aeac",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/oh/k_vl8_rr2.flac"
+        }
+      ],
+      "sha256": "3b3eb04d94cf72fe91b0b3bcea2816f8faa6e138b5cda4dce6cf16b6dad2b5c8"
     },
     {
-      "file": "036-cajon-bass-3.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit2_f_rr1.wav",
-      "source_sha256": "ad85e345189439370fb54676813affba0e46f5d9f502aa63e995a2ea7a831960",
-      "sha256": "1ef5e0d442bf903695c9b171779d35c2088abe8039f9289cee7d755df80c25db",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit2_f_rr1.wav"
+      "file": "036-kick-3.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/kick/k_vl13_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "35436a84127b72757e7dc7c266783af7e5f8e4f4244584df083a8cb8b784b768",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/kick/k_vl13_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/oh/k_vl13_rr1.flac",
+          "gain": 0.5,
+          "source_sha256": "5ef7f1388bf228013090ed74be8073148a3381078e9fdf0343a0c29e075a046a",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/oh/k_vl13_rr1.flac"
+        }
+      ],
+      "sha256": "e1408e3a6127de5b4bd379120168f61942b6b88242d1cfb2d847400b70963004"
     },
     {
-      "file": "036-cajon-bass-4.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit2_f_rr2.wav",
-      "source_sha256": "263ecb8dd1789dd67ad00e1383d04b052c3177af6d6e98fc32c34c896e55a868",
-      "sha256": "e24158f76fdc2d3cdaa081955185f60abbd6210f5eb16f2ae3324fa21c980832",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit2_f_rr2.wav"
+      "file": "036-kick-4.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/kick/k_vl13_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "8bbeebdaa5b31772624e1929939327cd019a2308cb90d0bd29567d4340221ed1",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/kick/k_vl13_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/kick_24/kick/oh/k_vl13_rr2.flac",
+          "gain": 0.5,
+          "source_sha256": "535cae01c0d1026111f9626f86a641f71d0df1b426251bfc91bbf46bd3bffb59",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/kick_24/kick/oh/k_vl13_rr2.flac"
+        }
+      ],
+      "sha256": "b13ea33b59677d0dd3c1eed89e1d1afd4fd64690ae67f6f7e12007a35ddb5f8c"
     },
     {
       "file": "037-side-stick-1.flac",
-      "source": "Membranophones/Struck Membranophones/Snare Drum, Modern 1/Snare2_stick_v1_rr1_Mid.wav",
-      "source_sha256": "98258bc22a11aca0a8eb1d50a2e0a82cbe6357d30e0b55116db0b188015ff648",
-      "sha256": "bb079a8a1e22a4e2c0b594da99103b9bedb4bf6eb2cbeb0e9c128fdd2e1f408b",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Snare%20Drum%2C%20Modern%201/Snare2_stick_v1_rr1_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/top/sn_ss_vl2_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "a46c6344cad79946f12a248af8ae6e005d21a3101c47d1efb6d8fde5625d506a",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/top/sn_ss_vl2_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/oh/sn_ss_vl2_rr1.flac",
+          "gain": 0.6,
+          "source_sha256": "9fe1cef1f2b79bb8f50e017cb2787b6e28fdb9f678286d9c1c72d3382eca19fc",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/oh/sn_ss_vl2_rr1.flac"
+        }
+      ],
+      "sha256": "97278d4acd54e4f1c91c2ab8da02ba3408351cecd0c681a3a517b1f8f9691112"
     },
     {
       "file": "037-side-stick-2.flac",
-      "source": "Membranophones/Struck Membranophones/Snare Drum, Modern 1/Snare2_stick_v1_rr2_Mid.wav",
-      "source_sha256": "a51181312d92049c2082d116efe96a32305b41c81c06b6c254a94cd2efd08bb1",
-      "sha256": "b1d39c34907ba4f9580c2703ad03c30bc1173290c880e4975b3735f237c6fab8",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Snare%20Drum%2C%20Modern%201/Snare2_stick_v1_rr2_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/top/sn_ss_vl2_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "7f3ec7c569852047a7f05d76ed5930a86b328aca30015aaf23c3d670fb0ee744",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/top/sn_ss_vl2_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/oh/sn_ss_vl2_rr2.flac",
+          "gain": 0.6,
+          "source_sha256": "2b07855c33c1603ce8f8eed859a9c2bbe17c4cf3969d4574da490797964fc2cd",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/oh/sn_ss_vl2_rr2.flac"
+        }
+      ],
+      "sha256": "d8c5b10c3c9b6416b88ed11799b4be8580f40a5c00c077a87f8678578ac30114"
     },
     {
-      "file": "038-cajon-slap-1.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit1_mp_rr1.wav",
-      "source_sha256": "4103c4a847a8cc8860b9449ef26619b56825e972f1bfa0427bdd3f5e36ca81aa",
-      "sha256": "4ed2bab5e05650484ddd0b3136b831471e8b9cc67ba529c9eb849cf2a00bd5c0",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit1_mp_rr1.wav"
+      "file": "037-side-stick-3.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/top/sn_ss_vl4_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "b81e2102701952ed73eb8fcdb08d9e3ad5c055b822bd360e8b345f181436ad73",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/top/sn_ss_vl4_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/oh/sn_ss_vl4_rr1.flac",
+          "gain": 0.6,
+          "source_sha256": "63519f4759e8712583e6cdd93936eac8fdaf6ef9f2dbd0ddb63f3d4627b3e5ae",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/oh/sn_ss_vl4_rr1.flac"
+        }
+      ],
+      "sha256": "feb4ff60dc833ad6545d43d58966cde71260b3141e89e1e984789adf53f2e94c"
     },
     {
-      "file": "038-cajon-slap-2.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit1_mp_rr2.wav",
-      "source_sha256": "f28fcadf95557619fe9f8a1b8ad1af511fbccba67608960c7b2a78040f03f01e",
-      "sha256": "621678f3f19bb3b3f922db288170e0ac112b9e3748a4a422c5ad1df65c748295",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit1_mp_rr2.wav"
+      "file": "037-side-stick-4.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/top/sn_ss_vl4_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "62ad3ecf9b7bf75eac20814a3d56daae4d62b92b349d04d6dc091983f82a38e8",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/top/sn_ss_vl4_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/sidestick/oh/sn_ss_vl4_rr2.flac",
+          "gain": 0.6,
+          "source_sha256": "9bfcc8a59e1e7a279ff6454e5fa79d407a2919a3551c7e612ed7588c5c2b8e6b",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/sidestick/oh/sn_ss_vl4_rr2.flac"
+        }
+      ],
+      "sha256": "9c0770029d1c8db795d435fc1aef9b1c51ffc3302a97754a86b12e4347a6b792"
     },
     {
-      "file": "038-cajon-slap-3.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit1_f_rr1.wav",
-      "source_sha256": "18241c7c9f73dc9edfe6402371fefba5584ed5f9bc6fe827d3bba945841301d6",
-      "sha256": "6505b06374356a7aadd810d33134b6f890a811d54536ff1d4a131ec1757eb8f4",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit1_f_rr1.wav"
+      "file": "038-snare-1.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/top/sn_center_vl5_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "73c19a6ba6baeab21dfca21136bd32b89adb80ef4182bb662556086f20c03ca8",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/top/sn_center_vl5_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/oh/sn_center_vl5_rr1.flac",
+          "gain": 0.6,
+          "source_sha256": "15e6f72dc4c35b2cc650e7c7c8a64a60d143b008cf4ead953d7b1868c544487e",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/oh/sn_center_vl5_rr1.flac"
+        }
+      ],
+      "sha256": "40890c381a5deeb0a414023757f17fe1c7f6f7476d5ea46a5f1af7342386a08d"
     },
     {
-      "file": "038-cajon-slap-4.flac",
-      "source": "Idiophones/Struck Idiophones/Cajon/Cajon_hit1_f_rr2.wav",
-      "source_sha256": "62ddc0aca63f93c6dd30d4dca7bb7debfc65ce6f576e5d5c201423bb81fb03d2",
-      "sha256": "c76517f3d411ec5bdd59b165b2b2619d71b4851e862622bcb3cfc116fea392df",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Cajon/Cajon_hit1_f_rr2.wav"
+      "file": "038-snare-2.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/top/sn_center_vl5_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "8c27048750733c88e471aac7d253df3a27873059dc67f9174425a22f6b4754f7",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/top/sn_center_vl5_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/oh/sn_center_vl5_rr2.flac",
+          "gain": 0.6,
+          "source_sha256": "6543bd3cdf8ebb74cf37475ee537bee635e38ba69d14c4777e29ee96a7d66533",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/oh/sn_center_vl5_rr2.flac"
+        }
+      ],
+      "sha256": "6e865263fe65d228b8623b42057a43607afb1dc6b0f5d1d58450f0f47223559a"
+    },
+    {
+      "file": "038-snare-3.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/top/sn_center_vl9_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "bce1459c07e2960252e8b7d67bbcd725c5333848bfa997828221f231781cf848",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/top/sn_center_vl9_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/oh/sn_center_vl9_rr1.flac",
+          "gain": 0.6,
+          "source_sha256": "034948624fe5068a4c52ca4745d3350da1b1258548d3642a9c398aadcb793404",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/oh/sn_center_vl9_rr1.flac"
+        }
+      ],
+      "sha256": "6a5973b0cfecc586293655b9faa3c8d8ecffc523d58e13bc915ec99abc4fc22b"
+    },
+    {
+      "file": "038-snare-4.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/top/sn_center_vl9_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "bc20f04dfcde5030c113c5a0e768f8423962ae693522a2877a9f39ac4cdb6655",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/top/sn_center_vl9_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/snare_14/center/oh/sn_center_vl9_rr2.flac",
+          "gain": 0.6,
+          "source_sha256": "c3f20747a69676ea90c0b8d539c32d18af015721cf4cc58122963e9bb5ded8b3",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/snare_14/center/oh/sn_center_vl9_rr2.flac"
+        }
+      ],
+      "sha256": "4e033e07ed1eaa8c3e1197b41ec75ea7f16e5ce25271adb5f21e956d38ea99e7"
     },
     {
       "file": "039-clap-1.flac",
-      "source": "Idiophones/Struck Idiophones/Claps/Clap_rr1.wav",
-      "source_sha256": "4c9f3fe4a34733b9be6ed9ce5e5aad48b19c1029ae9c6dd1b96294a847539e3f",
-      "sha256": "10b5e4039c48414d3e98ba548996040f912202d16fd2b478cf7e1c0586dfc20a",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr1.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Claps/Clap_rr1.wav",
+          "gain": 1.0,
+          "source_sha256": "4c9f3fe4a34733b9be6ed9ce5e5aad48b19c1029ae9c6dd1b96294a847539e3f",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr1.wav"
+        }
+      ],
+      "sha256": "cccb1bad862a1703b294c245c1cb1312939187c361da8e451f3354390cd34a30"
     },
     {
       "file": "039-clap-2.flac",
-      "source": "Idiophones/Struck Idiophones/Claps/Clap_rr2.wav",
-      "source_sha256": "5ae64e838b76d0658cc541f07c3c7dcfd4b08815a915f32843a8279bf2c33b9a",
-      "sha256": "11e412270be8ddbd2305a2b21e42d738a32a1c014b40573a0288eea2baf0504d",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr2.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Claps/Clap_rr2.wav",
+          "gain": 1.0,
+          "source_sha256": "5ae64e838b76d0658cc541f07c3c7dcfd4b08815a915f32843a8279bf2c33b9a",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr2.wav"
+        }
+      ],
+      "sha256": "f2e04488cac5000b88d6401367d01aa357b7efd1e0763dd1a5aae60e97f50a62"
     },
     {
       "file": "039-clap-3.flac",
-      "source": "Idiophones/Struck Idiophones/Claps/Clap_rr3.wav",
-      "source_sha256": "e8c13dc41f31b479f8e3ec49e9dfc49c17d299cce36eedb657fe170f0e6fcb44",
-      "sha256": "6bf691f1da9fa1d3bcf9f71908d4342bdff962430247c94de95891a63c5b91ce",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr3.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Claps/Clap_rr3.wav",
+          "gain": 1.0,
+          "source_sha256": "e8c13dc41f31b479f8e3ec49e9dfc49c17d299cce36eedb657fe170f0e6fcb44",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr3.wav"
+        }
+      ],
+      "sha256": "35b16867d25f4239d8e866a1af143f7029b5cdc0315cea48fd9df816ee797889"
     },
     {
       "file": "039-clap-4.flac",
-      "source": "Idiophones/Struck Idiophones/Claps/Clap_rr4.wav",
-      "source_sha256": "3415613351d0af8de674ebc3e8200784c2ffc691da60698cb81ba03704ad748a",
-      "sha256": "a821dfa71e0ed53e1de372f975a626db5ebc7c7176347c7579694024219912a3",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr4.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Claps/Clap_rr4.wav",
+          "gain": 1.0,
+          "source_sha256": "3415613351d0af8de674ebc3e8200784c2ffc691da60698cb81ba03704ad748a",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Claps/Clap_rr4.wav"
+        }
+      ],
+      "sha256": "e3e90362d6e377a09b7e55c49c76538324a153bed8bca5475b3f2e99b12f766a"
     },
     {
       "file": "042-hihat-closed-1.flac",
-      "source": "Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitC_v2_rr1_Mid.wav",
-      "source_sha256": "e1fb54c9a030800038abcebbed1c056fb74bdeec627315f3cd5fd893c6e6b031",
-      "sha256": "0cb5df50b8c95819aeaeda66d3c12d7bbf8c57096f4a83040a41e13d4f5852ee",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Hi-Hat%20Cymbal/HiHat_HitC_v2_rr1_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/cl/ht_cl_vl3_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "ce3d062d8de07cb3f273e84fbb8b9387fe951e21284cdceb8a0ec1e71cbc6bdc",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/cl/ht_cl_vl3_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/oh/ht_cl_vl3_rr1.flac",
+          "gain": 0.5,
+          "source_sha256": "931bbbcd65423b4ffc5657df6c57f6a56e535bc344606f2db0c0d7cbe4c36082",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/oh/ht_cl_vl3_rr1.flac"
+        }
+      ],
+      "sha256": "34c380a1c29b71c57a35429c44a0b6965dbe53eaeeac0d4e09ad10cdcf2039d6"
     },
     {
       "file": "042-hihat-closed-2.flac",
-      "source": "Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitC_v2_rr2_Mid.wav",
-      "source_sha256": "72830eafed387f4b4b5904d4d6f1da23e13b48986fa1bc09d7c5771eafbb3a1a",
-      "sha256": "9365c288407d7ef270d095ffcabb6967f8bbd17fd22c9aef9c8a537cf6f6ac5b",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Hi-Hat%20Cymbal/HiHat_HitC_v2_rr2_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/cl/ht_cl_vl3_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "bc4661e4178f068a6a5dfc623a591761da1f98a9041e36d7ad0a8d2bac246ad8",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/cl/ht_cl_vl3_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/oh/ht_cl_vl3_rr2.flac",
+          "gain": 0.5,
+          "source_sha256": "555e02fb5215d786abcea3d2ea1552b13f06da14deb7107e85fb90c230479bb8",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/oh/ht_cl_vl3_rr2.flac"
+        }
+      ],
+      "sha256": "34c70eb98c92004d56dd11f308662b8df11d206524cba6cfd137c98d2de00017"
     },
     {
       "file": "042-hihat-closed-3.flac",
-      "source": "Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitC_v4_rr1_Mid.wav",
-      "source_sha256": "ccaf3b3a353c22d7aac00c261229c42a1ef083285069f4c76dbafba454b46edd",
-      "sha256": "954b9a9af940204ff45a3e927fb08497566a889c613e37f7325ecb59c6e600e1",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Hi-Hat%20Cymbal/HiHat_HitC_v4_rr1_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/cl/ht_cl_vl5_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "87b23f751a0437ddab419489e2cbd14a79b7955d29034af513a77de96770efd4",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/cl/ht_cl_vl5_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/oh/ht_cl_vl5_rr1.flac",
+          "gain": 0.5,
+          "source_sha256": "7828b550006e5396b4656f4b156450cec6f87526fac28318312d6afd2b022398",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/oh/ht_cl_vl5_rr1.flac"
+        }
+      ],
+      "sha256": "763ed305795bdaddcc572b66bb32da3d73fc778ff66e1b12fa21cbd336721048"
     },
     {
       "file": "042-hihat-closed-4.flac",
-      "source": "Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitC_v4_rr2_Mid.wav",
-      "source_sha256": "98325d2327a7165b12840951de3fd2297e59fcdd0a6a58176a5cb4a3ed1f2958",
-      "sha256": "e23bb091f7e6c515e23f2c875c169bda2b2f706e21ae9d8fcd54d4bfe54fc789",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Hi-Hat%20Cymbal/HiHat_HitC_v4_rr2_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/cl/ht_cl_vl5_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "4f73bf9fbcf945420f7c45765c9e23a0e4cb1a063907367757c3e7e161ae69eb",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/cl/ht_cl_vl5_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/cl/oh/ht_cl_vl5_rr2.flac",
+          "gain": 0.5,
+          "source_sha256": "3c2970ab898a09e1f2293259436e03d6d776a359c423da48db7589510ae9e0cc",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/cl/oh/ht_cl_vl5_rr2.flac"
+        }
+      ],
+      "sha256": "a76bc7b58e5a677649bcdde6f3ddb57966fafe29eb122cbfebb0dd8f9648a4b0"
     },
     {
       "file": "046-hihat-open-1.flac",
-      "source": "Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitO_rr1_Mid.wav",
-      "source_sha256": "fa492ec14cc6924b43ad5fcf9e9a0f406d926998835bde2eb5847cd15ad25be7",
-      "sha256": "61418e2068d3828b4ac1d22156a65f9f8a6335eebf67ad67d17a6f5971eea3da",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Hi-Hat%20Cymbal/HiHat_HitO_rr1_Mid.wav"
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/cl/ht_open_vl3_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "d4a380fc54b9cc724fb567c7d5c3abb4dbd2999340367925f7b7e41100f6ed27",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/cl/ht_open_vl3_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/oh/ht_open_vl3_rr1.flac",
+          "gain": 0.5,
+          "source_sha256": "137e645c60b11382e87e30207fcee730aad676d4e28c1970eec08652dbaf0e21",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/oh/ht_open_vl3_rr1.flac"
+        }
+      ],
+      "sha256": "d4fa14dcec2ef33b5274933a4e47015943c165ee7a13c4a62b5cd5059bd801c6"
+    },
+    {
+      "file": "046-hihat-open-2.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/cl/ht_open_vl3_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "17d7798883b01a9a93dc65041ace93b1ffc0c804f74f95e43224f3bb7a2b4a99",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/cl/ht_open_vl3_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/oh/ht_open_vl3_rr2.flac",
+          "gain": 0.5,
+          "source_sha256": "46c0b37f4ed50836e24cb675e9d67cd1e7f6305d8a137f5c5cf97f1aa34ef06b",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/oh/ht_open_vl3_rr2.flac"
+        }
+      ],
+      "sha256": "b2857bac09192e4f3a3f27e1e80ae6907ae783139fa9c1add4ee4a46de8e4e6c"
+    },
+    {
+      "file": "046-hihat-open-3.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/cl/ht_open_vl5_rr1.flac",
+          "gain": 1.0,
+          "source_sha256": "38f3565f2c23803205e7483a3e992f33e041dd3af2e340e38b1486cc3663f856",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/cl/ht_open_vl5_rr1.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/oh/ht_open_vl5_rr1.flac",
+          "gain": 0.5,
+          "source_sha256": "429fac3437e0aa119308bf825c3c81097aa42baae70101e74b219abe48116f39",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/oh/ht_open_vl5_rr1.flac"
+        }
+      ],
+      "sha256": "cdfa1a508906d06fd6a46dc4867e31460c9f7871c147aa29aaa2838931568ecc"
+    },
+    {
+      "file": "046-hihat-open-4.flac",
+      "mix": [
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/cl/ht_open_vl5_rr2.flac",
+          "gain": 1.0,
+          "source_sha256": "c792d660141d3f2e78aed0a461fc58429dd360e9f228de03e631f501024fda4c",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/cl/ht_open_vl5_rr2.flac"
+        },
+        {
+          "source": "sfzinstruments/karoryfer.big-rusty-drums/Samples/hihat_14/open/oh/ht_open_vl5_rr2.flac",
+          "gain": 0.5,
+          "source_sha256": "a35400a972690253b5e8a17228ecacbd06f81963d4dfee49f2c5cf6fe47a304e",
+          "url": "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/f07ce00df34a46b6b08375be56fe116cf15782bc/Samples/hihat_14/open/oh/ht_open_vl5_rr2.flac"
+        }
+      ],
+      "sha256": "57c2823610ef0190e7d2651ed6c7af781df53abeaa5e7eeb368a2349d9db8c76"
     },
     {
       "file": "054-tambourine-1.flac",
-      "source": "Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v1_rr1_Mid.wav",
-      "source_sha256": "6fd5af9ec2d94c3b66fa871aecbc2e2844eea155a668fd0f15f07d59ae67dd40",
-      "sha256": "9a7d5bb0ed746b4452b681c027327e2475fa56866e3d9950ace23096f162b72b",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Tambourine%201/Tamb1_Hit_v1_rr1_Mid.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v1_rr1_Mid.wav",
+          "gain": 1.0,
+          "source_sha256": "6fd5af9ec2d94c3b66fa871aecbc2e2844eea155a668fd0f15f07d59ae67dd40",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Tambourine%201/Tamb1_Hit_v1_rr1_Mid.wav"
+        }
+      ],
+      "sha256": "e1798f606f0275cdc3a675bde4e3351e3ff736a8f895b2573981d60c86115610"
     },
     {
       "file": "054-tambourine-2.flac",
-      "source": "Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v2_rr1_Mid.wav",
-      "source_sha256": "885ebf1d70f8e888f576682e4e4112b92b69649162f392c83b3379c91a09cf41",
-      "sha256": "7b12e8397eb579d5fb57763fdc1c28d48c7efe5e64e4f7ffa7aa6dea0d121f5b",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Tambourine%201/Tamb1_Hit_v2_rr1_Mid.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v2_rr1_Mid.wav",
+          "gain": 1.0,
+          "source_sha256": "885ebf1d70f8e888f576682e4e4112b92b69649162f392c83b3379c91a09cf41",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Tambourine%201/Tamb1_Hit_v2_rr1_Mid.wav"
+        }
+      ],
+      "sha256": "9b77abaf5fb5c6a3b5b36d01bb00fbe4a46b1b68c8e6e5cffd3fc2221c1295cb"
     },
     {
       "file": "063-conga-high-1.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Conga_HitN_v1_rr1_Sum.wav",
-      "source_sha256": "74bb1f4feb3ae739e229f47f54b66def0cd12adc0033e998091e6456a15eadd0",
-      "sha256": "8e6d17078fff2bfd77b195daf65c91f7e888fa869b9b7165509f5d93b2bbad3e",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v1_rr1_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Conga_HitN_v1_rr1_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "74bb1f4feb3ae739e229f47f54b66def0cd12adc0033e998091e6456a15eadd0",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v1_rr1_Sum.wav"
+        }
+      ],
+      "sha256": "91b0b53249ac75480e6f960f0614d98907cb904149cbd333ee4943efa14da9b9"
     },
     {
       "file": "063-conga-high-2.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Conga_HitN_v1_rr2_Sum.wav",
-      "source_sha256": "08c13ec3aecfeca05762d696e67ec592f018898ed3969270c31fda6d249391f6",
-      "sha256": "d267f5d334d236c980fac5e0cb3b741fbb999f9e8570d77ddb8188661e00dbcc",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v1_rr2_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Conga_HitN_v1_rr2_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "08c13ec3aecfeca05762d696e67ec592f018898ed3969270c31fda6d249391f6",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v1_rr2_Sum.wav"
+        }
+      ],
+      "sha256": "9d6bfd5422184cca8dc473f4f3133133628b021dd7763b74f51b02fe41705c4e"
     },
     {
       "file": "063-conga-high-3.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Conga_HitN_v3_rr1_Sum.wav",
-      "source_sha256": "664365ac735d819c69cabbbae8a78d225fa73059e698ad8ca292c46cc03c6961",
-      "sha256": "f4ff14e7d8b675120614a0d37adc44c26c3201324834d8271c71d3a0f82ddcf3",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v3_rr1_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Conga_HitN_v3_rr1_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "664365ac735d819c69cabbbae8a78d225fa73059e698ad8ca292c46cc03c6961",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v3_rr1_Sum.wav"
+        }
+      ],
+      "sha256": "63004a64c078286a2738531a50421b242435dc3c0d20c68f0468766e44ec9f0e"
     },
     {
       "file": "063-conga-high-4.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Conga_HitN_v3_rr2_Sum.wav",
-      "source_sha256": "d968cd98a8cf8238f244515a302b77adec88dae365bc9de9146ae8938225d142",
-      "sha256": "89dfda0a3f97fbbe29ced84b0c55330517dadb85a7abf77223676fc7739561aa",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v3_rr2_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Conga_HitN_v3_rr2_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "d968cd98a8cf8238f244515a302b77adec88dae365bc9de9146ae8938225d142",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Conga_HitN_v3_rr2_Sum.wav"
+        }
+      ],
+      "sha256": "a701f93c8ac7371c50db47a8cc2398646e88413d736982fff774cc06b228febd"
     },
     {
       "file": "064-conga-low-1.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Tumba_HitN_v2_rr1_Sum.wav",
-      "source_sha256": "c61f662c8af0dc95fcfca81d8a319b71bafd6e4c59a168dceec799fbb7963a47",
-      "sha256": "9e4d28b8fd37ec8749ef996239055e54cbc9e7bc9d4bf1c93fcfb15b075691bc",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v2_rr1_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Tumba_HitN_v2_rr1_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "c61f662c8af0dc95fcfca81d8a319b71bafd6e4c59a168dceec799fbb7963a47",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v2_rr1_Sum.wav"
+        }
+      ],
+      "sha256": "04c627c8d347b7e9367253ceb45154974284e1d6986628d581483b617a2639a4"
     },
     {
       "file": "064-conga-low-2.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Tumba_HitN_v2_rr2_Sum.wav",
-      "source_sha256": "9092f501109e11c07a62503d1e69c53efb6fb9060376d491c57cf3c037199519",
-      "sha256": "f7b6c42a4927ec67b80cb8e5461ef9cf56a60868b287345c4fdf56038d208e36",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v2_rr2_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Tumba_HitN_v2_rr2_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "9092f501109e11c07a62503d1e69c53efb6fb9060376d491c57cf3c037199519",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v2_rr2_Sum.wav"
+        }
+      ],
+      "sha256": "ebcada9ffcc4f7222afc50126a47ac25b067f6ed72be8a475720d733a31597bb"
     },
     {
       "file": "064-conga-low-3.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Tumba_HitN_v4_rr1_Sum.wav",
-      "source_sha256": "5504101dba1a22e133efb77147084e96565a7ff64535f94f2f3d8934f2b2895b",
-      "sha256": "a32864fb5ce460abea21f2dc0610faa59950e7fc3b71ab66ded42d4d136afdad",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v4_rr1_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Tumba_HitN_v4_rr1_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "5504101dba1a22e133efb77147084e96565a7ff64535f94f2f3d8934f2b2895b",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v4_rr1_Sum.wav"
+        }
+      ],
+      "sha256": "69c45c585ad031666f316b2a7bdf30b7a0afbb25eeb868d0b59546a3784bd932"
     },
     {
       "file": "064-conga-low-4.flac",
-      "source": "Membranophones/Struck Membranophones/Conga/Tumba_HitN_v4_rr2_Sum.wav",
-      "source_sha256": "0f47c8791caf3a056c046ea58fee8c6845dbb0e5a7af26a466f1558072325b55",
-      "sha256": "a1d13c8a77de0d8a190e41468a6086c75b90e8282339839e9f0d0eea0a0ad6d7",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v4_rr2_Sum.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Membranophones/Struck Membranophones/Conga/Tumba_HitN_v4_rr2_Sum.wav",
+          "gain": 1.0,
+          "source_sha256": "0f47c8791caf3a056c046ea58fee8c6845dbb0e5a7af26a466f1558072325b55",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Membranophones/Struck%20Membranophones/Conga/Tumba_HitN_v4_rr2_Sum.wav"
+        }
+      ],
+      "sha256": "3f2df026d920a179536823216b4e4de41868177ad5371921f64eac778867e103"
     },
     {
       "file": "070-shaker-1.flac",
-      "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Up_rr1.wav",
-      "source_sha256": "69a10776db0b838bc6555be2dbdb41e1521bb28bba2e89963d1bf779bfb5b61f",
-      "sha256": "ba58ac230a61341229daf8bc6870a89f1e2ba64869cc1f98d1e6122f4633b90f",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Up_rr1.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Up_rr1.wav",
+          "gain": 1.0,
+          "source_sha256": "69a10776db0b838bc6555be2dbdb41e1521bb28bba2e89963d1bf779bfb5b61f",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Up_rr1.wav"
+        }
+      ],
+      "sha256": "9616675f5933e871ce35dd7db7df478c5932f6d366aa1c8805e16589b355be7e"
     },
     {
       "file": "070-shaker-2.flac",
-      "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Up_rr2.wav",
-      "source_sha256": "661f7591bf5fc77d8b69c61bd52425af20d0f5692bdd2f68c74a684c5f02d26d",
-      "sha256": "abd2a710f334917ab8f438abe1616d690a359c4af192690548ea5100111d9f87",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Up_rr2.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Up_rr2.wav",
+          "gain": 1.0,
+          "source_sha256": "661f7591bf5fc77d8b69c61bd52425af20d0f5692bdd2f68c74a684c5f02d26d",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Up_rr2.wav"
+        }
+      ],
+      "sha256": "e3286c2fa2d307df9c6eb3dab4c34acfa004d477e07c9b829acf07ad37a306b1"
     },
     {
       "file": "070-shaker-3.flac",
-      "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Down_rr1.wav",
-      "source_sha256": "0df7c271e1dba4de7304f7df81886390dd9ae698bfdd6df570026af4f2223574",
-      "sha256": "a11881f5337e2f08fa12ec53207413213391443d2c4462b7789cf933c4840908",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Down_rr1.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Down_rr1.wav",
+          "gain": 1.0,
+          "source_sha256": "0df7c271e1dba4de7304f7df81886390dd9ae698bfdd6df570026af4f2223574",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Down_rr1.wav"
+        }
+      ],
+      "sha256": "b52e3413c176b8c69b5c601a6f2a01283faf30f9f72e1e21169ccb9a6938fd12"
     },
     {
       "file": "070-shaker-4.flac",
-      "source": "Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Down_rr2.wav",
-      "source_sha256": "1bf11b6a055ace8b6fbe2c158f7bea449c91e4d72f97b9464b4856184aaf186d",
-      "sha256": "843bfc647ace697f0384be579ae2b0a283b97932c17a1d5b1579f8013f7265a9",
-      "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Down_rr2.wav"
+      "mix": [
+        {
+          "source": "sgossner/VCSL/Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Down_rr2.wav",
+          "gain": 1.0,
+          "source_sha256": "1bf11b6a055ace8b6fbe2c158f7bea449c91e4d72f97b9464b4856184aaf186d",
+          "url": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Shaker%2C%20Small/Mid_ShakerDouble_Down_rr2.wav"
+        }
+      ],
+      "sha256": "8e8a9f65f6d2b0265f1fa3d105b7f6bb9a863b0d244c1b4b9f48dcdad41b9fab"
     }
   ]
 }

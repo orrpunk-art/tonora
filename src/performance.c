@@ -329,7 +329,7 @@ bool kv_arrange(const KvChord *chords,size_t count,int base,KvPianoPattern patte
 typedef struct { int drum; const char *steps; } Lane;
 #define LANES 5
 static const Lane four[KV_BEAT_COUNT][LANES]={
-    [KV_BEAT_POP]={{KV_DRUM_KICK,"X.......x.x....."},{KV_DRUM_SNARE,"....X.......X..."},{KV_DRUM_SHAKER,"x.o.x.o.x.o.x.o."},{KV_DRUM_TAMBOURINE,"....o.......o..."}},
+    [KV_BEAT_POP]={{KV_DRUM_KICK,"X.......x.x....."},{KV_DRUM_SNARE,"....X.......X..."},{KV_DRUM_HAT,"x.o.x.o.x.o.x.o."},{KV_DRUM_TAMBOURINE,"....o.......o..."}},
     [KV_BEAT_BALLAD]={{KV_DRUM_KICK,"X.........o....."},{KV_DRUM_STICK,"....x.......x..."},{KV_DRUM_HAT,"o.o.o.o.o.o.o.o."}},
     [KV_BEAT_BOSSA]={{KV_DRUM_KICK,"X..x....X..x...."},{KV_DRUM_STICK,"x..x..x...x..x.."},{KV_DRUM_SHAKER,"xoxoxoxoxoxoxoxo"},{KV_DRUM_CONGA_LOW,"..............o."},{KV_DRUM_CONGA_HIGH,"......o.......o."}},
     [KV_BEAT_SHUFFLE]={{KV_DRUM_KICK,"X.....x....."},{KV_DRUM_SNARE,"...X.....X.."},{KV_DRUM_HAT,"x.ox.ox.ox.o"}},
@@ -337,17 +337,15 @@ static const Lane four[KV_BEAT_COUNT][LANES]={
     [KV_BEAT_TRIPHOP]={{KV_DRUM_KICK,"X.........x....."},{KV_DRUM_SNARE,"........X......."},{KV_DRUM_HAT,"o.o.o.o.o.o.o.o."},{KV_DRUM_SHAKER,"..o...o...o...o."}},
     [KV_BEAT_HOUSE]={{KV_DRUM_KICK,"X...x...x...x..."},{KV_DRUM_CLAP,"....x.......x..."},{KV_DRUM_HAT_OPEN,"..x...x...x...x."},{KV_DRUM_HAT,"o...o...o...o..."}},
 };
-/* 3/4 and 6/8 by kit: [electronic][meter 3/4, 6/8]; a step is a sixteenth (an eighth is two). */
-static const Lane odd[2][2][LANES]={
-    {{{KV_DRUM_KICK,"X..........."},{KV_DRUM_TAMBOURINE,"....o...o..."},{KV_DRUM_SHAKER,"x.o.x.o.x.o."}},
-     {{KV_DRUM_KICK,"X..........."},{KV_DRUM_SNARE,"......x....."},{KV_DRUM_SHAKER,"x.o.o.x.o.o."}}},
-    {{{KV_DRUM_KICK,"X..........."},{KV_DRUM_CLAP,"....o...o..."},{KV_DRUM_HAT,"x.o.x.o.x.o."}},
-     {{KV_DRUM_KICK,"X..........."},{KV_DRUM_SNARE,"......x....."},{KV_DRUM_HAT,"x.o.o.x.o.o."}}},
+/* 3/4 (a waltz on the side stick) and 6/8 (two groups of three, the snare on the second), whatever the beat; a step is a sixteenth. */
+static const Lane odd[2][LANES]={
+    {{KV_DRUM_KICK,"X..........."},{KV_DRUM_STICK,"....o...o..."},{KV_DRUM_HAT,"x.o.x.o.x.o."}},
+    {{KV_DRUM_KICK,"X..........."},{KV_DRUM_SNARE,"......x....."},{KV_DRUM_HAT,"x.o.o.x.o.o."}},
 };
 static int by_beat(const void *a,const void *b) { double d=((const KvHit *)a)->beat-((const KvHit *)b)->beat; return d<0?-1:d>0?1:((const KvHit *)a)->drum-((const KvHit *)b)->drum; }
 size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]) {
     if(beat<0 || beat>=KV_BEAT_COUNT || meter<0 || meter>=KV_METER_COUNT || !hits) return 0;
-    const Lane *lanes=meter==KV_METER_4_4?four[beat]:odd[kv_beat_electronic(beat)][meter==KV_METER_6_8];
+    const Lane *lanes=meter==KV_METER_4_4?four[beat]:odd[meter==KV_METER_6_8];
     double bar=kv_meter_bar(meter); size_t n=0;
     for(int l=0;l<LANES && lanes[l].steps;l++) {
         size_t steps=strlen(lanes[l].steps); double step=bar/steps;
@@ -356,7 +354,6 @@ size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]) {
     }
     qsort(hits,n,sizeof *hits,by_beat); return n;
 }
-bool kv_beat_electronic(KvBeat beat) { return beat==KV_BEAT_HIPHOP || beat==KV_BEAT_TRIPHOP || beat==KV_BEAT_HOUSE; }
 KvBeat kv_beat_for_style(KvPianoPattern style) {
     return style==KV_POP?KV_BEAT_POP:style==KV_DARK_JAZZ?KV_BEAT_SHUFFLE:style==KV_TRIP_HOP?KV_BEAT_TRIPHOP:KV_BEAT_BALLAD;   // the waltz becomes one in 3/4
 }

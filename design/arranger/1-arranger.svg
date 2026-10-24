@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="760" viewBox="0 0 1240 760" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" font-size="13">
+<defs>
+<style>
+.t{fill:#e8e9f0}.s{fill:#9a9db3}.mono{font-family:Menlo,monospace}
+.btn{fill:#2b2f40;stroke:#3a3f55}.pri{fill:#6c74e6}
+.verse{fill:#6c74e6}.chorus{fill:#e09a3c}.pit{fill:#3aa7a0}.trans{fill:#c06ad4}.intro{fill:#6e7489}
+.ghost{fill:none;stroke-dasharray:5 4;stroke-width:1.5}
+</style>
+</defs>
+<rect width="1240" height="760" fill="#1b1d27"/>
+<!-- header -->
+<rect x="24" y="12" width="32" height="32" rx="8" fill="#262a3a"/><text x="40" y="34" class="t" text-anchor="middle" font-weight="700" font-size="16">T</text>
+<text x="66" y="33" class="t" font-weight="700" font-size="18">Tonora</text>
+<rect x="166" y="12" width="138" height="30" rx="8" class="btn"/>
+<text x="189" y="32" class="s" text-anchor="middle">◎</text><text x="235" y="32" class="s" text-anchor="middle">▦</text>
+<rect x="258" y="14" width="44" height="26" rx="6" class="pri"/><text x="280" y="32" fill="#fff" text-anchor="middle">≣</text>
+<text x="318" y="54" class="s" font-size="11">Круг · Пиано-ролл · Аранжировщик (⌘1 ⌘2 ⌘3)</text>
+<rect x="320" y="12" width="200" height="30" rx="8" class="btn"/><text x="334" y="32" class="t">Мажор · ионийский</text><text x="505" y="32" class="s">⌄</text>
+<rect x="532" y="12" width="36" height="30" rx="8" class="btn"/><text x="550" y="32" class="s" text-anchor="middle">♪</text>
+<rect x="820" y="12" width="36" height="30" rx="8" class="btn"/><text x="838" y="32" class="s" text-anchor="middle">?</text>
+<rect x="862" y="12" width="36" height="30" rx="8" class="btn"/><text x="880" y="32" class="s" text-anchor="middle">⚙</text>
+
+<!-- arranger area -->
+<text x="40" y="84" class="t" font-weight="600" font-size="15">Песня · До мажор · 4/4 · 100 BPM · 29 тактов · 1:10</text>
+<rect x="760" y="68" width="150" height="26" rx="7" class="btn"/><text x="835" y="86" class="t" text-anchor="middle" font-size="12">Экспорт MIDI песни</text>
+
+<!-- ruler -->
+<g class="s" font-size="11">
+<line x1="40" y1="118" x2="900" y2="118" stroke="#3a3f55"/>
+<text x="40" y="112">1</text><text x="156" y="112">5</text><text x="272" y="112">9</text><text x="301" y="112">10</text><text x="417" y="112">14</text><text x="533" y="112">18</text><text x="649" y="112">22</text><text x="736" y="112">25</text><text x="765" y="112">26</text><text x="852" y="112">29</text>
+</g>
+<g stroke="#2d3142"><line x1="156" y1="118" x2="156" y2="330"/><line x1="272" y1="118" x2="272" y2="330"/><line x1="301" y1="118" x2="301" y2="330"/><line x1="533" y1="118" x2="533" y2="330"/><line x1="649" y1="118" x2="649" y2="330"/><line x1="765" y1="118" x2="765" y2="330"/></g>
+
+<!-- sections lane: 29 px per bar -->
+<g>
+<rect x="40" y="128" width="114" height="64" rx="8" class="intro" opacity=".9"/>
+<text x="48" y="148" fill="#fff" font-weight="600">Интро</text><text x="48" y="165" fill="#fff" class="mono" font-size="11">C · Am</text><text x="48" y="183" fill="#fff" font-size="11" opacity=".8">4 такта · эмбиент · без бита</text>
+
+<rect x="158" y="128" width="112" height="64" rx="8" class="verse"/>
+<text x="166" y="148" fill="#fff" font-weight="600">Куплет 1</text><text x="166" y="165" fill="#fff" class="mono" font-size="11">C Am F G</text><text x="166" y="183" fill="#fff" font-size="11" opacity=".8">4 такта · ×2 · баллада</text>
+<text x="262" y="147" fill="#fff" font-size="11" opacity=".8">✎</text>
+
+<rect x="274" y="128" width="25" height="64" rx="6" class="trans"/>
+<text x="286" y="166" fill="#fff" font-size="14" text-anchor="middle">⤴</text>
+
+<!-- chorus: selected, hovered -->
+<rect x="303" y="128" width="228" height="64" rx="8" class="chorus"/>
+<rect x="301" y="126" width="232" height="68" rx="10" fill="none" stroke="#fff" stroke-width="2"/>
+<text x="311" y="148" fill="#fff" font-weight="600">Припев 1</text><text x="311" y="165" fill="#fff" class="mono" font-size="11">F G Am C · F G C C</text><text x="311" y="183" fill="#fff" font-size="11" opacity=".9">8 тактов · баллада · проигрыш раз в 2 такта · бит поп</text>
+<text x="518" y="147" fill="#fff" font-size="12">✎</text>
+
+<rect x="535" y="128" width="112" height="64" rx="8" class="pit"/>
+<text x="543" y="148" fill="#fff" font-weight="600">Яма</text><text x="543" y="165" fill="#fff" class="mono" font-size="11">Am · F</text><text x="543" y="183" fill="#fff" font-size="11" opacity=".8">4 такта · арпеджио · бит тихо</text>
+
+<rect x="651" y="128" width="112" height="64" rx="8" class="verse"/>
+<text x="659" y="148" fill="#fff" font-weight="600">Куплет 2</text><text x="659" y="165" fill="#fff" class="mono" font-size="11">C Am F G</text><text x="659" y="183" fill="#fff" font-size="11" opacity=".8">4 такта · ×2 · баллада</text>
+
+<rect x="767" y="128" width="25" height="64" rx="6" class="trans"/><text x="779" y="166" fill="#fff" font-size="14" text-anchor="middle">V7</text>
+<rect x="796" y="128" width="86" height="64" rx="8" class="intro" opacity=".9"/>
+<text x="804" y="148" fill="#fff" font-weight="600">Концовка</text><text x="804" y="165" fill="#fff" class="mono" font-size="11">G → C</text><text x="804" y="183" fill="#fff" font-size="11" opacity=".8">3 такта</text>
+</g>
+
+<!-- ghosts after hovered chorus -->
+<g font-size="11">
+<rect x="303" y="204" width="114" height="34" rx="8" class="ghost" stroke="#3aa7a0"/><text x="360" y="225" fill="#3aa7a0" text-anchor="middle">+ Яма · 4 такта</text>
+<rect x="421" y="204" width="25" height="34" rx="6" class="ghost" stroke="#c06ad4"/><text x="433" y="225" fill="#c06ad4" text-anchor="middle">+</text>
+<rect x="450" y="204" width="114" height="34" rx="8" class="ghost" stroke="#6c74e6"/><text x="507" y="225" fill="#8d94f0" text-anchor="middle">+ Куплет · 4 такта</text>
+<rect x="568" y="204" width="228" height="34" rx="8" class="ghost" stroke="#e09a3c"/><text x="682" y="225" fill="#e09a3c" text-anchor="middle">+ Припев ещё раз · 8 тактов</text>
+<text x="303" y="254" class="s">Наведение на секцию: что обычно идёт следом — первым стоит рекомендуемое. Щелчок вставляет, ⌥-щелчок показывает варианты.</text>
+</g>
+
+<!-- dynamics lane -->
+<text x="40" y="282" class="s" font-size="11">Динамика</text>
+<polyline points="40,318 154,318 158,306 270,306 274,300 299,292 303,286 531,286 535,310 647,310 651,306 763,306 767,296 792,296 796,316 882,326" fill="none" stroke="#6c74e6" stroke-width="2"/>
+<text x="40" y="300" class="s" font-size="11">Бит</text>
+<g font-size="10" fill="#9a9db3"><text x="48" y="330">—</text><text x="166" y="330">по стилю</text><text x="311" y="330">поп</text><text x="543" y="330">тихо</text><text x="659" y="330">по стилю</text><text x="804" y="330">—</text></g>
+
+<!-- playhead -->
+<line x1="372" y1="118" x2="372" y2="330" stroke="#ff7a2f" stroke-width="2"/>
+<text x="40" y="358" class="s" font-size="11">Двойной щелчок или ✎ — открыть секцию в пиано-ролле · перетаскивание — переставить · ⌥-перетаскивание — копия · ⌘T — разрезать по такту · край — растянуть</text>
+
+<!-- inspector -->
+<rect x="920" y="0" width="1" height="470" fill="#2d3142"/>
+<rect x="936" y="12" width="280" height="24" rx="7" fill="#262a3a"/>
+<text x="960" y="29" class="s" font-size="12">Аккорды</text><text x="1028" y="29" class="s" font-size="12">Вне лада</text><text x="1100" y="29" class="s" font-size="12">MIDI</text>
+<rect x="1140" y="14" width="72" height="20" rx="6" class="pri"/><text x="1176" y="29" fill="#fff" font-size="12" text-anchor="middle">Секция</text>
+<text x="936" y="64" class="t" font-weight="700" font-size="22">Припев 1</text>
+<text x="936" y="84" class="s" font-size="12">такты 10–17 · 8 тактов · 19 с</text>
+<g font-size="12">
+<text x="936" y="116" class="s">Тип</text><rect x="1016" y="100" width="200" height="26" rx="7" class="btn"/><text x="1028" y="118" class="t">Припев</text><text x="1200" y="118" class="s">⌄</text>
+<text x="936" y="152" class="s">Аккорды</text>
+<rect x="1016" y="136" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1039" y="154" class="t mono" text-anchor="middle">F</text>
+<rect x="1066" y="136" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1089" y="154" class="t mono" text-anchor="middle">G</text>
+<rect x="1116" y="136" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1139" y="154" class="t mono" text-anchor="middle">Am</text>
+<rect x="1166" y="136" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1189" y="154" class="t mono" text-anchor="middle">C</text>
+<rect x="1016" y="166" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1039" y="184" class="t mono" text-anchor="middle">F</text>
+<rect x="1066" y="166" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1089" y="184" class="t mono" text-anchor="middle">G</text>
+<rect x="1116" y="166" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1139" y="184" class="t mono" text-anchor="middle">C</text>
+<rect x="1166" y="166" width="46" height="26" rx="6" fill="#2b2f40"/><text x="1189" y="184" class="t mono" text-anchor="middle">C</text>
+<text x="1016" y="212" class="s" font-size="11">правятся в ряду последовательности внизу</text>
+<text x="936" y="244" class="s">Длина</text><rect x="1016" y="228" width="96" height="26" rx="7" class="btn"/><text x="1028" y="246" class="t">8 тактов</text><text x="1096" y="246" class="s">⌄</text>
+<text x="1124" y="244" class="s">Повтор</text><rect x="1172" y="228" width="44" height="26" rx="7" class="btn"/><text x="1184" y="246" class="t">×1</text>
+<text x="936" y="280" class="s">Динамика</text><rect x="1016" y="266" width="150" height="4" rx="2" fill="#3a3f55"/><rect x="1016" y="266" width="110" height="4" rx="2" class="pri"/><circle cx="1126" cy="268" r="6" fill="#fff"/><text x="1176" y="272" class="t">+15 %</text>
+<text x="936" y="316" class="s">Бит</text><rect x="1016" y="300" width="200" height="26" rx="7" class="btn"/><text x="1028" y="318" class="t">Поп · кахон и шейкер</text><text x="1200" y="318" class="s">⌄</text>
+<text x="936" y="352" class="s">Регистр</text><rect x="1016" y="336" width="200" height="26" rx="7" class="btn"/><text x="1028" y="354" class="t">Правая рука на октаву выше</text>
+<text x="936" y="388" class="s">Правки</text><text x="1016" y="388" class="t">есть · ✎ 6 нот</text><text x="1110" y="388" fill="#8d94f0">Вернуть рисунок</text>
+<rect x="936" y="410" width="136" height="30" rx="8" class="pri"/><text x="1004" y="430" fill="#fff" text-anchor="middle">Открыть в ролле</text>
+<rect x="1080" y="410" width="136" height="30" rx="8" class="btn"/><text x="1148" y="430" class="t" text-anchor="middle">Другой вариант ⌘R</text>
+</g>
+
+<!-- bottom dock: keyboard + sequence + transport (unchanged) -->
+<rect x="0" y="470" width="1240" height="1" fill="#2d3142"/>
+<text x="40" y="498" class="t" font-weight="600" font-size="14">Припев 1 · такт 12 · G</text>
+<rect x="900" y="486" width="300" height="24" rx="7" fill="#262a3a"/><rect x="902" y="488" width="146" height="20" rx="6" class="pri"/><text x="975" y="503" fill="#fff" font-size="12" text-anchor="middle">Ноты тональности</text><text x="1125" y="503" class="s" font-size="12" text-anchor="middle">Ноты аккорда</text>
+<g>
+<rect x="40" y="520" width="1160" height="88" rx="4" fill="#dfe1ea"/>
+<g fill="#8d94f0"><rect x="42" y="522" width="54" height="84"/><rect x="152" y="522" width="54" height="84"/><rect x="207" y="522" width="54" height="84"/><rect x="262" y="522" width="54" height="84"/></g>
+<g fill="#1b1d27"><rect x="82" y="522" width="30" height="52"/><rect x="137" y="522" width="30" height="52"/><rect x="247" y="522" width="30" height="52"/><rect x="302" y="522" width="30" height="52"/><rect x="357" y="522" width="30" height="52"/><rect x="468" y="522" width="30" height="52"/><rect x="523" y="522" width="30" height="52"/><rect x="633" y="522" width="30" height="52"/><rect x="688" y="522" width="30" height="52"/><rect x="743" y="522" width="30" height="52"/><rect x="854" y="522" width="30" height="52"/><rect x="909" y="522" width="30" height="52"/><rect x="1019" y="522" width="30" height="52"/><rect x="1074" y="522" width="30" height="52"/><rect x="1129" y="522" width="30" height="52"/></g>
+<text x="640" y="572" class="s" font-size="12" text-anchor="middle">клавиатура — без изменений: показывает звучащие ноты секции</text>
+</g>
+<!-- sequence row = chords of the selected section -->
+<g font-size="12">
+<text x="40" y="630" class="s" font-size="11">Аккорды секции «Припев 1» — те же 8 слотов, правятся как раньше</text>
+<rect x="40" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="95" y="658" class="t mono" text-anchor="middle">1 · IV   F</text>
+<rect x="156" y="638" width="110" height="30" rx="7" class="pri"/><text x="211" y="658" fill="#fff" class="mono" text-anchor="middle">2 · V   G</text>
+<rect x="272" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="327" y="658" class="t mono" text-anchor="middle">3 · vi  Am</text>
+<rect x="388" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="443" y="658" class="t mono" text-anchor="middle">4 · I   C</text>
+<rect x="504" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="559" y="658" class="t mono" text-anchor="middle">5 · IV  F</text>
+<rect x="620" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="675" y="658" class="t mono" text-anchor="middle">6 · V   G</text>
+<rect x="736" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="791" y="658" class="t mono" text-anchor="middle">7 · I   C</text>
+<rect x="852" y="638" width="110" height="30" rx="7" fill="#2b2f40"/><text x="907" y="658" class="t mono" text-anchor="middle">8 · I   C</text>
+<rect x="1010" y="638" width="30" height="30" rx="7" class="btn"/><text x="1025" y="658" class="s" text-anchor="middle">✦</text>
+<rect x="1046" y="638" width="44" height="30" rx="7" class="btn"/><text x="1068" y="658" class="t" text-anchor="middle">4 ⌄</text>
+<rect x="1096" y="638" width="30" height="30" rx="7" class="btn"/><text x="1111" y="658" class="s" text-anchor="middle">≡</text>
+<rect x="1132" y="638" width="30" height="30" rx="7" class="btn"/><text x="1147" y="658" class="s" text-anchor="middle">↶</text>
+<rect x="1168" y="638" width="30" height="30" rx="7" class="btn"/><text x="1183" y="658" class="s" text-anchor="middle">🗑</text>
+</g>
+<!-- transport -->
+<g font-size="12">
+<rect x="40" y="680" width="56" height="30" rx="8" class="pri"/><text x="68" y="700" fill="#fff" text-anchor="middle">■</text>
+<rect x="104" y="680" width="30" height="30" rx="8" class="btn"/><text x="119" y="700" class="s" text-anchor="middle">↻</text>
+<rect x="142" y="680" width="30" height="30" rx="8" class="btn"/><text x="157" y="700" class="s" text-anchor="middle">◫</text>
+<text x="180" y="700" class="s" font-size="11">Темп</text><rect x="214" y="693" width="120" height="4" rx="2" fill="#3a3f55"/><rect x="214" y="693" width="40" height="4" rx="2" class="pri"/><circle cx="254" cy="695" r="6" fill="#fff"/><text x="346" y="700" class="t" font-weight="600">100 BPM</text>
+<rect x="420" y="680" width="30" height="30" rx="8" class="btn"/><text x="435" y="700" class="s" text-anchor="middle">⏱</text>
+<rect x="510" y="680" width="146" height="30" rx="8" class="btn"/><text x="524" y="700" class="t">Две руки</text><text x="640" y="700" class="s">⌄</text>
+<rect x="664" y="680" width="68" height="30" rx="8" class="btn"/><text x="678" y="700" class="t">4/4</text><text x="716" y="700" class="s">⌄</text>
+<rect x="740" y="680" width="150" height="30" rx="8" class="btn"/><text x="754" y="700" class="t">Баллада</text><text x="874" y="700" class="s">⌄</text>
+<rect x="898" y="680" width="100" height="30" rx="8" class="btn"/><text x="912" y="700" class="t">1 такт</text><text x="982" y="700" class="s">⌄</text>
+<rect x="1006" y="680" width="156" height="30" rx="8" class="btn"/><text x="1020" y="700" class="t">Проигр. · 2 такта</text><text x="1146" y="700" class="s">⌄</text>
+<rect x="1170" y="680" width="30" height="30" rx="8" class="btn"/><text x="1185" y="700" class="s" text-anchor="middle">⚄</text>
+<text x="40" y="738" class="s" font-size="11">Воспроизведение · песня · такт 12 из 29 · Esc — стоп · ⌥Пробел — играть только секцию</text>
+<text x="1200" y="738" class="s" font-size="11" text-anchor="end">Фактура, стиль, длина аккорда и проигрыши — у выбранной секции · размер и темп — у всей песни</text>
+</g>
+</svg>

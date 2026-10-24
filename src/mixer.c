@@ -64,15 +64,17 @@ static int synth_of(int drum) {
         case KV_DRUM_HAT: return SYNTH_HAT; case KV_DRUM_HAT_OPEN: return SYNTH_HAT_OPEN; case KV_DRUM_TAMBOURINE: return SYNTH_TAMBOURINE;
         case KV_DRUM_CONGA_HIGH: return SYNTH_CONGA_HIGH; case KV_DRUM_CONGA_LOW: return SYNTH_CONGA_LOW; case KV_DRUM_SHAKER: return SYNTH_SHAKER; default: return -1; }
 }
-/* A woodblock-like click: a tone with an overtone and a breath of noise, 1 ms rise, ~15 ms decay. Accent higher and louder. */
+/* A woodblock-like click: a tone with an overtone and a breath of noise, 1 ms rise, ~12 ms decay and a 20 ms fade that
+   reaches zero exactly at the end — a wave cut short would tick once more, 50 ms after every beat. Accent higher and louder. */
 static void synthesize_clicks(KvMixer *m) {
     static const float pitch[CLICKS]={1975.5f,1318.5f,1318.5f},level[CLICKS]={1,.72f,.38f};
     uint32_t noise=0x9e3779b9;
     for(int c=0;c<CLICKS;c++) for(int i=0;i<CLICK_FRAMES;i++) {
-        float t=(float)i/RATE,rise=i<44?(float)i/44:1,decay=expf(-t/.015f);
+        float t=(float)i/RATE,rise=i<44?(float)i/44:1,decay=expf(-t/.012f);
+        int left=CLICK_FRAMES-1-i; float fade=left<882?.5f-.5f*cosf((float)M_PI*left/882):1;
         noise^=noise<<13; noise^=noise>>17; noise^=noise<<5;
         float n=((float)(noise&65535)/32767.5f-1)*expf(-t/.002f)*.25f;
-        m->click_wave[c][i]=level[c]*rise*decay*(.8f*sinf(2*(float)M_PI*pitch[c]*t)+.25f*sinf(4*(float)M_PI*pitch[c]*t)+n)*.5f;
+        m->click_wave[c][i]=level[c]*rise*decay*fade*(.8f*sinf(2*(float)M_PI*pitch[c]*t)+.25f*sinf(4*(float)M_PI*pitch[c]*t)+n)*.5f;
     }
 }
 KvMixer *kv_mixer_create(void) {
@@ -131,7 +133,8 @@ void kv_mixer_rhythm(KvMixer *m,bool on,KvGrid grid,KvMeter meter,double seconds
     if(!m || grid<0 || grid>=KV_GRID_COUNT || meter<0 || meter>=KV_METER_COUNT || !isfinite(seconds_per_beat) || seconds_per_beat<.08 || seconds_per_beat>5 || !isfinite(volume)) return;
     bool was=m->rhythm; m->rhythm_volume=fmaxf(0,fminf(1,volume));
     m->bar=kv_meter_bar(meter); m->pulse=kv_meter_pulse(meter); m->grid=grid;
-    m->step=grid==KV_GRID_BEATS?m->pulse:grid==KV_GRID_SIXTEENTHS?.25:grid==KV_GRID_TRIPLETS && meter!=KV_METER_6_8?1.0/3:.5;
+    // 6/8 clicks every eighth (louder on the two dotted quarters); other meters click their beats.
+    m->step=grid==KV_GRID_SIXTEENTHS?.25:meter==KV_METER_6_8?.5:grid==KV_GRID_BEATS?1:grid==KV_GRID_TRIPLETS?1.0/3:.5;
     m->rhythm=on; if(!on) return;
     if(was) { rhythm_retime(m,seconds_per_beat*RATE); rhythm_align(m,m->origin); return; }
     m->beat_frames=seconds_per_beat*RATE;

@@ -888,9 +888,8 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         { NSArray *grids=@[T(@"Клик · доли"),T(@"Клик · восьмые"),T(@"Клик · триоли"),T(@"Клик · шестнадцатые")];
           for(NSInteger i=0;i<KV_GRID_COUNT;i++) { [_rhythmChoice addItemWithTitle:grids[i]]; _rhythmChoice.lastItem.tag=i; } }
         { NSDictionary *grey=@{NSForegroundColorAttributeName:NSColor.secondaryLabelColor};
-          NSArray *groups=@[@[T(@"Бит · перкуссия (записи VCSL)"),@[@(KvBeatByStyle),@(KV_BEAT_POP),@(KV_BEAT_BALLAD),@(KV_BEAT_BOSSA),@(KV_BEAT_SHUFFLE)]],
-                            @[T(@"Бит · электронный"),@[@(KV_BEAT_HIPHOP),@(KV_BEAT_TRIPHOP),@(KV_BEAT_HOUSE)]]];
-          NSString *titles[KV_BEAT_COUNT]={T(@"Поп · кахон и шейкер"),T(@"Баллада · хай-хэт и стик"),T(@"Босса-нова · шейкер и стик"),T(@"Шаффл · триольный хай-хэт"),T(@"Хип-хоп"),T(@"Трип-хоп"),T(@"Хаус · прямая бочка")};
+          NSArray *groups=@[@[T(@"Бит · живые барабаны"),@[@(KvBeatByStyle),@(KV_BEAT_POP),@(KV_BEAT_BALLAD),@(KV_BEAT_BOSSA),@(KV_BEAT_SHUFFLE),@(KV_BEAT_HIPHOP),@(KV_BEAT_TRIPHOP),@(KV_BEAT_HOUSE)]]];
+          NSString *titles[KV_BEAT_COUNT]={T(@"Поп · бочка, малый, хай-хэт"),T(@"Баллада · стик и хай-хэт"),T(@"Босса-нова · стик, шейкер, конги"),T(@"Шаффл · триольный хай-хэт"),T(@"Хип-хоп"),T(@"Трип-хоп · бэкбит на третью"),T(@"Хаус · прямая бочка")};
           for(NSArray *group in groups) {
               [_rhythmChoice.menu addItem:NSMenuItem.separatorItem]; _rhythmChoice.lastItem.tag=-1;
               NSMenuItem *header=[[NSMenuItem alloc] initWithTitle:group[0] action:NULL keyEquivalent:@""]; header.enabled=NO; header.tag=-1; [_rhythmChoice.menu addItem:header];
@@ -903,7 +902,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
                   item.attributedTitle=text; } } }
         [_rhythmChoice.menu addItem:NSMenuItem.separatorItem]; _rhythmChoice.lastItem.tag=-1;
         [_rhythmChoice addItemWithTitle:T(@"Отсчёт такта перед игрой")]; _rhythmChoice.lastItem.tag=100;
-        _rhythmChoice.target=self; _rhythmChoice.action=@selector(rhythmChanged:); _rhythmChoice.toolTip=T(@"Ритм: клик метронома или бит — перкуссия и электронный; отсчёт такта перед игрой");
+        _rhythmChoice.target=self; _rhythmChoice.action=@selector(rhythmChanged:); _rhythmChoice.toolTip=T(@"Ритм: клик метронома или бит на живых барабанах; отсчёт такта перед игрой");
         [_rhythmChoice setAccessibilityLabel:T(@"Ритм")]; [self addSubview:_rhythmChoice]; _beatDot=-1;
         _tempoSlider=[TNSlider sliderWithValue:_tempo minValue:50 maxValue:240 target:self action:@selector(tempoChanged:)];
         _tempoSlider.continuous=YES; [_tempoSlider setAccessibilityLabel:T(@"Темп воспроизведения")]; [self addSubview:_tempoSlider];
@@ -1010,7 +1009,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     m.cw=MIN(m.w-2*KvMargin,KvMaxContentWidth); m.cx=floor((m.w-m.cw)/2);
     m.headY=m.dockTop+10; m.kbY=m.headY+28+6; m.legendY=m.kbY+KvKeyboardHeight+6; m.sepY=m.legendY+24+8;
     m.seqY=m.sepY+1+8; m.transportY=m.seqY+KvChipHeight+8; m.statusY=m.transportY+KvTransportHeight+6;
-    m.slotW=floor((m.cw-200-16-7*KvSlotGap)/8); m.tempoX=m.cx+168; m.registerX=m.cx+m.cw-200;
+    m.slotW=floor((m.cw-200-16-7*KvSlotGap)/8); m.tempoX=m.cx+160; m.registerX=m.cx+m.cw-200;
     return m;
 }
 - (void)layout {
@@ -1084,8 +1083,9 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     // Transport: play, loop and tempo at the left; texture and pattern at the right.
     CGFloat ty=m.transportY;
     self.playButton.frame=NSMakeRect(m.cx,ty,56,KvTransportHeight); self.loopButton.frame=NSMakeRect(m.cx+64,ty,32,KvTransportHeight);
-    self.metronomeButton.frame=NSMakeRect(m.cx+104,ty,32,KvTransportHeight); self.rhythmChoice.frame=NSMakeRect(m.cx+138,ty,22,KvTransportHeight);
-    self.tempoSlider.frame=NSMakeRect(m.tempoX+40,ty+3,104,26); self.tempoValue.frame=NSMakeRect(m.tempoX+150,ty+7,64,18);
+    // The metronome and its menu read as one control; the beat dots (or «Темп») have their own 56 points before the slider.
+    self.metronomeButton.frame=NSMakeRect(m.cx+104,ty,32,KvTransportHeight); self.rhythmChoice.frame=NSMakeRect(m.cx+137,ty,16,KvTransportHeight);
+    self.tempoSlider.frame=NSMakeRect(m.tempoX+60,ty+3,92,26); self.tempoValue.frame=NSMakeRect(m.tempoX+156,ty+7,64,18);
     // Right group, read left to right: texture, meter, style, chord length, fills, variation.
     CGFloat right=m.cx+m.cw; BOOL hands=self.performanceMode==1,arp=self.performanceMode==2,strings=self.performanceMode>=3,ostinato=self.performanceMode==3+KV_STRINGS_OSTINATO-KV_STRINGS_CHORALE;
     NSArray<NSView *> *group=hands?@[self.performanceChoice,self.meterChoice,self.patternChoice,self.lengthChoice,self.fillChoice,self.arrangeButton]:arp?@[self.performanceChoice,self.meterChoice,self.arpeggioChoice,self.lengthChoice,self.divisionChoice,self.arrangeButton]
@@ -1118,7 +1118,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     }
     Text([NSString stringWithFormat:T(@"Клавиатура %@ · регистр"),[self rangeText]],NSMakeRect(m.registerX-12-260,m.legendY+3,260,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentRight);
     if(self.metronomeOn) [self drawBeatDots:[self beatDotsRect]];   // the metronome shows its beats where «Темп» stands
-    else Text(T(@"Темп"),NSMakeRect(m.tempoX,m.transportY+8,38,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+    else Text(T(@"Темп"),NSMakeRect(m.tempoX,m.transportY+8,56,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
     CGFloat dash[]={4,3};
     for(NSUInteger i=self.progression.count;i<8 && self.progression.count;i++) {
         NSBezierPath *slot=[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(NSMakeRect(m.cx+i*(m.slotW+KvSlotGap),m.seqY,m.slotW,KvChipHeight),1.5,2.5) xRadius:8 yRadius:8];
@@ -1959,7 +1959,7 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     NSInteger beat=[self resolvedBeat];
     if(self.audio && (beat!=self.sentBeat || (beat>=0 && self.meter!=self.sentBeatMeter))) {
         KvHit hits[KV_BEAT_HITS]; size_t count=beat>=0?kv_beat_bar((KvBeat)beat,self.meter,hits):0;
-        if(kv_audio_set_beat(self.audio,hits,count,beat>=0 && kv_beat_electronic((KvBeat)beat))) { self.sentBeat=beat; self.sentBeatMeter=self.meter; }
+        if(kv_audio_set_beat(self.audio,hits,count,false)) { self.sentBeat=beat; self.sentBeatMeter=self.meter; }
     }
     self.metronomeButton.state=self.metronomeOn?NSControlStateValueOn:NSControlStateValueOff;
     for(NSMenuItem *item in self.rhythmChoice.itemArray) {
@@ -1992,18 +1992,20 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
     self.rhythmVolume=MIN(1,MAX(0,sender.doubleValue/100)); self.rhythmVolumeValue.stringValue=[NSString stringWithFormat:@"%.0f %%",self.rhythmVolume*100];
     [self applyRhythm]; [self saveState];
 }
-- (NSUInteger)beatDotCount { return self.meter==KV_METER_4_4?4:self.meter==KV_METER_3_4?3:2; }
-- (NSRect)beatDotsRect { KvMetrics m=self.metrics; return NSMakeRect(m.tempoX,m.transportY+8,38,16); }
+/* One dot per count of the bar: 4, 3, or six eighths in 6/8 (the first larger, the second dotted quarter a little larger). */
+- (NSUInteger)beatDotCount { return self.meter==KV_METER_4_4?4:self.meter==KV_METER_3_4?3:6; }
+- (double)beatDotLength { return self.meter==KV_METER_6_8?.5:1; }
+- (NSRect)beatDotsRect { KvMetrics m=self.metrics; return NSMakeRect(m.tempoX,m.transportY+8,56,16); }
 - (void)drawBeatDots:(NSRect)rect {
-    NSUInteger n=[self beatDotCount]; CGFloat gap=(rect.size.width-4)/n;
-    for(NSUInteger i=0;i<n;i++) { CGFloat r=i==0?4.5:3.5,x=rect.origin.x+4+gap*i+gap/2-r-2,y=NSMidY(rect)-r;
+    NSUInteger n=[self beatDotCount]; CGFloat gap=(rect.size.width-2)/n;
+    for(NSUInteger i=0;i<n;i++) { CGFloat r=i==0?4.5:(n==6 && i==3)?3.8:3,x=rect.origin.x+gap*i+gap/2-r,y=NSMidY(rect)-r;
         [(self.beatDot>=0 && i==(NSUInteger)self.beatDot?Accent():[NSColor.secondaryLabelColor colorWithAlphaComponent:.35]) setFill];
         [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(x,y,2*r,2*r)] fill]; }
 }
 - (void)updateBeatDots {
     if(!self.metronomeOn) return;
     double beat=self.audio?kv_audio_rhythm_beat(self.audio):-1;
-    NSInteger dot=beat<0?-1:(NSInteger)floor(fmod(beat+1e-6,kv_meter_bar(self.meter))/kv_meter_pulse(self.meter));
+    NSInteger dot=beat<0?-1:(NSInteger)floor(fmod(beat+1e-6,kv_meter_bar(self.meter))/[self beatDotLength]);
     if(dot!=self.beatDot) { self.beatDot=dot; [self setNeedsDisplayInRect:NSInsetRect([self beatDotsRect],-2,-2)]; }
 }
 /* The «Фактура» menu: piano textures for every instrument, strings textures with the strings; items carry their mode in the tag,
@@ -2136,7 +2138,7 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
         self.rhythmVolumeSlider.continuous=YES; self.rhythmVolumeSlider.frame=NSMakeRect(164,458,210,26); [self.rhythmVolumeSlider setAccessibilityLabel:T(@"Ритм · громкость")];
         self.rhythmVolumeSlider.toolTip=T(@"Громкость метронома и бита; ритм идёт мимо реверберации и дилея"); [view addSubview:self.rhythmVolumeSlider];
         self.rhythmVolumeValue=Label(@"",12,NSFontWeightMedium); self.rhythmVolumeValue.frame=NSMakeRect(385,462,82,22); [view addSubview:self.rhythmVolumeValue];
-        PanelLabel(view,T(@"A. Holm / G. Sullivan · CC BY 3.0 · VSCO 2 CE · VCSL · CC0 · лицензии — в меню Tonora"),NSMakeRect(24,500,450,20),10);
+        PanelLabel(view,T(@"A. Holm / G. Sullivan · CC BY 3.0 · VSCO · Karoryfer · VCSL · CC0 · лицензии — в меню Tonora"),NSMakeRect(24,500,450,20),10);
         NSButton *preview=Button(T(@"▶  Послушать"),self,@selector(previewSound:)); preview.frame=NSMakeRect(24,546,112,32); [view addSubview:preview];
         NSButton *reset=Button(T(@"По умолчанию"),self,@selector(defaultSound:)); reset.frame=NSMakeRect(144,546,124,32); Hint(reset,T(@"Рояль, реверб 10 %, дилей 10 % на 1/8, ритм 60 %")); [view addSubview:reset];
         NSButton *dry=Button(T(@"Без эффектов"),self,@selector(drySound:)); dry.frame=NSMakeRect(276,546,116,32); [view addSubview:dry];
@@ -2722,7 +2724,7 @@ static int ComputerKeyOffset(unsigned short code) {
 - (void)showCredits:(id)sender {
     (void)sender;
     NSAlert *alert=[NSAlert new]; alert.messageText=T(@"Инструменты Tonora");
-    alert.informativeText=T(@"Salamander Grand Piano V3 — Alexander Holm\nhttps://github.com/sfzinstruments/SalamanderGrandPiano\n\nYamaha CP80 / Hohner Pianet T — Greg Sullivan\nhttps://github.com/sfzinstruments/GregSullivan.E-Pianos\n\nСтрунные (виолончели и скрипки, sustain vibrato) — VS Chamber Orchestra 2: Community Edition, Versilian Studios: Sam Gossner, Simon Dalzell. CC0 1.0, общественное достояние.\nhttps://github.com/sgossner/VSCO-2-CE\n\nПеркуссия для битов (кахон, хай-хэт, стик, хлопки, тамбурин, конги, шейкер) — Versilian Community Sample Library, Versilian Studios. CC0 1.0, общественное достояние.\nhttps://github.com/sgossner/VCSL\n\nРеверберация: Verblib / Freeverb — Philip Bennefall, Jezar at Dreampoint. Public domain / Unlicense.\nhttps://github.com/blastbay/verblib\n\nЗаписи роялей и электропиано: Creative Commons Attribution 3.0\nhttps://creativecommons.org/licenses/by/3.0/\n\nИспользуются компактные наборы записей. Полные тексты лицензий, авторство и контрольные суммы включены в ресурсы приложения.");
+    alert.informativeText=T(@"Salamander Grand Piano V3 — Alexander Holm\nhttps://github.com/sfzinstruments/SalamanderGrandPiano\n\nYamaha CP80 / Hohner Pianet T — Greg Sullivan\nhttps://github.com/sfzinstruments/GregSullivan.E-Pianos\n\nСтрунные (виолончели и скрипки, sustain vibrato) — VS Chamber Orchestra 2: Community Edition, Versilian Studios: Sam Gossner, Simon Dalzell. CC0 1.0, общественное достояние.\nhttps://github.com/sgossner/VSCO-2-CE\n\nБарабаны для битов — Big Rusty Drums, Karoryfer Samples. CC0 1.0, общественное достояние.\nhttps://github.com/sfzinstruments/karoryfer.big-rusty-drums\n\nПеркуссия (хлопки, тамбурин, конги, шейкер) — Versilian Community Sample Library, Versilian Studios. CC0 1.0, общественное достояние.\nhttps://github.com/sgossner/VCSL\n\nРеверберация: Verblib / Freeverb — Philip Bennefall, Jezar at Dreampoint. Public domain / Unlicense.\nhttps://github.com/blastbay/verblib\n\nЗаписи роялей и электропиано: Creative Commons Attribution 3.0\nhttps://creativecommons.org/licenses/by/3.0/\n\nИспользуются компактные наборы записей. Полные тексты лицензий, авторство и контрольные суммы включены в ресурсы приложения.");
     [alert addButtonWithTitle:T(@"Готово")]; [alert runModal];
 }
 - (BOOL)shortcutsVisible { return self.shortcutsCard && !self.shortcutsCard.hidden; }

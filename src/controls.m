@@ -270,6 +270,11 @@ NSString *TNHintVisibleText(void) { return HintPanel.visible?HintBubble.text:nil
 @end
 @implementation TNPopupCell
 - (void)drawWithFrame:(NSRect)frame inView:(NSView *)view {
+    if(self.pullsDown && frame.size.width<30) {   // a menu beside a button: only its chevron, as in a split button
+        CGFloat x=NSMidX(frame),y=NSMidY(frame); NSBezierPath *chevron=[NSBezierPath bezierPath];
+        [chevron moveToPoint:NSMakePoint(x-3.5,y-1.5)]; [chevron lineToPoint:NSMakePoint(x,y+2)]; [chevron lineToPoint:NSMakePoint(x+3.5,y-1.5)];
+        chevron.lineWidth=1.6; chevron.lineCapStyle=NSLineCapStyleRound; [NSColor.secondaryLabelColor setStroke]; [chevron stroke]; (void)view; return;
+    }
     Rounded(NSInsetRect(frame,1,1),8,Control(),Border());
     NSRect text=NSInsetRect(frame,12,0); text.size.width-=20;
     NSImage *icon=self.selectedItem.image;

@@ -1,6 +1,13 @@
-Percussion — Versilian Community Sample Library (VCSL), Versilian Studios (Sam Gossner and contributors).
+Drum kit — Big Rusty Drums, Karoryfer Samples (Dawid Bebenek).
 CC0 1.0 Universal (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+https://github.com/sfzinstruments/karoryfer.big-rusty-drums
+Pinned commit: f07ce00df34a46b6b08375be56fe116cf15782bc
+24" kick, 14" snare (centre hit and side stick), 14" hi-hat (closed and open); close microphone and overheads mixed to stereo.
+
+Hand percussion — Versilian Community Sample Library (VCSL), Versilian Studios (Sam Gossner and contributors).
+CC0 1.0 Universal (public domain).
 https://github.com/sgossner/VCSL
 Pinned commit: c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e
-Cajon (bass and slap), snare side stick, claps, closed and open hi-hat, tambourine, conga and tumba, small shaker; cut at the hit, shortened with a fade, converted to FLAC and level-matched.
-No author endorsement implied.
+Claps, tambourine, conga and tumba, small shaker.
+
+Every hit cut at its attack, shortened with a fade, converted to FLAC and level-matched. No author endorsement implied.

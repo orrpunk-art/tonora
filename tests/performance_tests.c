@@ -406,6 +406,5 @@ int main(void) {
     }
     for(int style=0;style<KV_PATTERN_COUNT;style++) { KvBeat b=kv_beat_for_style((KvPianoPattern)style); CHECK(b>=0 && b<KV_BEAT_COUNT); }
     CHECK(kv_beat_for_style(KV_POP)==KV_BEAT_POP && kv_beat_for_style(KV_TRIP_HOP)==KV_BEAT_TRIPHOP && kv_beat_for_style(KV_DARK_JAZZ)==KV_BEAT_SHUFFLE);
-    CHECK(kv_beat_electronic(KV_BEAT_HOUSE) && !kv_beat_electronic(KV_BEAT_POP));
     puts("Legacy and melodic piano patterns: 24 keys, five registers, independent hands, scale/chord membership, fills, voice leading and invalid inputs passed."); return 0;
 }

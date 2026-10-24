@@ -290,7 +290,7 @@ int main(int argc,char **argv) {
     // The metronome: clicks on the exact frame of each beat at 60/100/160 BPM, accents on the bar in 4/4, 3/4 and 6/8 (two
     // dotted quarters), subdivisions softer; it joins a sequence on its first beat, counts it in, and keeps the beat across a tempo change.
     { size_t at[64]; float peak[64];
-      const KvMeter meters[3]={KV_METER_4_4,KV_METER_3_4,KV_METER_6_8}; const double bars[3]={4,3,3},pulses[3]={1,1,1.5};
+      const KvMeter meters[3]={KV_METER_4_4,KV_METER_3_4,KV_METER_6_8}; const double bars[3]={4,3,3},pulses[3]={1,1,.5};   /* 6/8: every eighth */
       for(int t=0;t<3;t++) for(int mt=0;mt<3;mt++) {
           double bpm=(double[]){60,100,160}[t],beat=44100*60/bpm; KvMixer *r=kv_mixer_create(); CHECK(r);
           kv_mixer_rhythm(r,true,KV_GRID_BEATS,meters[mt],60/bpm,.6f); uint64_t origin=kv_mixer_clock(r);
@@ -302,6 +302,11 @@ int main(int argc,char **argv) {
           CHECK(peak[0]>peak[1]*1.15f);
           kv_mixer_free(r);
       }
+      // No tick after the click: its wave fades to silence, so the last sound before each silence is tiny (a cut wave leaves a step).
+      { KvMixer *q=kv_mixer_create(); kv_mixer_rhythm(q,true,KV_GRID_EIGHTHS,KV_METER_4_4,1,1); float out[512],previous=0,step=0; int silences=0;
+        for(int k=0;k<44100*2/256;k++) { kv_mixer_render(q,out,256); const float *dry=kv_mixer_dry(q);
+            for(int f=0;f<256;f++) { float x=dry[f*2]; if(x==0 && previous!=0) { silences++; if(fabsf(previous)>step) step=fabsf(previous); } previous=x; } }
+        CHECK(silences>=3 && step<2e-4f); kv_mixer_free(q); }
       // Eighths: the off-beat clicks are softer than the beats.
       KvMixer *r=kv_mixer_create(); kv_mixer_rhythm(r,true,KV_GRID_EIGHTHS,KV_METER_4_4,.5,.6f);
       size_t n=clicks(r,44100*2,at,peak,64); CHECK(n==8 && fabs((double)at[1]-at[0]-11025)<=1 && peak[1]<peak[2]*.8f && peak[2]<peak[0]);
@@ -322,8 +327,8 @@ int main(int argc,char **argv) {
       n=clicks(r,44100,at,peak,64); CHECK(n>=3 && fabs((double)(at[2]-at[1])-11025)<=1);
       kv_mixer_rhythm(r,false,KV_GRID_BEATS,KV_METER_4_4,.25,.6f); advance(r,block,2400); CHECK(kv_mixer_rhythm_beat(r)<0 && clicks(r,44100,at,peak,64)==0);
       kv_mixer_free(r); }
-    // Beats: hits on the exact frames of the bar; the electronic kit needs no recordings; the recorded kit has every drum the
-    // acoustic beats use (soft and loud, two takes); a count-in is clicked and the beat comes in with the sequence.
+    // Beats: hits on the exact frames of the bar; without recordings the synthesized kit plays; the recorded kit has every drum
+    // the beats use (soft and loud, two takes); a count-in is clicked and the beat comes in with the sequence.
     { size_t at[64]; float peak[64];
       KvMixer *r=kv_mixer_create(); CHECK(r); kv_mixer_humanize(r,false);
       kv_mixer_rhythm(r,true,KV_GRID_BEATS,KV_METER_4_4,.6,.6f); uint64_t origin=kv_mixer_clock(r);
@@ -335,7 +340,6 @@ int main(int argc,char **argv) {
       if(argc==6) {
           KvPianoBank *kit=kv_piano_load(argv[5]); CHECK(kit);
           for(int b=0;b<KV_BEAT_COUNT;b++) for(int mt=0;mt<KV_METER_COUNT;mt++) { KvHit h[KV_BEAT_HITS]; size_t k=kv_beat_bar((KvBeat)b,(KvMeter)mt,h);
-              if(kv_beat_electronic((KvBeat)b)) continue;
               for(size_t i=0;i<k;i++) for(int layer=0;layer<4;layer++) { KvSampleView v; CHECK(kv_piano_layer(kit,h[i].drum,layer,&v) && v.midi==h[i].drum && v.frames>441); } }
           kv_mixer_drums(r,kit); kv_mixer_beat(r,pop,np,false); float energy=0;
           for(int i=0;i<40;i++) { advance(r,block,2646); const float *dry=kv_mixer_dry(r); for(int f=0;f<256;f++) energy+=dry[f*2]*dry[f*2]; }

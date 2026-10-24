@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="560" viewBox="0 0 1240 560" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" font-size="13">
+<defs><style>
+.t{fill:#e8e9f0}.s{fill:#9a9db3}.mono{font-family:Menlo,monospace}
+.verse{fill:#6c74e6}.chorus{fill:#e09a3c}.pit{fill:#3aa7a0}.trans{fill:#c06ad4}
+.ghost{fill:none;stroke-dasharray:5 4;stroke-width:1.5}
+</style></defs>
+<rect width="1240" height="560" fill="#1b1d27"/>
+<text x="40" y="36" class="t" font-weight="700" font-size="16">Артборд 2 · три жеста на ленте секций</text>
+
+<!-- A: hover on a loop -->
+<text x="40" y="72" class="t" font-weight="600">A · Наведение на луп: подсказки «что дальше»</text>
+<g>
+<rect x="40" y="88" width="224" height="64" rx="8" class="verse"/>
+<rect x="38" y="86" width="228" height="68" rx="10" fill="none" stroke="#fff" stroke-width="1.5" opacity=".6"/>
+<text x="48" y="108" fill="#fff" font-weight="600">Куплет 1</text><text x="48" y="125" fill="#fff" class="mono" font-size="11">C Am F G · ×2</text><text x="48" y="143" fill="#fff" font-size="11" opacity=".8">8 тактов · баллада</text>
+<text x="250" y="107" fill="#fff" font-size="12">✎</text>
+<rect x="40" y="164" width="28" height="34" rx="6" class="ghost" stroke="#c06ad4"/><text x="54" y="185" fill="#c06ad4" text-anchor="middle" font-size="11">⤴</text>
+<rect x="72" y="164" width="224" height="34" rx="8" class="ghost" stroke="#e09a3c"/><text x="184" y="185" fill="#e09a3c" text-anchor="middle" font-size="11">+ Припев · 8 тактов</text>
+<rect x="300" y="164" width="112" height="34" rx="8" class="ghost" stroke="#3aa7a0"/><text x="356" y="185" fill="#3aa7a0" text-anchor="middle" font-size="11">+ Яма · 4 такта</text>
+<rect x="416" y="164" width="224" height="34" rx="8" class="ghost" stroke="#6c74e6"/><text x="528" y="185" fill="#8d94f0" text-anchor="middle" font-size="11">+ Куплет ещё раз</text>
+<!-- tooltip bubble -->
+<rect x="72" y="212" width="400" height="86" rx="8" fill="#2b2f40" stroke="#3a3f55"/>
+<text x="84" y="232" class="t" font-weight="600" font-size="12">Подъём → Припев</text>
+<text x="84" y="250" class="s" font-size="11">Переход: такт на G7 с подъёмом арпеджио и дробью малого.</text>
+<text x="84" y="266" class="s" font-size="11">Припев: F – G – Am – C · F – G – C – C, правая рука на октаву выше,</text>
+<text x="84" y="282" class="s" font-size="11">проигрыш раз в 2 такта, динамика +15 %, бит поп. Щелчок — вставить.</text>
+<text x="84" y="296" class="s" font-size="11" fill="#8d94f0">⌥-щелчок — другие варианты припева · пробел при наведении — послушать</text>
+</g>
+
+<!-- B: seam between sections -->
+<text x="700" y="72" class="t" font-weight="600">B · Стык двух секций: вставка перехода</text>
+<g>
+<rect x="700" y="88" width="150" height="64" rx="8" class="chorus"/><text x="708" y="108" fill="#fff" font-weight="600">Припев 1</text><text x="708" y="125" fill="#fff" class="mono" font-size="11">F G Am C …</text>
+<rect x="874" y="88" width="150" height="64" rx="8" class="pit"/><text x="882" y="108" fill="#fff" font-weight="600">Яма</text><text x="882" y="125" fill="#fff" class="mono" font-size="11">Am · F</text>
+<rect x="852" y="84" width="20" height="72" rx="5" fill="none" stroke="#c06ad4" stroke-dasharray="4 3" stroke-width="1.5"/>
+<text x="862" y="128" fill="#c06ad4" text-anchor="middle" font-size="14">+</text>
+<rect x="760" y="164" width="300" height="104" rx="8" fill="#2b2f40" stroke="#3a3f55"/>
+<text x="772" y="184" class="t" font-weight="600" font-size="12">Переход Припев → Яма · 1 такт</text>
+<g font-size="11">
+<rect x="772" y="194" width="276" height="18" rx="4" fill="#6c74e6"/><text x="780" y="207" fill="#fff">Пауза · удар на первую долю, тишина, затакт — рекомендуется</text>
+<text x="780" y="226" class="t">Доминанта · V7 к первому аккорду ямы</text>
+<text x="780" y="242" class="t">Проигрыш · интерлюдия на последнем аккорде</text>
+<text x="780" y="258" class="t">Подъём · арпеджио и дробь (2 такта)</text>
+</g>
+</g>
+
+<!-- C: cut and stretch -->
+<text x="40" y="334" class="t" font-weight="600">C · Нарезка и растяжение</text>
+<g>
+<rect x="40" y="366" width="224" height="64" rx="8" class="verse"/><text x="48" y="386" fill="#fff" font-weight="600">Куплет 2</text><text x="48" y="403" fill="#fff" class="mono" font-size="11">C Am F G · ×2</text>
+<line x1="152" y1="360" x2="152" y2="436" stroke="#fff" stroke-dasharray="3 3"/>
+<text x="152" y="352" fill="#fff" font-size="11" text-anchor="middle">✂ такт 5 · ⌘T</text>
+<text x="48" y="454" class="s" font-size="11">Разрез по границе такта: две секции с теми же аккордами, правки нот делятся по времени.</text>
+<text x="48" y="470" class="s" font-size="11">Половина «C Am» — это та же прогрессия, но каждая половина теперь живёт своей жизнью.</text>
+
+<rect x="700" y="366" width="224" height="64" rx="8" class="chorus"/><text x="708" y="386" fill="#fff" font-weight="600">Припев 2</text><text x="708" y="403" fill="#fff" class="mono" font-size="11">F G Am C · F G C C</text>
+<rect x="924" y="366" width="112" height="64" rx="8" class="ghost" stroke="#e09a3c"/><text x="980" y="402" fill="#e09a3c" text-anchor="middle" font-size="11">+4 такта</text>
+<text x="920" y="356" fill="#fff" font-size="11" text-anchor="middle">⟷ правый край</text>
+<text x="708" y="454" class="s" font-size="11">Растяжение за край — шагом в такт: прогрессия повторяется по кругу (9-й такт снова F),</text>
+<text x="708" y="470" class="s" font-size="11">ужатие обрезает хвост. Длина всегда кратна такту; ⌥ — кратно длине аккорда.</text>
+</g>
+<text x="40" y="520" class="s" font-size="11">Цвета типов: куплет — синий, припев — оранжевый, яма — бирюза, переход — сиреневый, интро и концовка — серые. Правленная вручную секция несёт ✎.</text>
+<text x="40" y="540" class="s" font-size="11">Перетаскивание блока — переставить; ⌥-перетаскивание — копия; ⌫ — удалить; ⌘D — дублировать рядом; ⌘R — другой вариант того же типа.</text>
+</svg>

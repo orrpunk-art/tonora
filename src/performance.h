@@ -78,17 +78,16 @@ const char *kv_articulation_name(KvArticulation articulation);
    shorter than an eighth spiccato; in Auto and Legato a note that starts while an earlier note of the same hand still
    sounds (or ends within 0.05 beat before it) is legato, any other note a sustained new bow. Expects events sorted by beat. */
 void kv_string_strokes(const KvPerformance *performance,KvArticulation articulation,unsigned char *strokes);
-/* Beats for the metronome's rhythm layer. Drums are numbered as General MIDI drums: the acoustic kit's recordings sit on
-   these notes (the cajon plays kick and snare), the electronic kit is synthesized for the same numbers. */
+/* Beats for the metronome's rhythm layer, played on a live kit. Drums are numbered as General MIDI drums: the recordings sit
+   on these notes; without them the mixer synthesizes the same numbers. */
 typedef enum { KV_DRUM_KICK=36, KV_DRUM_STICK=37, KV_DRUM_SNARE=38, KV_DRUM_CLAP=39, KV_DRUM_HAT=42, KV_DRUM_HAT_OPEN=46,
                KV_DRUM_TAMBOURINE=54, KV_DRUM_CONGA_HIGH=63, KV_DRUM_CONGA_LOW=64, KV_DRUM_SHAKER=70 } KvDrum;
 typedef struct { double beat; int drum; float velocity; } KvHit;   /* beat from the bar's start; velocity 0…1 */
 typedef enum { KV_BEAT_POP, KV_BEAT_BALLAD, KV_BEAT_BOSSA, KV_BEAT_SHUFFLE, KV_BEAT_HIPHOP, KV_BEAT_TRIPHOP, KV_BEAT_HOUSE, KV_BEAT_COUNT } KvBeat;
 #define KV_BEAT_HITS 64
 /* One bar of `beat` in `meter`, sorted by beat, every hit inside the bar; the first is the kick on the downbeat.
-   4/4 has a pattern per beat; 3/4 and 6/8 have one per kit (a waltz, and two groups of three). */
+   4/4 has a pattern per beat; 3/4 is a waltz and 6/8 two groups of three for every beat. */
 size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]);
-bool kv_beat_electronic(KvBeat beat);                 /* synthesized kit; else the recordings */
 KvBeat kv_beat_for_style(KvPianoPattern style);       /* «По стилю рисунка» */
 const char *kv_beat_name(KvBeat beat);                /* Russian; the app translates */
 void kv_beat_tempo(KvBeat beat,int *low,int *high);  /* the tempo the beat is usually played at */

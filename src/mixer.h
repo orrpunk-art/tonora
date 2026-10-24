@@ -32,7 +32,7 @@ void kv_mixer_pedal(KvMixer *mixer,bool down);
 unsigned kv_mixer_voices(const KvMixer *mixer);
 /* The rhythm layer: a metronome click on a grid of the beat. While on it runs by itself — from the moment it is switched on,
    or from the first beat of a sequence that starts (again at each loop) — at seconds_per_beat; bar and pulse come from the
-   meter (kv_meter_bar, kv_meter_pulse: 6/8 clicks on its two dotted quarters). A new tempo keeps the beat. The click is dry:
+   meter (kv_meter_bar, kv_meter_pulse: 6/8 clicks every eighth, louder on its two dotted quarters). A new tempo keeps the beat. The click is dry:
    it is left out of the stereo render and read with kv_mixer_dry, to be mixed after the effects. volume 0…1. */
 typedef enum { KV_GRID_BEATS, KV_GRID_EIGHTHS, KV_GRID_TRIPLETS, KV_GRID_SIXTEENTHS, KV_GRID_COUNT } KvGrid;
 void kv_mixer_rhythm(KvMixer *mixer,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,float volume);

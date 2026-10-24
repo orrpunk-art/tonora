@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="640" viewBox="0 0 1240 640" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" font-size="13">
+<defs><style>
+.t{fill:#e8e9f0}.s{fill:#9a9db3}.mono{font-family:Menlo,monospace}.btn{fill:#2b2f40;stroke:#3a3f55}.pri{fill:#6c74e6}
+.box{fill:#262a3a;stroke:#3a3f55}
+</style>
+<marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9a9db3"/></marker>
+</defs>
+<rect width="1240" height="640" fill="#1b1d27"/>
+<text x="40" y="36" class="t" font-weight="700" font-size="16">Артборд 3 · пиано-ролл секции и поток работы</text>
+
+<!-- roll toolbar -->
+<text x="40" y="70" class="t" font-weight="600">Панель пиано-ролла, когда открыта секция песни</text>
+<rect x="40" y="82" width="860" height="40" rx="8" fill="#20232f" stroke="#2d3142"/>
+<rect x="48" y="88" width="130" height="28" rx="7" class="btn"/><text x="113" y="107" class="t" text-anchor="middle" font-size="12">← Аранжировщик</text>
+<rect x="186" y="88" width="190" height="28" rx="7" class="pri"/><text x="200" y="107" fill="#fff" font-size="12">Припев 1 · 8 тактов</text><text x="362" y="107" fill="#fff" font-size="12">⌄</text>
+<rect x="386" y="88" width="104" height="28" rx="7" class="btn"/><text x="438" y="107" class="t" text-anchor="middle" font-size="12">Из рисунка</text>
+<rect x="498" y="88" width="70" height="28" rx="7" class="btn"/><text x="533" y="107" class="t" text-anchor="middle" font-size="12">1/16 ⌄</text>
+<rect x="576" y="88" width="62" height="28" rx="7" class="btn"/><text x="607" y="107" class="t" text-anchor="middle" font-size="12">×1 ⌄</text>
+<rect x="646" y="88" width="90" height="28" rx="7" class="btn"/><text x="691" y="107" class="t" text-anchor="middle" font-size="12">Квантовать</text>
+<rect x="744" y="88" width="70" height="28" rx="7" class="btn"/><text x="779" y="107" class="t" text-anchor="middle" font-size="12">Удалить</text>
+<text x="828" y="107" class="s" font-size="11">62 ноты · ✎</text>
+<text x="40" y="146" class="s" font-size="11">Список секций в панели — переход к соседней без возврата в аранжировщик. Остальное в ролле без изменений. Без песни панель прежняя (без первых двух кнопок).</text>
+<!-- mini roll with section bars -->
+<rect x="40" y="160" width="860" height="110" fill="#f2f3f7"/>
+<g stroke="#c9ccd8"><line x1="147" y1="160" x2="147" y2="270"/><line x1="254" y1="160" x2="254" y2="270"/><line x1="361" y1="160" x2="361" y2="270"/><line x1="468" y1="160" x2="468" y2="270"/><line x1="575" y1="160" x2="575" y2="270"/><line x1="682" y1="160" x2="682" y2="270"/><line x1="789" y1="160" x2="789" y2="270"/></g>
+<rect x="40" y="160" width="860" height="14" fill="#e09a3c" opacity=".35"/>
+<g font-size="10" fill="#555"><text x="44" y="171">10 · F</text><text x="151" y="171">11 · G</text><text x="258" y="171">12 · Am</text><text x="365" y="171">13 · C</text><text x="472" y="171">14 · F</text><text x="579" y="171">15 · G</text><text x="686" y="171">16 · C</text><text x="793" y="171">17 · C</text></g>
+<g fill="#6c74e6"><rect x="60" y="190" width="60" height="8" rx="2"/><rect x="170" y="205" width="40" height="8" rx="2"/><rect x="280" y="184" width="70" height="8" rx="2"/><rect x="400" y="212" width="50" height="8" rx="2"/><rect x="500" y="190" width="60" height="8" rx="2"/><rect x="610" y="200" width="40" height="8" rx="2"/><rect x="700" y="186" width="80" height="8" rx="2"/></g>
+<g fill="#2a9d7c"><rect x="44" y="240" width="100" height="8" rx="2"/><rect x="258" y="240" width="100" height="8" rx="2"/><rect x="472" y="240" width="100" height="8" rx="2"/><rect x="686" y="240" width="200" height="8" rx="2"/></g>
+<text x="44" y="264" fill="#555" font-size="10">номера тактов — сквозные по песне (10–17), линейка подкрашена цветом секции</text>
+
+<!-- flow -->
+<text x="40" y="312" class="t" font-weight="600">Поток работы</text>
+<g font-size="12">
+<rect x="40" y="326" width="250" height="96" rx="10" class="box"/>
+<text x="52" y="348" class="t" font-weight="600">1 · Круг</text>
+<text x="52" y="368" class="s">тональность, лад, аккорды</text><text x="52" y="384" class="s">генератор ⌘N, пресеты, стиль</text>
+<text x="52" y="404" fill="#8d94f0">⇧⌘A — в аранжировщик</text>
+<rect x="330" y="326" width="250" height="96" rx="10" class="box"/>
+<text x="342" y="348" class="t" font-weight="600">2 · Пиано-ролл</text>
+<text x="342" y="368" class="s">правка нот черновика</text><text x="342" y="384" class="s">или нот выбранной секции</text>
+<text x="342" y="404" fill="#8d94f0">⇧⌘A — в аранжировщик · ← назад</text>
+<rect x="620" y="326" width="280" height="96" rx="10" class="box"/>
+<text x="632" y="348" class="t" font-weight="600">3 · Аранжировщик</text>
+<text x="632" y="368" class="s">луп → секции: подсказки, вставка,</text><text x="632" y="384" class="s">перестановка, нарезка, растяжение</text>
+<text x="632" y="404" fill="#8d94f0">✎ / двойной щелчок — в ролл с секцией</text>
+<line x1="290" y1="360" x2="330" y2="360" stroke="#9a9db3" marker-end="url(#a)"/>
+<line x1="580" y1="360" x2="620" y2="360" stroke="#9a9db3" marker-end="url(#a)"/>
+<path d="M165,326 C165,296 760,296 760,326" fill="none" stroke="#9a9db3" marker-end="url(#a)"/>
+<path d="M760,422 C760,452 455,452 455,422" fill="none" stroke="#9a9db3" marker-end="url(#a)"/>
+<text x="462" y="298" class="s" font-size="11" text-anchor="middle">последовательность + фактура = новая секция «Куплет»</text>
+<text x="608" y="462" class="s" font-size="11" text-anchor="middle">правка нот секции, обратно по «← Аранжировщик»</text>
+</g>
+
+<!-- data model -->
+<text x="940" y="312" class="t" font-weight="600">Модель</text>
+<g font-size="11" class="mono">
+<rect x="940" y="326" width="270" height="290" rx="10" class="box"/>
+<text x="952" y="346" class="t" font-weight="700">KvSong</text>
+<text x="964" y="362" class="s">key · meter · bpm · instrument</text>
+<text x="964" y="378" class="s">sections[≤32] · selected</text>
+<text x="952" y="404" class="t" font-weight="700">KvSection</text>
+<text x="964" y="420" class="s">kind: intro verse chorus</text>
+<text x="964" y="434" class="s">      pit transition outro</text>
+<text x="964" y="450" class="s">name · codes[≤8] · bars · repeats</text>
+<text x="964" y="466" class="s">arrangement (KvArrangement)</text>
+<text x="964" y="482" class="s">level 0.5…1.2 · beat · lift</text>
+<text x="964" y="498" class="s">transition_kind · seed</text>
+<text x="964" y="514" class="s">edited → track (KvPerformance)</text>
+<text x="952" y="540" class="t" font-weight="700">Воспроизведение</text>
+<text x="964" y="556" class="s">секция = один план ≤512 событий;</text>
+<text x="964" y="570" class="s">микшер держит текущий и следующий,</text>
+<text x="964" y="584" class="s">переключает их без зазора (gapless);</text>
+<text x="964" y="598" class="s">UI подаёт следующий на старте текущего</text>
+</g>
+<text x="40" y="500" class="s" font-size="11">Черновик (круг + ролл без песни) остаётся как сегодня: последовательность, дорожка, отмена. «В аранжировщик» снимает с него копию, черновик не меняется.</text>
+<text x="40" y="520" class="s" font-size="11">Пока песни нет, третий сегмент показывает пустой холст с кнопкой «Взять текущую последовательность».</text>
+<text x="40" y="552" class="s" font-size="11">Смена тональности на круге при открытой песне транспонирует всю песню: коды аккордов от тональности не зависят, секции без правок пересобираются сами,</text>
+<text x="40" y="568" class="s" font-size="11">секции с правками переносятся по полутонам (ноты вне лада остаются вне лада). Смена темпа и размера — тоже для всей песни.</text>
+</svg>
