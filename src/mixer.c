@@ -262,7 +262,9 @@ static void schedule(KvMixer *m) {
                 double eighth=event.beat*2;
                 if(fabs(eighth-round(eighth))<.001 && ((int)lround(eighth))%2) onset+=(int64_t)fmin(529,m->interval*.025);
                 onset+=(int64_t)((random_unit(m)*2-1)*220);
-                int64_t boundary=(int64_t)(event.chord*m->performance.beats_per_chord*m->interval);
+                // Jitter never pulls a note before the chord change it starts: the boundary is the chord's time in this plan,
+                // not its number — a song part cut from the middle of a pass keeps its pass chord numbers (kv_section_part).
+                double chord_beats=m->performance.beats_per_chord; int64_t boundary=chord_beats>0?(int64_t)(floor(event.beat/chord_beats+1e-9)*chord_beats*m->interval):0;
                 if(onset<boundary) onset=boundary;
             }
             m->sequence[i]=event.midi; m->onset[i]=(uint64_t)onset;

@@ -401,8 +401,8 @@ int main(void) {
             if(meter==KV_METER_6_8) { bool second=false; for(size_t i=0;i<n;i++) if(fabs(hits[i].beat-1.5)<1e-9) second=true; CHECK(second); }   // the second dotted quarter is played
         }
         int low=0,high=0; kv_beat_tempo((KvBeat)beat,&low,&high); CHECK(low>=50 && low<high && high<=160 && kv_beat_name((KvBeat)beat)[0]);
-        for(int other=0;other<beat;other++) { KvHit a[KV_BEAT_HITS],b[KV_BEAT_HITS]; size_t na=kv_beat_bar((KvBeat)beat,KV_METER_4_4,a),nb=kv_beat_bar((KvBeat)other,KV_METER_4_4,b);
-            CHECK(na!=nb || memcmp(a,b,na*sizeof *a)!=0); }
+        for(int other=0;other<beat;other++) for(int meter=0;meter<KV_METER_COUNT;meter++) { KvHit a[KV_BEAT_HITS],b[KV_BEAT_HITS]; size_t na=kv_beat_bar((KvBeat)beat,(KvMeter)meter,a),nb=kv_beat_bar((KvBeat)other,(KvMeter)meter,b);
+            CHECK(na!=nb || memcmp(a,b,na*sizeof *a)!=0); }   // every meter tells the beats apart
     }
     for(int style=0;style<KV_PATTERN_COUNT;style++) { KvBeat b=kv_beat_for_style((KvPianoPattern)style); CHECK(b>=0 && b<KV_BEAT_COUNT); }
     CHECK(kv_beat_for_style(KV_POP)==KV_BEAT_POP && kv_beat_for_style(KV_TRIP_HOP)==KV_BEAT_TRIPHOP && kv_beat_for_style(KV_DARK_JAZZ)==KV_BEAT_SHUFFLE);

@@ -66,7 +66,7 @@ static NSString *EndpointName(MIDIEndpointRef endpoint) {
     if(!_input) return;
     ItemCount count=MIDIGetNumberOfSources();
     for(ItemCount i=0;i<count;i++) {
-        MIDIEndpointRef endpoint=MIDIGetSource(i); if(!endpoint || endpoint==_source) continue;
+        MIDIEndpointRef endpoint=MIDIGetSource(i); if(!endpoint || endpoint==_source || [EndpointName(endpoint) isEqualToString:@"Tonora"]) continue;   // another Tonora's output would echo back as held keys
         NSNumber *key=@((unsigned long)endpoint);
         if(![_connected containsObject:key] && MIDIPortConnectSource(_input,endpoint,NULL)==noErr) [_connected addObject:key];
     }

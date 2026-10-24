@@ -648,6 +648,7 @@ NSDictionary<NSString *,NSString *> *TNEnglishTable(void) {
         @"Обе руки на октаву ниже":@"Both hands an octave down",
         @"Обратно в аранжировщик":@"Back to the arranger",
         @"Открыть секцию в пиано-ролле · двойной щелчок · Enter":@"Open the section in the piano roll · double-click · Enter",
+        @"Убрать сдвиг «%@»":@"Remove the shift of «%@»",
         @"Отменить правку песни":@"Undo song edit",
         @"Пауза":@"Break",
         @"Переход":@"Transition",

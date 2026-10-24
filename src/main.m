@@ -118,6 +118,7 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 @property(nonatomic) KvArranger *arranger;
 /* Song playback: the section of each part in play order, the song beat where each part starts, plans by section, parts started. */
 @property(nonatomic) BOOL songPlaying;
+@property(nonatomic) BOOL rollDocked;                      /* the piano roll under the arranger's tracks, on the selected section */
 @property(nonatomic) NSMutableArray<NSNumber *> *songOrder,*songOrderBeats,*songOrderFrom,*songOrderLength;   /* per part: section, song beat, beat in the section, length */
 @property(nonatomic) NSMutableDictionary<NSString *,NSData *> *songPlans;   /* parts already built, by section, start and length */
 @property(nonatomic) NSInteger songPart,songQueued;
@@ -1049,7 +1050,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         NSArray *saved=[defaults arrayForKey:@"progression"];
         for(id code in saved) if([code isKindOfClass:NSNumber.class] && kv_code_valid([code intValue]) && self.progression.count<8) [self appendDegree:[code intValue]];
         self.sequenceUndo=nil;
-        [self restoreTrack]; [self restoreSong]; _restoring=NO;
+        [self restoreTrack]; [self restoreSong]; [self fitTexturesToInstrument]; _restoring=NO;
         [self refresh];
         if(_viewMode==2) { [_arranger reload]; if(_song->count) [self editSection:_arranger.selected]; }
         [self matchInspectorToView];
@@ -1065,7 +1066,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
             [root updatePlaybackVisualization]; [root.piano advanceAnimation]; [root updateHands]; [root.circle advanceFingers]; [root updateMidiOut]; [root updateTransportIfChanged]; [root updateBeatDots]; [root updateSongPlayback]; [root updateSongTempo]; if(root.viewMode==2) [root.arranger updatePlayhead];
             [root reconcilePlayback];
             if(!root.roll.hidden) {
-                double beat=[root isPlayingProgression]?[root playheadBeat]:-1;
+                double beat=[root rollPlayheadBeat];
                 if(beat!=root.roll.playheadBeat) { root.roll.playheadBeat=beat; root.roll.needsDisplay=YES; }
             }
             if(root.playbackActivity && !kv_audio_is_playing(root.audio)) {
@@ -1094,10 +1095,10 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     self.mode.frame=NSMakeRect(312,12,206,28); self.soundButton.frame=NSMakeRect(524,12,36,28); self.computerKeyboardButton.frame=NSMakeRect(566,12,36,28);
     self.soundSettingsButton.frame=NSMakeRect(left-KvMargin-36,12,36,28); self.shortcutsButton.frame=NSMakeRect(left-KvMargin-78,12,36,28);
     self.shortcutsCard.frame=self.bounds;
-    self.circle.frame=NSMakeRect(16,KvHeaderHeight,left-32,m.dockTop-KvHeaderHeight-8);
-    self.roll.frame=NSMakeRect(16,KvHeaderHeight,left-32,m.dockTop-KvHeaderHeight-8);
-    self.arranger.frame=NSMakeRect(16,KvHeaderHeight,left-32,m.dockTop-KvHeaderHeight-8);
-    self.circle.hidden=self.viewMode!=0; self.roll.hidden=self.viewMode!=1; self.arranger.hidden=self.viewMode!=2;
+    NSRect area=NSMakeRect(16,KvHeaderHeight,left-32,m.dockTop-KvHeaderHeight-8); self.circle.frame=area; self.roll.frame=area; self.arranger.frame=area;
+    BOOL docked=self.viewMode==2 && self.rollDocked && self.song->count;   // the roll under the tracks, on the selected section
+    if(docked) { CGFloat rollHeight=MAX(200,floor(NSHeight(area)*.42)); self.arranger.frame=NSMakeRect(NSMinX(area),NSMinY(area),NSWidth(area),NSHeight(area)-rollHeight-8); self.roll.frame=NSMakeRect(NSMinX(area),NSMaxY(area)-rollHeight,NSWidth(area),rollHeight); }
+    self.circle.hidden=self.viewMode!=0; self.roll.hidden=self.viewMode!=1 && !docked; self.arranger.hidden=self.viewMode!=2;
     // Inspector: tabs on top; the chord tab's rows grow with the window between 28 and 36 points.
     CGFloat x=m.inspectorX+KvMargin,iw=KvInspectorWidth-2*KvMargin,y=10;
     self.inspectorTabs.frame=NSMakeRect(x,y,iw,24); y+=30;
@@ -1933,7 +1934,7 @@ static NSString *Describe(NSView *view) {
 }
 - (NSInteger)pianoRollSection:(KvPianoRoll *)roll { (void)roll; return self.editingSection; }
 - (void)pianoRoll:(KvPianoRoll *)roll openSection:(NSInteger)index {
-    (void)roll; if(index<0) { [self showView:2]; return; }
+    (void)roll; if(index<0) { if(self.viewMode==2) { self.rollDocked=NO; self.needsLayout=YES; [self layoutSubtreeIfNeeded]; [self.window makeFirstResponder:self.arranger]; } else [self showView:2]; return; }
     [self editSection:index]; [self.roll reload]; [self.window makeFirstResponder:self.roll];
     self.status.stringValue=[NSString stringWithFormat:T(@"Пиано-ролл · секция «%@» · ⇧⌘A — обратно в аранжировщик"),[self arrangerName:index]];
 }
@@ -2135,7 +2136,8 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
 }
 - (void)togglePlayback:(id)sender {
     if(kv_audio_is_playing(self.audio)) [self stopPlayback:sender];
-    else if(self.viewMode==2 && self.song->count && !(NSApp.currentEvent.modifierFlags&NSEventModifierFlagOption)) [self playSongFromBeat:self.arranger.cursorBeat];   // from the playhead; ⌥: the selected section alone
+    else if(self.viewMode==2 && self.song->count && !(NSApp.currentEvent.modifierFlags&NSEventModifierFlagOption)) {   // ↻ with a cycle: from its start, as any DAW; else from the cursor; ⌥: the selected section alone
+        double from=0,to=0; [self playSongFromBeat:[self songCycle:&from to:&to]?from:self.arranger.cursorBeat]; }
     else [self playProgression:sender];
 }
 /* ---- metronome: the rhythm layer of the engine (kv_audio_set_rhythm) driven from here ---- */
@@ -2390,6 +2392,7 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
             if([self stringsChosen] && !wasStrings) { self.performanceMode=3+KV_STRINGS_OSTINATO-KV_STRINGS_CHORALE; }
             else if(self.performanceMode>=3 && ![self stringsChosen]) self.performanceMode=1;
         }];
+        [self fitTexturesToInstrument];
         if([self stringsChosen] && !wasStrings) self.status.stringValue=T(@"Струнные · остинато спиккато — другие струнные фактуры в списке «Фактура»");
         else if(stringsTexture && ![self stringsChosen]) self.status.stringValue=T(@"Струнная фактура доступна только у струнных — включено фортепиано, две руки");
         [self updateSoundPanelRows]; self.needsLayout=YES; [self refresh]; [self saveState];
@@ -3168,8 +3171,17 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
 - (NSString *)arrangerChords:(NSInteger)index {
     const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return @"";
     const KvSection *s=&song->sections[index]; NSMutableArray *names=[NSMutableArray array];
-    for(size_t i=0;i<s->count;i++) { KvChord chord; if(kv_code_chord(song->key,s->codes[i],song->extension,&chord)) [names addObject:S(chord.name)]; }
+    double pass=kv_section_pass_beats(song,s),length=kv_section_beats(song,(size_t)index),chord_beats=kv_section_chord_beats(song,s),begin=fmod(s->start,pass);
+    for(size_t i=0;i<s->count;i++) { KvChord chord; if(!kv_code_chord(song->key,s->codes[i],song->extension,&chord)) continue;
+        BOOL sounds=length>=pass-1e-9; for(double at=i*chord_beats;!sounds && at<begin+length;at+=pass) sounds=at+chord_beats>begin+1e-9 && at<begin+length-1e-9;
+        if(sounds) [names addObject:S(chord.name)]; }
     return [names componentsJoinedByString:@" "];
+}
+/* The strings' textures need the strings: on another instrument the song's sections fall back to two hands, as the circle does. */
+- (void)fitTexturesToInstrument {
+    if([self stringsChosen]) return; BOOL changed=NO;
+    for(size_t i=0;i<self.song->count;i++) if(self.song->sections[i].arrangement.strings) { self.song->sections[i].arrangement.strings=KV_STRINGS_NONE; changed=YES; }
+    if(changed) { self.songPlans=nil; [self.arranger reload]; }
 }
 - (NSString *)textureOf:(const KvArrangement *)a {
     if(a->strings) return [T(@"струнные · ") stringByAppendingString:[S(kv_string_texture_name(a->strings)) lowercaseString]];
@@ -3199,7 +3211,23 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     return -1;
 }
 - (void)arrangerSelect:(NSInteger)index { [self editSection:index]; [self saveState]; }
-- (void)arrangerOpenInRoll:(NSInteger)index { [self editSection:index]; [self showView:1]; }
+/* «Открыть в ролле», a double click, Enter: the roll comes up under the tracks with the section, zoomed to the stretch that sounds. */
+- (void)arrangerOpenInRoll:(NSInteger)index {
+    if(self.viewMode!=2) { [self editSection:index]; [self showView:1]; return; }
+    [self editSection:index]; self.rollDocked=YES; [self buildTrack]; [self.roll reload]; self.needsLayout=YES; [self layoutSubtreeIfNeeded]; [self.roll layoutSubtreeIfNeeded];
+    const KvSong *song=[self songWithWorking]; const KvSection *s=&song->sections[self.editingSection]; double length=kv_section_beats(song,(size_t)self.editingSection);
+    [self.roll resetView]; double visible=[self.roll visibleBeats];
+    if(length>0 && visible>0) { [self.roll zoomBy:visible/length aroundX:NSMinX([self.roll noteAreaRect])]; self.roll.scrollBeat=s->start; self.roll.needsDisplay=YES; }
+    [self.window makeFirstResponder:self.roll];
+    self.status.stringValue=[NSString stringWithFormat:T(@"Пиано-ролл · секция «%@» · ⇧⌘A — обратно в аранжировщик"),[self arrangerName:self.editingSection]];
+}
+/* The roll's playhead: the plan's beat, or, in the song, where the sounding part lies in the open section's pass (−1 elsewhere). */
+- (double)rollPlayheadBeat {
+    if(!self.songPlaying) return [self isPlayingProgression]?[self playheadBeat]:-1;
+    NSInteger i=self.editingSection; if(i<0 || self.songPart<0 || self.songPart>=(NSInteger)self.songOrder.count || self.songOrder[self.songPart].integerValue!=i) return -1;
+    double beat=[self arrangerPlayheadBeat]; if(beat<0) return -1; const KvSong *song=self.song; double pass=kv_section_pass_beats(song,&song->sections[i]);
+    return pass>0?fmod(fmax(0,song->sections[i].start+beat-kv_section_start(song,(size_t)i)),pass):-1;
+}
 - (void)arrangerForwardKey:(NSEvent *)event { [self keyDown:event]; }
 - (NSInteger)indexOfSection:(uint32_t)identifier { for(size_t i=0;i<self.song->count;i++) if(self.song->sections[i].id==identifier) return (NSInteger)i; return -1; }
 - (void)arrangerMove:(NSInteger)from to:(NSInteger)to copy:(BOOL)copy {
@@ -3478,7 +3506,7 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
 /* ⇧⌘A: the circle's progression and texture become a verse at the end of the song (or, from a section's roll, back to the arranger). */
 - (void)sendToArranger:(id)sender {
     (void)sender;
-    if(self.editingSection>=0) { [self showView:2]; return; }
+    if(self.editingSection>=0) { if(self.viewMode==2 && self.rollDocked) [self pianoRoll:self.roll openSection:-1]; else [self showView:2]; return; }
     if(!self.progression.count) { self.status.stringValue=T(@"Сначала соберите последовательность на круге"); return; }
     KvSong *song=[self liveSong]; KvArrangement texture=[self arrangementForPreview:NO]; NSInteger last=(NSInteger)song->count-1;
     if(last>=0 && !self.trackEdited && !song->sections[last].edited && song->sections[last].count==self.progression.count && SameTexture(song->sections[last].arrangement,texture)) {
@@ -5057,10 +5085,14 @@ int main(int argc, const char *argv[]) {
               [root arrangerRemove:3]; KV_CHECK(root.song->count==3 && root.editingSection==2,@"Arranger: ⌫ removes the section");
               [root undoSequence:nil]; KV_CHECK(root.song->count==4,@"Arranger: ⌘Z brings it back"); [root redoTrack:nil]; KV_CHECK(root.song->count==3,@"Arranger: ⇧⌘Z removes it again");
               // Notes edited in the roll stay with their section.
-              [root arrangerOpenInRoll:1]; KV_CHECK(root.viewMode==1 && root.editingSection==1 && !root.roll.hidden,@"Arranger: double-click opens the section in the roll");
+              [root arrangerOpenInRoll:1]; KV_CHECK(root.viewMode==2 && root.rollDocked && root.editingSection==1 && !root.roll.hidden && !root.arranger.hidden && NSMinY(root.roll.frame)>=NSMaxY(root.arranger.frame),@"Arranger: double-click opens the section in the roll under the tracks");
+              KV_CHECK(fabs([root.roll visibleBeats]-kv_section_beats(root.song,1))<1e-6 && root.roll.scrollBeat==root.song->sections[1].start,@"Arranger: the docked roll shows the section from its start to its end");
+              [root pianoRoll:root.roll openSection:-1]; KV_CHECK(root.viewMode==2 && !root.rollDocked && root.roll.hidden,@"Arranger: «← Аранжировщик» puts the roll away");
+              [root showView:1]; KV_CHECK(root.viewMode==1 && root.editingSection==1 && !root.roll.hidden,@"Arranger: ⌘2 opens the section in the full roll");
               KV_CHECK(!root.roll.sectionChoice.hidden && root.roll.sectionChoice.numberOfItems==(NSInteger)root.song->count+1 && root.roll.sectionChoice.indexOfSelectedItem==2,@"Arranger: the roll lists the song's sections, the open one chosen");
               KV_CHECK([root pianoRollFirstBar:root.roll]==(int)(kv_section_start(root.song,1)/4)+1,@"Arranger: the roll counts the song's bars");
               [root pianoRoll:root.roll openSection:0]; KV_CHECK(root.viewMode==1 && root.editingSection==0 && root.roll.sectionChoice.indexOfSelectedItem==1,@"Arranger: the list opens another section in the roll");
+              [root showView:2]; [root arrangerOpenInRoll:1]; KV_CHECK(root.rollDocked && !root.roll.hidden,@"Arranger: the roll docks again"); [root sendToArranger:nil]; KV_CHECK(root.viewMode==2 && !root.rollDocked && root.roll.hidden,@"Arranger: ⇧⌘A puts the docked roll away"); [root showView:1];
               [root pianoRoll:root.roll openSection:1];
               for(NSNumber *width in @[@1120,@1728]) for(NSNumber *height in @[@680,@1000]) { root.frame=NSMakeRect(0,0,width.doubleValue,height.doubleValue); [root layout]; [root.roll layout]; NSString *problem=[root layoutProblem]; KV_CHECK(!problem && NSWidth(root.roll.sectionChoice.frame)>=100,([NSString stringWithFormat:@"Section roll layout %@x%@: %@",width,height,problem])); }
               root.frame=NSMakeRect(0,0,1240,760); [root layout];
@@ -5231,9 +5263,14 @@ int main(int argc, const char *argv[]) {
                 click(NSMakePoint([arr xOfBeat:2*bar],cycleY),1,0); KV_CHECK(root.loopEnabled,@"Cycle: and on");
                 arr.cursorBeat=0; [root togglePlayback:nil];
                 NSUInteger k=0; while(k<root.songOrder.count && root.songOrderBeats[k].doubleValue+root.songOrderLength[k].doubleValue<3*bar-1e-9) k++; k++;   // the part that ends at the cycle's end, then the next
-                KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue)<1e-9 && k<=root.songOrder.count && fabs(root.songOrderBeats[k-1].doubleValue+root.songOrderLength[k-1].doubleValue-3*bar)<1e-9,@"Cycle: with ↻ the song plays from the playhead up to the cycle's end");
+                KV_CHECK(root.songPlaying && fabs(root.songOrderBeats[0].doubleValue-bar)<1e-9 && k<=root.songOrder.count && fabs(root.songOrderBeats[k-1].doubleValue+root.songOrderLength[k-1].doubleValue-3*bar)<1e-9,@"Cycle: with ↻ Space plays from the cycle's start up to its end");
                 [root queueSongPart:(NSInteger)root.songOrder.count]; KV_CHECK(root.songOrder.count>k && fabs(root.songOrderBeats[k].doubleValue-bar)<1e-9,@"Cycle: and comes round to its start");
                 [root stopPlayback:nil]; root.loopButton.state=NSControlStateValueOff; [root loopChanged:root.loopButton];
+                { NSPoint mid=NSMakePoint([arr xOfBeat:2*bar],cycleY); arr.snap=KvSnapBar;   // the cycle carried by its middle keeps its length; an edge stretches it
+                  void (^drag)(NSPoint,NSPoint,NSEventModifierFlags)=^(NSPoint from,NSPoint to,NSEventModifierFlags flags) { [arr mouseDown:mouse(NSEventTypeLeftMouseDown,from,1,flags)]; [arr mouseDragged:mouse(NSEventTypeLeftMouseDragged,to,1,flags)]; [arr mouseUp:mouse(NSEventTypeLeftMouseUp,to,1,flags)]; };
+                  drag(mid,NSMakePoint([arr xOfBeat:3*bar],cycleY),0); KV_CHECK(fabs(root.song->cycle_from-2*bar)<1e-9 && fabs(root.song->cycle_to-4*bar)<1e-9,@"Cycle: dragged by its middle it moves a bar whole");
+                  drag(NSMakePoint([arr xOfBeat:4*bar],cycleY),NSMakePoint([arr xOfBeat:5*bar],cycleY),0); KV_CHECK(fabs(root.song->cycle_from-2*bar)<1e-9 && fabs(root.song->cycle_to-5*bar)<1e-9,@"Cycle: its right edge stretches it");
+                  arr.snap=KvSnapSmart; }
                 [arr clearCycle:nil]; KV_CHECK(root.song->cycle_to==0,@"Cycle: «Снять цикл» clears it");
                 // Scissors: the tool or ⌘ with the pointer; ⌘T at the playhead.
                 arr.tool=KvToolScissors; click(NSMakePoint([arr xOfBeat:bar+.4],melodyY),1,0);
@@ -5278,7 +5315,7 @@ int main(int argc, const char *argv[]) {
                 [root undoSong]; click(centre(1),1,0); KV_CHECK(arr.tool==KvToolScissors && root.song->count==count,@"Buttons: ✂ takes the scissors, nothing is cut yet");
                 click(NSMakePoint([arr xOfBeat:kv_section_start(root.song,2)+bar+.3],NSMidY([arr rectOfRegion:2 track:KV_TRACK_BASS])),1,0);
                 KV_CHECK(root.song->count==count+1 && fabs(kv_section_beats(root.song,2)-bar)<1e-9 && arr.tool==KvToolPointer,@"Buttons: then a click cuts where it is, on the bar, and the pointer is back");
-                [root undoSong]; arr.cursorBeat=0; click(centre(0),1,0); KV_CHECK(root.viewMode==1 && root.editingSection==2,@"Buttons: ✎ opens it in the roll"); [root showView:2]; [root.window makeFirstResponder:arr];
+                [root undoSong]; arr.cursorBeat=0; click(centre(0),1,0); KV_CHECK(root.viewMode==2 && root.rollDocked && root.editingSection==2,@"Buttons: ✎ opens it in the roll under the tracks"); [root pianoRoll:root.roll openSection:-1]; [root.window makeFirstResponder:arr];
                 // Selection: ⇧-click a range, ⌫ removes it, ⌘A all, ⌘D copies them, Esc one; a drag moves the range; a drop on a section swaps.
                 uint32_t ids[4]; for(int k=0;k<4;k++) ids[k]=root.song->sections[k].id;
                 click(bassMid(1),1,0); click(bassMid(3),1,NSEventModifierFlagShift);
@@ -5293,12 +5330,10 @@ int main(int argc, const char *argv[]) {
                 [root undoSong]; click(bassMid(0),1,0); drag(markerMid(0),markerMid(3),0);
                 KV_CHECK(root.song->sections[0].id==ids[3] && root.song->sections[3].id==ids[0] && root.song->sections[1].id==ids[1],@"Swap: a section dropped on the middle of another trades places with it");
                 [root undoSong]; KV_CHECK(root.song->sections[0].id==ids[0] && root.song->sections[3].id==ids[3],@"Swap: ⌘Z puts them back");
-                // A region dragged on its track shifts in time on the snap (the marker moves the section); the drums' bar turns.
-                { arr.snap=KvSnapBeat; double (^firstOf)(NSData *,unsigned)=^double(NSData *d,unsigned hand) { const KvPianoEvent *e=d.bytes; double at=1e9; for(size_t k=0;k<d.length/sizeof(*e);k++) if(e[k].hand==hand) at=fmin(at,e[k].beat); return at; };
-                  NSData *was=[root arrangerNotes:0]; double bass=firstOf(was,0),melody=firstOf(was,1); NSPoint from=bassMid(0);
-                  drag(from,NSMakePoint(from.x+(CGFloat)(1.2*arr.scale),from.y),0); NSData *now=[root arrangerNotes:0];
-                  KV_CHECK(fabs(root.song->sections[0].regions[KV_TRACK_BASS].shift-1)<1e-9 && root.song->sections[0].id==ids[0] && fabs(firstOf(now,0)-(bass+1))<1e-9 && fabs(firstOf(now,1)-melody)<1e-9,@"Shift: a bass region dragged on its track plays a beat later, alone, the section in its place");
-                  [root undoSong]; KV_CHECK(root.song->sections[0].regions[KV_TRACK_BASS].shift==0,@"Shift: ⌘Z takes it back");
+                // A region dragged on its track moves the section, as its marker does; a shifted drums region's bar turns.
+                { arr.snap=KvSnapBeat; drag(bassMid(0),markerMid(3),0);
+                  KV_CHECK(root.song->sections[0].id==ids[3] && root.song->sections[3].id==ids[0] && root.song->sections[0].regions[KV_TRACK_BASS].shift==0,@"Drag: a bass region dragged onto another section trades places with it, nothing shifts");
+                  [root undoSong]; KV_CHECK(root.song->sections[0].id==ids[0],@"Drag: ⌘Z puts it back");
                   [root arrangerSelect:0]; [root arrangerSet:KvSectionFieldBeat value:4+KV_BEAT_POP]; NSData *plain=[root arrangerHits:0];
                   [root arrangerShiftRegion:0 track:KV_TRACK_DRUMS shift:.5]; NSData *turned=[root arrangerHits:0];
                   double bar=kv_meter_bar(root.song->meter); NSMutableArray *expect=[NSMutableArray array],*got=[NSMutableArray array];

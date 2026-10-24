@@ -345,15 +345,30 @@ static const Lane four[KV_BEAT_COUNT][LANES]={
     [KV_BEAT_TRIPHOP]={{KV_DRUM_KICK,"X.........x....."},{KV_DRUM_SNARE,"........X......."},{KV_DRUM_HAT,"o.o.o.o.o.o.o.o."},{KV_DRUM_SHAKER,"..o...o...o...o."}},
     [KV_BEAT_HOUSE]={{KV_DRUM_KICK,"X...x...x...x..."},{KV_DRUM_CLAP,"....x.......x..."},{KV_DRUM_HAT_OPEN,"..x...x...x...x."},{KV_DRUM_HAT,"o...o...o...o..."}},
 };
-/* 3/4 (a waltz on the side stick) and 6/8 (two groups of three, the snare on the second), whatever the beat; a step is a sixteenth. */
-static const Lane odd[2][LANES]={
-    {{KV_DRUM_KICK,"X..........."},{KV_DRUM_STICK,"....o...o..."},{KV_DRUM_HAT,"x.o.x.o.x.o."}},
-    {{KV_DRUM_KICK,"X..........."},{KV_DRUM_SNARE,"......x....."},{KV_DRUM_HAT,"x.o.o.x.o.o."}},
+/* 3/4 and 6/8, a bar of twelve sixteenths, each beat with its own kit and feel: in 3/4 a waltz lays the kick on one and the
+   side stick on two and three; in 6/8 two groups of three, the snare on the second dotted quarter (step 6). */
+static const Lane three[KV_BEAT_COUNT][LANES]={
+    [KV_BEAT_POP]={{KV_DRUM_KICK,"X.....x....."},{KV_DRUM_SNARE,"....X...X..."},{KV_DRUM_HAT,"x.o.x.o.x.o."},{KV_DRUM_TAMBOURINE,"....o...o..."}},
+    [KV_BEAT_BALLAD]={{KV_DRUM_KICK,"X..........."},{KV_DRUM_STICK,"....o...o..."},{KV_DRUM_HAT,"o.o.o.o.o.o."}},
+    [KV_BEAT_BOSSA]={{KV_DRUM_KICK,"X.....x....."},{KV_DRUM_STICK,"x..x..x..x.."},{KV_DRUM_SHAKER,"xoxoxoxoxoxo"},{KV_DRUM_CONGA_HIGH,"..........o."}},
+    [KV_BEAT_SHUFFLE]={{KV_DRUM_KICK,"X.....x....."},{KV_DRUM_SNARE,"....X......."},{KV_DRUM_HAT,"x.ox.ox.ox.o"}},
+    [KV_BEAT_HIPHOP]={{KV_DRUM_KICK,"X......x...."},{KV_DRUM_SNARE,"....X...X..."},{KV_DRUM_HAT,"x.o.x.o.x.o."}},
+    [KV_BEAT_TRIPHOP]={{KV_DRUM_KICK,"X.........x."},{KV_DRUM_SNARE,"........X..."},{KV_DRUM_HAT,"o.o.o.o.o.o."},{KV_DRUM_SHAKER,"..o...o...o."}},
+    [KV_BEAT_HOUSE]={{KV_DRUM_KICK,"X...x...x..."},{KV_DRUM_CLAP,"....x......."},{KV_DRUM_HAT_OPEN,"..x...x...x."},{KV_DRUM_HAT,"o...o...o..."}},
+};
+static const Lane six[KV_BEAT_COUNT][LANES]={
+    [KV_BEAT_POP]={{KV_DRUM_KICK,"X.....x....."},{KV_DRUM_SNARE,"......X....."},{KV_DRUM_HAT,"x.o.o.x.o.o."},{KV_DRUM_TAMBOURINE,"......o....."}},
+    [KV_BEAT_BALLAD]={{KV_DRUM_KICK,"X..........."},{KV_DRUM_STICK,"......x....."},{KV_DRUM_HAT,"o.o.o.o.o.o."}},
+    [KV_BEAT_BOSSA]={{KV_DRUM_KICK,"X.....X....."},{KV_DRUM_STICK,"x....x....x."},{KV_DRUM_SHAKER,"xoxoxoxoxoxo"},{KV_DRUM_CONGA_LOW,"..........o."},{KV_DRUM_CONGA_HIGH,"....o......."}},
+    [KV_BEAT_SHUFFLE]={{KV_DRUM_KICK,"X....x......"},{KV_DRUM_SNARE,"......X....."},{KV_DRUM_HAT,"x.ox.ox.ox.o"}},
+    [KV_BEAT_HIPHOP]={{KV_DRUM_KICK,"X.......x..."},{KV_DRUM_SNARE,"......X....."},{KV_DRUM_HAT,"x.o.x.o.x.o."}},
+    [KV_BEAT_TRIPHOP]={{KV_DRUM_KICK,"X.........x."},{KV_DRUM_SNARE,"......X....."},{KV_DRUM_HAT,"o.o.o.o.o.o."},{KV_DRUM_SHAKER,"..o...o...o."}},
+    [KV_BEAT_HOUSE]={{KV_DRUM_KICK,"X.....X....."},{KV_DRUM_CLAP,"......x....."},{KV_DRUM_HAT_OPEN,"...x.....x.."},{KV_DRUM_HAT,"o.o.o.o.o.o."}},
 };
 static int by_beat(const void *a,const void *b) { double d=((const KvHit *)a)->beat-((const KvHit *)b)->beat; return d<0?-1:d>0?1:((const KvHit *)a)->drum-((const KvHit *)b)->drum; }
 size_t kv_beat_bar(KvBeat beat,KvMeter meter,KvHit hits[KV_BEAT_HITS]) {
     if(beat<0 || beat>=KV_BEAT_COUNT || meter<0 || meter>=KV_METER_COUNT || !hits) return 0;
-    const Lane *lanes=meter==KV_METER_4_4?four[beat]:odd[meter==KV_METER_6_8];
+    const Lane *lanes=meter==KV_METER_4_4?four[beat]:meter==KV_METER_6_8?six[beat]:three[beat];
     double bar=kv_meter_bar(meter); size_t n=0;
     for(int l=0;l<LANES && lanes[l].steps;l++) {
         size_t steps=strlen(lanes[l].steps); double step=bar/steps;
