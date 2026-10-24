@@ -879,8 +879,9 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         _viewSwitch.selectedSegment=0; [_viewSwitch setAccessibilityLabel:T(@"Вид")]; [self addSubview:_viewSwitch];
         _roll=[[KvPianoRoll alloc] initWithFrame:NSZeroRect]; _roll.owner=self; _roll.hidden=YES; [self addSubview:_roll];
         _arranger=[[KvArranger alloc] initWithFrame:NSZeroRect]; _arranger.owner=self; _arranger.hidden=YES; [self addSubview:_arranger];
+        _arranger.sectionPanel.hidden=YES; [self addSubview:_arranger.sectionPanel];
         _track=calloc(1,sizeof(KvPerformance)); _roll.track=_track; _trackUndo=[NSMutableArray array]; _trackRedo=[NSMutableArray array]; _speed=1;
-        _inspectorTabs=[TNSegmented segmentedControlWithLabels:@[T(@"Аккорды"),T(@"Вне лада"),@"MIDI"] trackingMode:NSSegmentSwitchTrackingSelectOne target:self action:@selector(inspectorTabChanged:)];
+        _inspectorTabs=[TNSegmented segmentedControlWithLabels:@[T(@"Аккорды"),T(@"Вне лада"),@"MIDI",T(@"Секция")] trackingMode:NSSegmentSwitchTrackingSelectOne target:self action:@selector(inspectorTabChanged:)];
         _chromaticChips=[NSMutableArray array];
         NSMutableArray *headers=[NSMutableArray array];
         for(NSString *title in @[T(@"Побочные доминанты"),T(@"Заимствованные"),T(@"Тритоновые замены")]) { NSTextField *h=Label(title,12,NSFontWeightSemibold); h.textColor=NSColor.secondaryLabelColor; [self addSubview:h]; [headers addObject:h]; }
@@ -1041,6 +1042,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         [self restoreTrack]; [self restoreSong]; _restoring=NO;
         [self refresh];
         if(_viewMode==2) { [_arranger reload]; if(_song->count) [self editSection:_arranger.selected]; }
+        [self matchInspectorToView];
         __weak KvRoot *weakSelf=self;
         // Common modes: the frame clock keeps running while a slider or a menu tracks the mouse.
         [NSRunLoop.mainRunLoop addTimer:[NSTimer timerWithTimeInterval:1.0/60 repeats:YES block:^(NSTimer *timer) {
@@ -1070,6 +1072,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     m.cw=MIN(m.w-2*KvMargin,KvMaxContentWidth); m.cx=floor((m.w-m.cw)/2);
     m.headY=m.dockTop+10; m.kbY=m.headY+28+6; m.legendY=m.kbY+KvKeyboardHeight+6; m.sepY=m.legendY+24+8;
     m.seqY=m.sepY+1+8; m.transportY=m.seqY+KvChipHeight+8; m.statusY=m.transportY+KvTransportHeight+6;
+    if(self.viewMode==2) m.dockTop=m.sepY;   // the arranger has no keyboard: its tracks take the room (spec 1.5 §2)
     m.slotW=floor((m.cw-200-16-7*KvSlotGap)/8); m.tempoX=m.cx+160; m.registerX=m.cx+m.cw-200;
     return m;
 }
@@ -1088,7 +1091,9 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     // Inspector: tabs on top; the chord tab's rows grow with the window between 28 and 36 points.
     CGFloat x=m.inspectorX+KvMargin,iw=KvInspectorWidth-2*KvMargin,y=10;
     self.inspectorTabs.frame=NSMakeRect(x,y,iw,24); y+=30;
-    BOOL midiTab=self.inspectorTab==2,chromaticTab=self.inspectorTab==1,chordTab=!midiTab && !chromaticTab;
+    BOOL midiTab=self.inspectorTab==2,chromaticTab=self.inspectorTab==1,sectionTab=self.inspectorTab==3,chordTab=!midiTab && !chromaticTab && !sectionTab;
+    [self.inspectorTabs setEnabled:self.viewMode==2 forSegment:3];
+    self.arranger.sectionPanel.hidden=!sectionTab; if(sectionTab) self.arranger.sectionPanel.frame=NSMakeRect(x,y+6,iw,m.dockTop-y-16);
     for(NSView *view in @[self.heading,self.signature,self.scaleNames,self.harmonyChoice,self.scaleButton]) view.hidden=!chordTab;
     for(NSButton *button in self.chordButtons) button.hidden=!chordTab; for(NSButton *button in self.addButtons) button.hidden=!chordTab;
     for(NSView *view in self.midiViews) view.hidden=!midiTab;
@@ -1136,6 +1141,8 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     self.dynamicsSlider.frame=NSMakeRect(m.cx,m.kbY+4,24,KvKeyboardHeight-8);
     self.piano.frame=bowed?NSMakeRect(m.cx+32,m.kbY,m.cw-32,KvKeyboardHeight):NSMakeRect(m.cx,m.kbY,m.cw,KvKeyboardHeight);
     self.registerControl.frame=NSMakeRect(m.registerX,m.legendY,200,24);
+    BOOL keys=self.viewMode!=2; for(NSView *view in @[self.piano,self.keyboardHeading,self.keyboardNotes,self.keyboardMode,self.registerControl]) view.hidden=!keys;
+    if(!keys) self.dynamicsSlider.hidden=YES;
     // Sequence: eight fixed slots, edit actions at the right.
     for(NSUInteger i=0;i<self.progressionButtons.count;i++) self.progressionButtons[i].frame=NSMakeRect(m.cx+i*(m.slotW+KvSlotGap),m.seqY,m.slotW,KvChipHeight);
     // Right of the slots: wand, its chord count, presets, undo, clear.
@@ -1166,19 +1173,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     Line(m.inspectorX,0,m.inspectorX,m.dockTop); Line(0,m.dockTop,m.w,m.dockTop); Line(m.cx,m.sepY,m.cx+m.cw,m.sepY);
     KvDrawBrand(NSMakeRect(24,9,34,34));
     Text(@"Tonora",NSMakeRect(68,13,90,28),20,NSFontWeightSemibold,Ink(),NSTextAlignmentLeft);
-    BOOL chordMode=self.keyboardMode.selectedSegment==1;
-    NSColor *tonic=[NSColor colorWithCalibratedRed:0 green:0.48 blue:0.36 alpha:1];
-    [tonic setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+1,m.legendY+8,8,8)] fill];
-    Text(chordMode?T(@"1 — основной тон аккорда"):T(@"1 — тоника тональности"),NSMakeRect(m.cx+14,m.legendY+3,220,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
-    [Accent() setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+237,m.legendY+8,8,8)] fill];
-    Text(chordMode?T(@"ноты выбранного аккорда"):T(@"остальные ноты тональности"),NSMakeRect(m.cx+250,m.legendY+3,170,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
-    if(self.performanceMode==1) { // two hands: the melody also plays notes outside the chord
-        [TNPassing() setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+426,m.legendY+8,8,8)] fill];
-        Text(T(@"проходящая"),NSMakeRect(m.cx+439,m.legendY+3,80,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
-        [TNAnticipation() setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+522,m.legendY+8,8,8)] fill];
-        Text(T(@"предвосхищение"),NSMakeRect(m.cx+535,m.legendY+3,100,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
-    }
-    Text([NSString stringWithFormat:T(@"Клавиатура %@ · регистр"),[self rangeText]],NSMakeRect(m.registerX-12-260,m.legendY+3,260,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentRight);
+    if(self.viewMode!=2) [self drawLegend:m];
     if(self.metronomeOn) [self drawBeatDots:[self beatDotsRect]];   // the metronome shows its beats where «Темп» stands
     else Text(T(@"Темп"),NSMakeRect(m.tempoX,m.transportY+8,56,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
     CGFloat dash[]={4,3};
@@ -1195,6 +1190,22 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
         Text(T(EmptyHint),NSMakeRect(NSMinX(strip),m.seqY+10,NSMinX(link)-NSMinX(strip)-4,18),12,NSFontWeightRegular,NSColor.secondaryLabelColor,NSTextAlignmentRight);
         Text(T(EmptyLink),link,12,NSFontWeightSemibold,Accent(),NSTextAlignmentLeft);
     }
+}
+/* Under the keyboard: what its colours mean, and its range. */
+- (void)drawLegend:(KvMetrics)m {
+    BOOL chordMode=self.keyboardMode.selectedSegment==1;
+    NSColor *tonic=[NSColor colorWithCalibratedRed:0 green:0.48 blue:0.36 alpha:1];
+    [tonic setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+1,m.legendY+8,8,8)] fill];
+    Text(chordMode?T(@"1 — основной тон аккорда"):T(@"1 — тоника тональности"),NSMakeRect(m.cx+14,m.legendY+3,220,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+    [Accent() setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+237,m.legendY+8,8,8)] fill];
+    Text(chordMode?T(@"ноты выбранного аккорда"):T(@"остальные ноты тональности"),NSMakeRect(m.cx+250,m.legendY+3,170,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+    if(self.performanceMode==1) { // two hands: the melody also plays notes outside the chord
+        [TNPassing() setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+426,m.legendY+8,8,8)] fill];
+        Text(T(@"проходящая"),NSMakeRect(m.cx+439,m.legendY+3,80,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+        [TNAnticipation() setFill]; [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(m.cx+522,m.legendY+8,8,8)] fill];
+        Text(T(@"предвосхищение"),NSMakeRect(m.cx+535,m.legendY+3,100,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentLeft);
+    }
+    Text([NSString stringWithFormat:T(@"Клавиатура %@ · регистр"),[self rangeText]],NSMakeRect(m.registerX-12-260,m.legendY+3,260,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentRight);
 }
 static NSString *const EmptyHint=@"Последовательность пуста — добавьте аккорды «+» в списке справа или ";
 static NSString *const EmptyLink=@"✦ создайте новые аккорды";
@@ -1274,6 +1285,31 @@ static NSString *Describe(NSView *view) {
         if([(NSPopUpButton *)view pullsDown] || NSWidth(view.frame)<60) continue;
         if(view.superview==self && view!=self.patternChoice && view!=self.arpeggioChoice && [title sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightMedium]}].width>NSWidth(view.frame)-44-(item.image?22:0)) return [NSString stringWithFormat:@"Popup title truncated: «%@» in %@",title,Describe(view)];
         if((view==self.patternChoice || view==self.arpeggioChoice) && [item.representedObject isKindOfClass:NSString.class] && [[title stringByAppendingString:T(@" · вар.")] sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightMedium]}].width>NSWidth(view.frame)-44) return [NSString stringWithFormat:T(@"Style title truncated: «%@ · вар.»"),title];
+    }
+    return nil;
+}
+/* The arranger's window (self-test): no keyboard, the Section tab, tracks at least 72 points, nothing outside or overlapping
+   in the tracks' headers or the panel, every popup title whole. */
+- (NSString *)arrangerLayoutProblem {
+    [self layout]; [self.arranger layout];
+    if(!self.piano.hidden || !self.keyboardHeading.hidden || !self.registerControl.hidden) return @"Keyboard shown in the arranger";
+    if(self.inspectorTab!=3 || self.arranger.sectionPanel.hidden) return @"The Section tab is not shown";
+    for(NSView *box in @[self.arranger,self.arranger.sectionPanel]) {
+        NSMutableArray<NSView *> *views=[NSMutableArray array];
+        for(NSView *view in box.subviews) if(!view.hidden && NSWidth(view.frame)>0 && NSHeight(view.frame)>0) [views addObject:view];
+        for(NSView *view in views) if(!NSContainsRect(NSInsetRect(box.bounds,-.5,-.5),view.frame)) return [@"Outside the arranger: " stringByAppendingString:Describe(view)];
+        for(NSUInteger i=0;i<views.count;i++) for(NSUInteger j=i+1;j<views.count;j++)
+            if(NSIntersectsRect(NSInsetRect(views[i].frame,.5,.5),NSInsetRect(views[j].frame,.5,.5))) return [NSString stringWithFormat:@"Arranger overlap: %@ / %@",Describe(views[i]),Describe(views[j])];
+        for(NSView *view in views) if([view isKindOfClass:NSPopUpButton.class]) for(NSMenuItem *item in [(NSPopUpButton *)view itemArray]) {
+            NSString *title=[item.representedObject isKindOfClass:NSString.class]?item.representedObject:item.title;
+            if([title sizeWithAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:13 weight:NSFontWeightMedium]}].width>NSWidth(view.frame)-44) return [NSString stringWithFormat:@"Popup title truncated: «%@» in %@",title,Describe(view)];
+        }
+    }
+    const KvSong *song=[self songWithWorking]; NSRect marker=[self.arranger rectOfSection:0];
+    for(int t=0;t<KV_TRACKS && song->count;t++) {
+        NSRect r=[self.arranger rectOfRegion:0 track:t]; if(NSHeight(r)+4<72) return [NSString stringWithFormat:@"Track %d below 72 pt",t];
+        if(NSMinY(r)<NSMaxY(marker) || NSMaxY(r)>NSHeight(self.arranger.bounds)-18) return [NSString stringWithFormat:@"Track %d outside its place",t];
+        if(t && NSMinY(r)<NSMaxY([self.arranger rectOfRegion:0 track:t-1])) return [NSString stringWithFormat:@"Tracks %d and %d overlap",t-1,t];
     }
     return nil;
 }
@@ -1989,10 +2025,16 @@ static NSString *Describe(NSView *view) {
     if(self.viewMode==0) [self editDraft];
     else if(self.viewMode==2) { [self.arranger reload]; if(self.song->count) [self editSection:self.arranger.selected]; }
     if(self.viewMode==1) { [self buildTrack]; [self.roll reload]; }
+    [self matchInspectorToView];
     [self.window makeFirstResponder:[self viewFocus]];
     self.needsLayout=YES; [self layoutSubtreeIfNeeded]; [self saveState];
     if(self.viewMode==1) self.status.stringValue=self.editingSection>=0?[NSString stringWithFormat:T(@"Пиано-ролл · секция «%@» · ⇧⌘A — обратно в аранжировщик"),[self arrangerName:self.editingSection]]:T(@"Пиано-ролл · двойной щелчок — нота · ⌫ — удалить · ⌘Z — отмена · «Из рисунка» — пересобрать");
     if(self.viewMode==2) self.status.stringValue=self.song->count?T(@"Аранжировщик · Пробел — песня · ⌥Пробел — секция · двойной щелчок — в ролл"):T(@"Аранжировщик · соберите последовательность на круге и нажмите ⇧⌘A");
+}
+/* The «Секция» tab belongs to the arranger: it opens with it and gives way to «Аккорды» elsewhere. */
+- (void)matchInspectorToView {
+    NSInteger tab=self.viewMode==2?3:self.inspectorTab==3?0:self.inspectorTab;
+    if(tab!=self.inspectorTab || self.inspectorTabs.selectedSegment!=tab) { self.inspectorTabs.selectedSegment=tab; self.inspectorTab=tab; self.needsLayout=YES; self.needsDisplay=YES; }
 }
 - (NSView *)viewFocus { return self.viewMode==1?(NSView *)self.roll:self.viewMode==2?(NSView *)self.arranger:self; }
 - (void)showView:(NSInteger)mode { [self.viewSwitch setSelectedSegment:mode]; [self viewChanged:self.viewSwitch]; }
@@ -3140,6 +3182,38 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     if(field==KvSectionFieldLift || field==KvSectionFieldTransition) { if(self.trackEdited) { [self pushTrackUndo]; self.trackEdited=NO; } [self buildTrack]; }
     [self.arranger reload]; [self saveState];
 }
+- (void)arrangerSetTrack:(int)track mute:(int)mute solo:(int)solo level:(double)level {
+    if(track<0 || track>=KV_TRACKS) return;
+    [self pushSongUndo]; KvSong *song=self.song;
+    if(mute>=0) song->track_mute[track]=mute; if(solo>=0) song->track_solo[track]=solo; if(level>=0) song->track_level[track]=(float)MIN(1.2,level);
+    self.songPlans=nil; [self.arranger reload]; [self saveState];
+}
+- (void)arrangerSetRegion:(int)track mute:(int)mute level:(double)level {
+    NSInteger i=self.editingSection; if(track<0 || track>=KV_TRACKS || i<0 || i>=(NSInteger)self.song->count) return;
+    [self pushSongUndo]; KvRegion *r=&self.song->sections[i].regions[track];
+    if(mute>=0) r->mute=mute; if(level>=0) r->level=(float)MAX(.5,MIN(1.2,level));
+    self.songPlans=nil; [self.arranger reload]; [self saveState];
+}
+/* A section's notes as they sound, pass by pass, beats from its start (nil: it cannot be built). */
+- (NSData *)arrangerNotes:(NSInteger)index {
+    KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return nil;
+    double length=kv_section_beats(song,(size_t)index),pass=kv_section_pass_beats(song,&song->sections[index]); NSMutableData *notes=[NSMutableData data]; KvPerformance plan;
+    for(double from=0;from<length-1e-9;from+=pass) {
+        if(![self songPart:index from:from length:fmin(pass,length-from) into:&plan]) return nil;
+        for(size_t k=0;k<plan.count;k++) { KvPianoEvent e=plan.events[k]; e.beat+=from; [notes appendBytes:&e length:sizeof(e)]; }
+    }
+    return notes;
+}
+/* Its beat, on the song's bars wherever the section begins, beats from its start. */
+- (NSData *)arrangerHits:(NSInteger)index {
+    const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return nil;
+    KvHit hits[KV_BEAT_HITS]; size_t n=0; NSMutableData *out=[NSMutableData data]; if(![self rhythmOfSection:index hits:hits count:&n]) return out;
+    double bar=kv_meter_bar(song->meter),start=kv_section_start(song,(size_t)index),end=start+kv_section_beats(song,(size_t)index);
+    for(double b=floor(start/bar+1e-9)*bar;n && b<end-1e-9;b+=bar) for(size_t h=0;h<n;h++) {
+        double t=b+hits[h].beat; if(t<start-1e-9 || t>=end-1e-9) continue;
+        KvHit hit=hits[h]; hit.beat=t-start; [out appendBytes:&hit length:sizeof(hit)]; }
+    return out;
+}
 - (void)arrangerRevert:(id)sender { (void)sender; if(self.trackEdited) [self pianoRollResetRequested:self.roll]; [self.arranger reload]; }
 - (void)arrangerTakeDraft:(id)sender { [self sendToArranger:sender]; }
 /* ⇧⌘A: the circle's progression and texture become a verse at the end of the song (or, from a section's roll, back to the arranger). */
@@ -3291,19 +3365,13 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     [self storeWorking]; const KvSong *song=[self songWithWorking]; if(!song->count || !path) return NO;
     NSMutableData *notes=[NSMutableData data],*drums=[NSMutableData data]; NSMutableArray<NSString *> *names=[NSMutableArray array];
     KvMidiMarker *marks=calloc(song->count,sizeof(KvMidiMarker)); if(!marks) return NO;
-    double at=0,bar=kv_meter_bar(song->meter);
+    double at=0;
     for(size_t i=0;i<song->count;i++) {
         [names addObject:[self arrangerName:(NSInteger)i]]; marks[i]=(KvMidiMarker){at,names.lastObject.UTF8String};
-        double length=kv_section_beats(song,i),pass=kv_section_pass_beats(song,&song->sections[i]); KvPerformance plan;
-        for(double from=0;from<length-1e-9;from+=pass) {
-            if(![self songPart:(NSInteger)i from:from length:fmin(pass,length-from) into:&plan]) { free(marks); return NO; }
-            for(size_t k=0;k<plan.count;k++) { KvPianoEvent e=plan.events[k]; e.beat+=at+from; [notes appendBytes:&e length:sizeof(e)]; }
-        }
-        // The beat follows the song's bars, wherever the section begins.
-        KvHit hits[KV_BEAT_HITS]; size_t n=0; int on=[self rhythmOfSection:(NSInteger)i hits:hits count:&n];
-        for(double b=floor(at/bar+1e-9)*bar;on && n && b<at+length-1e-9;b+=bar) for(size_t h=0;h<n;h++) {
-            double t=b+hits[h].beat; if(t<at-1e-9 || t>=at+length-1e-9) continue;
-            KvHit hit=hits[h]; hit.beat=t; [drums appendBytes:&hit length:sizeof(hit)]; }
+        NSData *part=[self arrangerNotes:(NSInteger)i],*beat=[self arrangerHits:(NSInteger)i]; if(!part) { free(marks); return NO; }
+        const KvPianoEvent *e=part.bytes; for(size_t k=0;k<part.length/sizeof(*e);k++) { KvPianoEvent x=e[k]; x.beat+=at; [notes appendBytes:&x length:sizeof(x)]; }
+        const KvHit *h=beat.bytes; for(size_t k=0;k<beat.length/sizeof(*h);k++) { KvHit x=h[k]; x.beat+=at; [drums appendBytes:&x length:sizeof(x)]; }
+        double length=kv_section_beats(song,i);
         at+=length;
     }
     if(!notes.length) { KvPianoEvent quiet={.midi=60,.beat=0,.duration=.01,.velocity=0,.hand=1}; [notes appendBytes:&quiet length:sizeof(quiet)]; }   // every track muted: an inaudible note keeps the file valid
@@ -3377,6 +3445,11 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
 }
 /* What plays under a section: 0 nothing, 1 the rhythm layer with these hits (none: the click). */
 - (int)rhythmOfSection:(NSInteger)index hits:(KvHit *)hits count:(size_t *)count {
+    int on=[self beatOfSection:index hits:hits count:count]; float level=[self songWithWorking]->track_level[KV_TRACK_DRUMS];
+    for(size_t i=0;on && i<*count;i++) hits[i].velocity=fminf(1,hits[i].velocity*level);   // the «Ударные» track's level
+    return on;
+}
+- (int)beatOfSection:(NSInteger)index hits:(KvHit *)hits count:(size_t *)count {
     *count=0; const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count || !kv_region_audible(song,(size_t)index,KV_TRACK_DRUMS)) return 0;
     const KvSection *s=&song->sections[index]; const KvArrangement *a=&s->arrangement; KvPianoPattern style=a->blocks || a->arpeggio || a->strings?KV_BALLAD:a->style; NSInteger beat=-1;
     if(s->kind==KV_SECTION_TRANSITION && s->beat!=KV_SECTION_BEAT_OFF) { *count=kv_transition_hits(s->transition,self.meter,hits); if(*count) return 1; }   // the roll of a rise, the kick of a break
@@ -4666,7 +4739,8 @@ int main(int argc, const char *argv[]) {
               for(size_t i=0;lifted && i<plain->count;i++) if(plain->events[i].hand && plain->events[i].midi+12<=108 && root.track->events[i].midi!=plain->events[i].midi+12) lifted=NO;
               free(plain); KV_CHECK(lifted,@"Arranger: «right hand an octave up» lifts the right hand in the roll");
               // Layout of the third view at the extreme sizes.
-              for(NSNumber *width in @[@1120,@1728]) for(NSNumber *height in @[@680,@1000]) { root.frame=NSMakeRect(0,0,width.doubleValue,height.doubleValue); NSString *problem=[root layoutProblem]; KV_CHECK(!problem,([NSString stringWithFormat:@"Arranger layout %@x%@: %@",width,height,problem])); }
+              for(NSNumber *width in @[@1120,@1728]) for(NSNumber *height in @[@680,@1000]) { root.frame=NSMakeRect(0,0,width.doubleValue,height.doubleValue); NSString *problem=[root layoutProblem]?:[root arrangerLayoutProblem]; KV_CHECK(!problem,([NSString stringWithFormat:@"Arranger layout %@x%@: %@",width,height,problem])); }
+              KV_CHECK(NSMaxY(root.arranger.frame)>NSHeight(root.bounds)-KvDockHeight()+100,@"Arranger: without the keyboard the tracks take its room");
               root.frame=NSMakeRect(0,0,1240,760); [root layout]; [root.arranger layout];
               NSRect first=[root.arranger rectOfSection:0],next=[root.arranger rectOfSection:1];
               KV_CHECK(NSWidth(first)>20 && NSMinX(next)>NSMaxX(first) && NSMaxX([root.arranger rectOfSection:2])<=NSWidth(root.arranger.bounds),@"Arranger: the lane lays the sections out in order, inside the view");
@@ -4680,6 +4754,24 @@ int main(int argc, const char *argv[]) {
               KV_CHECK(root.playingDegrees.count==root.song->sections[1].count,@"Arranger: the keyboard follows the playing section's chords");
               [root stopPlayback:nil]; KV_CHECK(!root.songPlaying && !kv_audio_is_playing(root.audio),@"Arranger: Stop ends the song");
               [root applyTempo:100];
+              // Tracks and regions (spec 1.5 §2): M on the bass region takes the left hand out, the melody's level softens it,
+              // S leaves one track, the beat lies on the drums track and follows its level and M; ⌘Z undoes each.
+              { [root arrangerSelect:0]; KvSectionBeat was=root.song->sections[0].beat; NSData *all=[root arrangerNotes:0]; const KvPianoEvent *e=all.bytes; size_t left=0,now=0; float loud=0,soft=0;
+                for(size_t k=0;k<all.length/sizeof(*e);k++) { if(!e[k].hand) left++; else loud=fmaxf(loud,e[k].velocity); }
+                [root arrangerSetRegion:KV_TRACK_BASS mute:1 level:-1]; NSData *bare=[root arrangerNotes:0]; e=bare.bytes; for(size_t k=0;k<bare.length/sizeof(*e);k++) if(!e[k].hand) now++;
+                KV_CHECK(left>0 && !now && bare.length && root.arranger.regionMutes[KV_TRACK_BASS].state==NSControlStateValueOn,@"Tracks: M on the bass region takes the left hand out of the section");
+                [root undoSong]; KV_CHECK(!root.song->sections[0].regions[KV_TRACK_BASS].mute && [root arrangerNotes:0].length==all.length,@"Tracks: ⌘Z brings the bass back");
+                [root arrangerSetTrack:KV_TRACK_MELODY mute:-1 solo:-1 level:.5]; NSData *quiet=[root arrangerNotes:0]; e=quiet.bytes; for(size_t k=0;k<quiet.length/sizeof(*e);k++) if(e[k].hand) soft=fmaxf(soft,e[k].velocity);
+                KV_CHECK(soft>0 && soft<loud*.6f && fabs(root.arranger.trackLevels[KV_TRACK_MELODY].doubleValue-50)<1,@"Tracks: the melody track's level softens its notes");
+                [root undoSong]; [root arrangerSetTrack:KV_TRACK_BASS mute:-1 solo:1 level:-1];
+                KV_CHECK(!kv_region_audible(root.song,0,KV_TRACK_MELODY) && kv_region_audible(root.song,0,KV_TRACK_BASS) && root.arranger.trackSolos[KV_TRACK_BASS].state==NSControlStateValueOn,@"Tracks: S leaves the soloed track alone");
+                [root undoSong]; [root arrangerSet:KvSectionFieldBeat value:4]; NSData *beat=[root arrangerHits:0]; const KvHit *h=beat.bytes; BOOL inside=beat.length>0;
+                for(size_t k=0;k<beat.length/sizeof(*h);k++) if(h[k].beat<-1e-9 || h[k].beat>=kv_section_beats(root.song,0)) inside=NO;
+                KV_CHECK(inside,@"Tracks: the section's beat lies on the drums track, inside the section");
+                [root arrangerSetTrack:KV_TRACK_DRUMS mute:-1 solo:-1 level:.5]; NSData *half=[root arrangerHits:0];
+                KV_CHECK(half.length==beat.length && ((const KvHit *)half.bytes)[0].velocity<h[0].velocity,@"Tracks: the drums track's level softens the beat"); [root undoSong];
+                [root arrangerSetRegion:KV_TRACK_DRUMS mute:1 level:-1]; KV_CHECK(![root arrangerHits:0].length,@"Tracks: M on the drums region silences its beat"); [root undoSong]; [root undoSong];
+                KV_CHECK(root.song->sections[0].beat==was && root.song->track_level[KV_TRACK_DRUMS]==1,@"Tracks: ⌘Z undoes them all"); }
               // Saved with the settings: a restart brings the song, its edited section, its regions, lanes and the view back.
               root.song->sections[2].regions[KV_TRACK_BASS].mute=YES; root.song->sections[2].regions[KV_TRACK_MELODY].shift=.5; root.song->track_level[KV_TRACK_DRUMS]=.8f;
               [root saveState]; KvRoot *again=[[KvRoot alloc] initWithFrame:root.frame];
@@ -4693,6 +4785,7 @@ int main(int argc, const char *argv[]) {
                 KV_CHECK([root loadSongPlist:old] && root.song->count==1 && kv_section_beats(root.song,0)==32 && root.song->sections[0].regions[KV_TRACK_BASS].level==1 && !root.song->sections[0].regions[KV_TRACK_BASS].mute && root.song->track_level[KV_TRACK_MELODY]==1,@"Arranger: a 1.4 song opens with full levels");
                 KV_CHECK([root loadSongPlist:now] && root.song->count==kept->count,@"Arranger: and the current one comes back"); free(kept); [root reloadEditing:0]; }
               [root showView:0]; KV_CHECK(root.editingSection==-1 && [root.progression isEqualToArray:second],@"Arranger: the circle has the draft back");
+              KV_CHECK(root.inspectorTab==0 && root.arranger.sectionPanel.hidden && !root.piano.hidden && ![root.inspectorTabs isEnabledForSegment:3],@"Arranger: the circle has its keyboard and «Аккорды» back");
               [root showView:1]; KV_CHECK(root.roll.sectionChoice.hidden && ![root pianoRollSections:root.roll] && [root pianoRollFirstBar:root.roll]==1,@"Arranger: the draft's roll has no section list"); [root showView:0]; }
             // Arranger suggestions: ghosts under the hovered section, kept while the mouse moves onto them, with an explanation;
             // a click inserts the chorus led in by a rise; a seam takes a transition; other choruses differ; a ghost can be heard.
