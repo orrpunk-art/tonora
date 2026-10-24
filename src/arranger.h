@@ -21,6 +21,11 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerOpenInRoll:(NSInteger)index;
 - (void)arrangerMove:(NSInteger)from to:(NSInteger)to copy:(BOOL)copy;
 - (void)arrangerCut:(NSInteger)index atBeat:(double)beat;   /* beat inside the section, already an allowed cut */
+- (void)arrangerMoveRange:(NSRange)range to:(NSInteger)to copy:(BOOL)copy;   /* to: a seam among the sections, 0…count */
+- (void)arrangerRemoveRange:(NSRange)range;
+- (void)arrangerSwap:(NSInteger)a with:(NSInteger)b;           /* a region dropped on another */
+- (void)arrangerSetLength:(NSInteger)index beats:(double)beats; /* the resize corner */
+- (void)arrangerTrimStart:(NSInteger)index beats:(double)beats; /* the start corner: + later in the pass, − earlier */
 - (void)arrangerRemove:(NSInteger)index;
 - (void)arrangerSet:(KvSectionField)field value:(NSInteger)value;   /* of the selected section */
 - (void)arrangerSetTrack:(int)track mute:(int)mute solo:(int)solo level:(double)level;   /* −1 (level < 0): unchanged */
@@ -64,6 +69,12 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (NSArray<NSValue *> *)ghostRectsAfter:(NSInteger)index;   /* where the ghosts of a section are drawn (self-test) */
 - (void)hoverAtPoint:(NSPoint)point;                        /* as a mouse move there (self-test) */
 @property(nonatomic,readonly) NSInteger hoverSection,hoverGhost,hoverSeam;
+/* Selection (spec 1.5 §4): a click one section, ⇧-click a range, ⌘A all; the owner's `selected` is the one in the inspector. */
+@property(nonatomic) NSRange selection;
+@property(nonatomic,readonly) NSInteger hoverRegion,hoverButton;   /* the region under the pointer (its buttons show), the button */
+@property(nonatomic,readonly) int hoverTrack;
+- (NSArray<NSValue *> *)buttonRectsOf:(NSInteger)index track:(int)track;   /* ✎ ✂ ⧉ ✕ of a hovered region; empty when too small */
+- (NSMenu *)menuForSection:(NSInteger)index track:(int)track beat:(double)beat;   /* the right-click menu; track −1: the marker */
 /* The «Секция» tab of the inspector: the owner places it; the arranger fills and updates it. */
 @property(nonatomic,readonly) NSView *sectionPanel;
 @property(nonatomic,readonly) NSSegmentedControl *toolChoice;
