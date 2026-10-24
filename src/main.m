@@ -757,7 +757,7 @@ static NSPanel *Panel(NSString *title,CGFloat width,CGFloat height) {
 /* All keyboard shortcuts of the app on one card over the window: ⌘/ anywhere, the "?" buttons, Справка menu. */
 @interface KvShortcutsCard : NSView
 @property(nonatomic,weak) KvRoot *owner;
-@property(nonatomic) NSInteger tab;   // 0 shortcuts, 1 the circle of fifths
+@property(nonatomic) NSInteger tab;   // 0 shortcuts, 1 the circle of fifths, 2 the arranger
 @end
 typedef struct { const char *key,*text; } KvShortcut;
 static const KvShortcut KvGeneral[]={
@@ -783,10 +783,10 @@ static const KvShortcut KvComputerKeys[]={
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { (void)event; return YES; }
 - (void)mouseDown:(NSEvent *)event {
     NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
-    for(NSInteger i=0;i<2;i++) if(NSPointInRect(point,[self tabRect:i])) { self.tab=i; self.needsDisplay=YES; return; }
+    for(NSInteger i=0;i<3;i++) if(NSPointInRect(point,[self tabRect:i])) { self.tab=i; self.needsDisplay=YES; return; }
     [self.owner toggleShortcuts:nil];
 }
-static NSString *const KvCardTabs[]={@"Сочетания клавиш",@"Квинтовый круг"};
+static NSString *const KvCardTabs[]={@"Сочетания клавиш",@"Квинтовый круг",@"Аранжировщик"};
 - (NSRect)tabRect:(NSInteger)i {
     NSRect card=[self cardRect]; CGFloat x=card.origin.x+24;
     for(NSInteger j=0;j<=i;j++) {
@@ -797,13 +797,18 @@ static NSString *const KvCardTabs[]={@"Сочетания клавиш",@"Кви
     return NSZeroRect;
 }
 - (NSRect)cardRect {
-    CGFloat w=MIN(NSWidth(self.bounds)-40,1060),h=MIN(NSHeight(self.bounds)-40,64+24+21*18);   // the third column holds the computer keyboard and the song
+    CGFloat w=MIN(NSWidth(self.bounds)-40,1060),h=MIN(NSHeight(self.bounds)-40,64+24+(self.tab==2?25:21)*18);   // the third column holds the computer keyboard and the song; the arranger's columns run longer
     return NSMakeRect(round(NSMidX(self.bounds)-w/2),round(NSMidY(self.bounds)-h/2),w,h);
 }
 static const char *const KvCircleHelp[][2]={
     {"Что это за круг","Все двенадцать тональностей стоят по кругу так, что каждый шаг по часовой стрелке — квинта вверх: C → G → D → A… Против часовой — квинта вниз (кварта вверх): C → F → B♭… Соседние тональности отличаются одним знаком при ключе: вправо прибавляется диез, влево — бемоль. Внизу круг смыкается — там одни и те же клавиши пишутся двумя способами (F♯ = G♭).\nВнешнее кольцо — мажорные тональности, внутреннее — параллельные миноры с теми же знаками: C и Am, G и Em."},
     {"Почему всё строится от него","Аккорды тональности на круге — соседи. Тоника в середине, слева от неё субдоминанта IV, справа доминанта V, а под ними на внутреннем кольце — ii, vi и iii. Шесть соседних секторов дают все мажорные и минорные трезвучия тональности; седьмое, уменьшённое vii°, своего сектора не имеет.\nПоэтому в Tonora всё идёт от нажатого сектора: гамма и ноты на клавиатуре, номера ступеней, генератор и готовые прогрессии, аккорды вне лада, рисунок рук и арпеджио. Другой лад — тот же круг, только подсвечено другое окно соседей."},
     {"Как этим пользоваться","Щелчок по сектору выбирает тонику, центр играет её трезвучие; ← → шагают по кругу, ↑ ↓ меняют мажор и минор.\nСамое сильное тяготение — шаг против часовой стрелки: V → I, ii → V → I. На нём держатся каденции и цепочки доминант, поэтому хорошие прогрессии часто идут по кругу вниз.\nЧем ближе две тональности, тем больше у них общих аккордов и тем мягче переход. Наведите на чужой сектор — круг обведёт общие аккорды и подскажет путь модуляции."}};
+static const char *const KvArrangerHelp[][2]={
+    {"С чего начать","⌘3 открывает аранжировщик. ⇧⌘A делает последовательность с круга секцией песни; «✦ Сгенерировать песню» на пустой дорожке «Мелодия» собирает целую песню из аккордов круга — интро, куплеты, припевы, бридж, переходы. «Структура ▾» пересобирает песню по форме вокруг выбранного куплета, ⌘R даёт другой вариант. «+» после последней секции показывает, что может быть дальше: щелчок вставляет, Пробел над подсказкой — послушать.\nТри дорожки: «Мелодия» — правая рука, «Бас» — левая, «Ударные» — бит секций. У каждой M (выкл), S (соло) и фейдер — они действуют сразу, даже во время игры. «A» открывает кривую громкости дорожки, ⌁ — кривую темпа; двойной щелчок по полосе ставит точку, ⌫ удаляет.\nДвойной щелчок, Enter, ✎ или «Открыть в ролле» открывают пиано-ролл под дорожками на руке той дорожки, по которой щёлкнули; «Свернуть» или Esc убирают его, ⌘2 — ролл на всё окно. Правки нот остаются у секции (✎ на маркере), ↺ возвращает рисунок."},
+    {"Секции и регионы","Щелчок по маркеру выбирает секцию, по региону — её дорожку; ⇧-щелчок — диапазон, ⌘A — все. Перетаскивание маркера или региона двигает секцию, ⌥ — копирует, бросок на середину другой меняет их местами. Правый край — длина, левый — начало в прогрессии, маленький верхний правый угол региона — повторы. Ножницы (I, ⌘-щелчок или ✂ на регионе) режут там, где щёлкнуть; карандаш (P) ставит последовательность с круга новой секцией. Правый щелчок — меню секции и региона: разрезать, дублировать, удалить, добавить после, вставить переход, цикл по секции, M региона, бит ударных.\nВкладка «Секция» справа: тип, повторы, громкость, регистр, вид перехода, M и громкость регионов, ударные секции («Как у песни», свой бит, тихо, без). Рисунок и фактура внизу окна меняются у всей песни, когда выбрана одна секция, и только у выделенных, когда их несколько."},
+    {"Игра, цикл и экспорт","Пробел играет от курсора; щелчок по линейке ставит курсор, двойной — играет отсюда, во время игры щелчок переносит игру. С ↻ и циклом Пробел играет от начала цикла и крутит его. Цикл рисуется протяжкой по полосе над номерами тактов; за середину он переносится, за края растягивается, щелчок по нему включает и выключает ↻, правый щелчок — «Снять цикл». Home — в начало, ⌥Пробел — только выбранная секция.\nМетроном (⌘K) — клик, он щёлкает только пока идёт игра; сетка и отсчёт такта — в его меню. Ударные (⇧⌘K) — своя кнопка и меню: по стилю или один бит; под песней у каждой секции свой. Громкость ритма — в FX (⌘,).\nМасштаб: ⌘+ и ⌘−, ⌘+колесо или щипок, Z — вся песня; привязка — в меню «Умная · такт · доля · 1/8», ⌃ во время жеста — без привязки. ⇧⌘E экспортирует песню в MIDI с ударными и маркерами, кнопка ↓ — одну дорожку. ⌘Z отменяет правки песни."},
+};
 static CGFloat DrawParagraphs(NSString *title,NSString *body,CGFloat x,CGFloat y,CGFloat width) {
     Text(title,NSMakeRect(x,y,width,18),12,NSFontWeightBold,Accent(),NSTextAlignmentLeft); y+=24;
     NSMutableParagraphStyle *style=[NSMutableParagraphStyle new]; style.lineSpacing=2; style.paragraphSpacing=12;
@@ -824,7 +829,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     (void)dirtyRect; [[NSColor.blackColor colorWithAlphaComponent:.28] setFill]; NSRectFillUsingOperation(self.bounds,NSCompositingOperationSourceOver);
     NSRect card=[self cardRect]; NSBezierPath *path=[NSBezierPath bezierPathWithRoundedRect:card xRadius:14 yRadius:14];
     [TNSurface() setFill]; [path fill]; [[NSColor.labelColor colorWithAlphaComponent:.18] setStroke]; [path stroke];
-    for(NSInteger i=0;i<2;i++) {
+    for(NSInteger i=0;i<3;i++) {
         NSRect tab=[self tabRect:i];
         Text(T(KvCardTabs[i]),NSMakeRect(tab.origin.x,tab.origin.y+4,tab.size.width+2,24),17,NSFontWeightSemibold,i==self.tab?NSColor.labelColor:NSColor.tertiaryLabelColor,NSTextAlignmentLeft);
         if(i==self.tab) { [Accent() setFill]; NSRectFill(NSMakeRect(tab.origin.x,NSMaxY(tab)-3,tab.size.width,2)); }
@@ -832,6 +837,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
     Text(T(@"Tab — вкладка · Esc, ⌘/ или щелчок — закрыть"),NSMakeRect(NSMaxX(card)-344,card.origin.y+20,320,18),11,NSFontWeightMedium,NSColor.secondaryLabelColor,NSTextAlignmentRight);
     CGFloat column=(card.size.width-48-2*24)/3,top=card.origin.y+56,x=card.origin.x+24;
     if(self.tab==1) { for(int i=0;i<3;i++) DrawParagraphs(T(@(KvCircleHelp[i][0])),T(@(KvCircleHelp[i][1])),x+i*(column+24),top,column); return; }
+    if(self.tab==2) { for(int i=0;i<3;i++) DrawParagraphs(T(@(KvArrangerHelp[i][0])),T(@(KvArrangerHelp[i][1])),x+i*(column+24),top,column); return; }
     DrawShortcuts(T(@"Везде"),KvGeneral,x,top,column);
     DrawShortcuts(T(@"Пиано-ролл"),KvRollKeys,x+column+24,top,column);
     CGFloat below=DrawShortcuts(T(@"Клавиатура компьютера · M"),KvComputerKeys,x+2*(column+24),top,column);
@@ -3923,7 +3929,7 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
 }
 - (void)endSong { self.tempoValue.stringValue=[NSString stringWithFormat:@"%.0f BPM",self.tempo]; self.songPlaying=NO; self.songOrder=nil; self.songOrderBeats=nil; self.songOrderFrom=nil; self.songOrderLength=nil; self.songPart=0; self.songQueued=0; self.sentBeat=-2; [self applyRhythm]; if(self.viewMode==2) self.arranger.needsDisplay=YES; }
 - (void)keyDown:(NSEvent *)event {
-    if(self.shortcutsVisible && event.keyCode==48) { KvShortcutsCard *card=(KvShortcutsCard *)self.shortcutsCard; card.tab=!card.tab; card.needsDisplay=YES; return; }   // Tab
+    if(self.shortcutsVisible && event.keyCode==48) { KvShortcutsCard *card=(KvShortcutsCard *)self.shortcutsCard; card.tab=(card.tab+1)%3; card.needsDisplay=YES; return; }   // Tab
     if(self.shortcutsVisible && (event.keyCode==53 || (event.keyCode==44 && (event.modifierFlags&NSEventModifierFlagCommand)))) { [self toggleShortcuts:nil]; return; }
     if((event.modifierFlags&NSEventModifierFlagCommand) && event.keyCode==44) { [self toggleShortcuts:nil]; return; } // ⌘/
     if([self computerKeyDown:event]) return;

@@ -18,7 +18,7 @@ Native app for macOS 12 and later, Universal (Apple Silicon and Intel). The musi
 - **Four instruments:** Salamander grand piano, Yamaha CP80, Hohner Pianet T and VSCO 2 strings with legato, spiccato, pizzicato and mod-wheel dynamics. Reverb and a tempo-synced delay.
 - **Arranger** (`⌘3`): a progression from the circle (`⇧⌘A`) becomes a section of a song. Hover a section and the arranger suggests what comes next: a chorus led in by a rise, a breakdown, the verse again, an outro; between two sections, a transition. Sections move, copy, cut on a bar line (`⌘`-click) and repeat, each with its own texture, level, register and beat; a double-click opens one in the piano roll. The song plays through without gaps and exports to MIDI with drums and section markers (`⇧⌘E`).
 - **`.tonora` song files** (`⌘O`, `⌘S`): key, texture, sound, edits and the whole song in one file that opens with a double-click.
-- **Metronome and beats** to play along on a MIDI keyboard (`⌘K`): a click on beats, eighths, triplets or sixteenths, or a beat on a live drum kit — pop, ballad, bossa nova, shuffle, hip-hop, trip-hop, house, or one that suits the pattern's style. It runs on its own or locks to the sequence, with an optional one-bar count-in.
+- **Metronome and drums.** The metronome (`⌘K`) clicks on beats, eighths, triplets or sixteenths while something plays, with an optional one-bar count-in. The drums (`⇧⌘K`) are a live kit — pop, ballad, bossa nova, shuffle, hip-hop, trip-hop, house, or a beat that suits the pattern's style; in a song each section has its own.
 - **256-voice polyphony** with voice stealing, and a sustain pedal that lets a re-struck key ring.
 - **Piano roll** to edit the generated part note by note: snap to grid, drag, stretch, quantize, undo, slowed-down playback.
 - **MIDI everywhere.** Save a `.mid` file, drag a clip straight onto a DAW track, send notes live to the virtual «Tonora» port, play from a MIDI keyboard (one-key chords optional), or import a MIDI file — key, meter, tempo and chords are detected.
@@ -64,7 +64,7 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 | `⌘1` `⌘2` `⌘3` · `⇧⌘A` | circle · piano roll · arranger · send the progression to the arranger |
 | `⌘-click` · `⌘T` · `⌘D` | arranger: cut a section on a bar line · cut at the mouse · duplicate |
 | `⇧⌘E` | export the song as MIDI |
-| `⌘K` | metronome on / off (Esc stops it with the music) |
+| `⌘K` · `⇧⌘K` | metronome · drums |
 | `⌘,` · `⌘/` | sound and language · all shortcuts and help |
 | `M` | play from the computer keyboard: `A`…`'` white keys, `W E T Y U O P` black keys, `Z X` octave, `C V` velocity |
 
