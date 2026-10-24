@@ -327,6 +327,35 @@ int main(int argc,char **argv) {
       n=clicks(r,44100,at,peak,64); CHECK(n>=3 && fabs((double)(at[2]-at[1])-11025)<=1);
       kv_mixer_rhythm(r,false,KV_GRID_BEATS,KV_METER_4_4,.25,.6f); advance(r,block,2400); CHECK(kv_mixer_rhythm_beat(r)<0 && clicks(r,44100,at,peak,64)==0);
       kv_mixer_free(r); }
+    // Queue: the next part starts on the exact frame the current one ends, the current voices ring on under it, the rhythm
+    // switches with it; a stop or a new performance drops the queue.
+    { KvMixer *q=kv_mixer_create(); kv_mixer_bank(q,0,banks[0]); KvKey ck={0,false,0,0};
+      KvPerformance first={0},next={0},third={0}; KvArrangement arr={.style=KV_BALLAD,.meter=KV_METER_4_4,.length=KV_LENGTH_BAR,.blocks=true,.seconds_per_beat=.5};
+      KvChord c; CHECK(kv_chord(ck,0,&c) && kv_arrange_with(&c,1,60,ck,arr,&first));
+      CHECK(kv_chord(ck,4,&c) && kv_arrange_with(&c,1,60,ck,arr,&next));
+      CHECK(kv_chord(ck,3,&c) && kv_arrange_with(&c,1,60,ck,arr,&third));
+      CHECK(!kv_mixer_queue(q,&next,-1,NULL,0));                       // nothing playing yet
+      CHECK(kv_mixer_performance(q,&first,.5,0)); uint64_t start=kv_mixer_start(q);
+      kv_mixer_rhythm(q,false,KV_GRID_BEATS,KV_METER_4_4,.5,.6f);
+      CHECK(kv_mixer_queue(q,&next,-1,NULL,0) && kv_mixer_part(q)==0 && kv_mixer_busy(q));
+      advance(q,block,(unsigned)(start-kv_mixer_clock(q))+88200-8); CHECK(kv_mixer_part(q)==0);
+      advance(q,block,16); CHECK(kv_mixer_part(q)==1 && kv_mixer_start(q)==start+88200);
+      unsigned struck=0; for(size_t i=0;i<next.count;i++) if(next.events[i].beat<.01) struck++;
+      advance(q,block,512); CHECK(struck==3 && kv_mixer_voices(q)>=2*struck);   // the C chord's release tails sound under G      // the C chord's release tails sound under G
+      int sounding[KV_ACTIVE_NOTES]; unsigned ns=kv_mixer_active(q,sounding); bool g=false; for(unsigned i=0;i<ns;i++) if(sounding[i]%12==7) g=true; CHECK(g);
+      advance(q,block,88200+44100*2); CHECK(kv_mixer_part(q)==1 && !kv_mixer_running(q));
+      // The rhythm follows the parts: off in the first, a beat in the second, off again in the third.
+      KvHit kicks[2]={{0,KV_DRUM_KICK,1},{2,KV_DRUM_KICK,.8f}};
+      CHECK(kv_mixer_performance(q,&first,.5,0)); start=kv_mixer_start(q); CHECK(kv_mixer_queue(q,&next,1,kicks,2));
+      advance(q,block,88200-256); CHECK(kv_mixer_drum_voices(q)==0 && kv_mixer_rhythm_beat(q)<0);
+      advance(q,block,512); CHECK(kv_mixer_part(q)==1 && kv_mixer_drum_voices(q)>0 && kv_mixer_rhythm_beat(q)>=0 && kv_mixer_rhythm_beat(q)<.05);
+      CHECK(kv_mixer_queue(q,&third,0,NULL,0)); advance(q,block,88200); CHECK(kv_mixer_part(q)==2 && kv_mixer_rhythm_beat(q)<0);
+      // A stop drops the queue; so does a fresh performance.
+      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_part(q)==0 && kv_mixer_queue(q,&next,-1,NULL,0)); kv_mixer_stop(q);
+      advance(q,block,88200*2); CHECK(kv_mixer_part(q)==0 && !kv_mixer_running(q));
+      CHECK(kv_mixer_performance(q,&first,.5,0) && kv_mixer_queue(q,&next,-1,NULL,0) && kv_mixer_performance(q,&third,.5,0));
+      advance(q,block,88200*2); CHECK(kv_mixer_part(q)==0);
+      kv_mixer_free(q); }
     // Beats: hits on the exact frames of the bar; without recordings the synthesized kit plays; the recorded kit has every drum
     // the beats use (soft and loud, two takes); a count-in is clicked and the beat comes in with the sequence.
     { size_t at[64]; float peak[64];

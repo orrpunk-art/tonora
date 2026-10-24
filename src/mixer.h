@@ -50,6 +50,12 @@ unsigned kv_mixer_drum_voices(const KvMixer *mixer);
 #define KV_DRY_FRAMES 4096
 /* The dry part (the click) of the last render, stereo interleaved; frames beyond KV_DRY_FRAMES carry no click. */
 const float *kv_mixer_dry(const KvMixer *mixer);
+/* The part after the playing performance (a song's next section): it starts on the frame the current one ends, without a gap,
+   while the current voices ring on; humanizing, tempo and instrument stay. rhythm: −1 leaves the rhythm layer as it is, 0 switches
+   it off, 1 on with `hits` (count 0: the click); the layer restarts on the part's first beat. One part waits at a time: a new
+   call replaces it. kv_mixer_part counts the parts started since the last kv_mixer_performance (0 while the first plays). */
+bool kv_mixer_queue(KvMixer *mixer,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count);
+unsigned kv_mixer_part(const KvMixer *mixer);
 void kv_mixer_humanize(KvMixer *mixer,bool enabled);
 void kv_mixer_loop(KvMixer *mixer,bool enabled);
 void kv_mixer_interval(KvMixer *mixer,double seconds);

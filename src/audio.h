@@ -19,6 +19,11 @@ bool kv_audio_load_piano(KvAudio *audio, const char *directory);
 bool kv_audio_set_effects(KvAudio *audio, KvEffects effects);
 /* Main-thread calls only. Single notes overlap; sequences replace future scheduled events with release tails. */
 bool kv_audio_performance(KvAudio *audio,const KvPerformance *performance,double seconds_per_beat);
+/* The part to play after the current performance ends (a song's next section), gapless; see kv_mixer_queue. Send it while the
+   current part plays, after its kv_audio_performance. kv_audio_part: parts started since that call, and seconds into the
+   current one (0 during a count-in). */
+bool kv_audio_queue(KvAudio *audio,const KvPerformance *performance,int rhythm,const KvHit *hits,size_t count);
+unsigned kv_audio_part(KvAudio *audio,double *seconds);
 bool kv_audio_play(KvAudio *audio, const int *notes, size_t note_count, size_t voices, double seconds_per_event);
 /* One note on top of whatever is playing: never cancels a scheduled performance or moves the playhead. */
 bool kv_audio_audition(KvAudio *audio,int midi,double seconds);

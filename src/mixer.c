@@ -30,7 +30,9 @@ struct KvMixer { const KvPianoBank *banks[KV_INSTRUMENTS]; struct Voice voices[V
     struct Click clicks[4]; float click_wave[CLICKS][CLICK_FRAMES]; float dry[KV_DRY_FRAMES*2];
     /* beat: one bar of hits, the next one due (bar, hit), the kit; counting: a count-in is under way */
     const KvPianoBank *drums; KvHit beat[KV_BEAT_HITS]; size_t beat_count,beat_hit; uint64_t beat_bar; bool electronic,counting;
-    unsigned char take[128]; struct Drum drum_voices[DRUM_VOICES]; float synth[SYNTHS][SYNTH_FRAMES]; size_t synth_frames[SYNTHS]; };
+    unsigned char take[128]; struct Drum drum_voices[DRUM_VOICES]; float synth[SYNTHS][SYNTH_FRAMES]; size_t synth_frames[SYNTHS];
+    /* the queued part (kv_mixer_queue): its plan, its rhythm (−1 as is, 0 off, 1 on) and hits, and parts started so far */
+    KvPerformance queued; bool has_queued; int queued_rhythm; KvHit queued_hits[KV_BEAT_HITS]; size_t queued_hit_count; unsigned part; };
 /* Drum-machine sounds: a kick that drops from 150 to 48 Hz, a snare of tone and noise, a stick, a clap of three bursts and a
    tail, closed and open hi-hats and a tambourine of bright noise, two congas, a shaker. Peaks by role. */
 static void synthesize_kit(KvMixer *m) {
@@ -178,7 +180,7 @@ static void click(KvMixer *m,uint64_t k) {
     *slot=(struct Click){.wave=wave,.pos=0,.gain=m->rhythm_volume,.active=true};
 }
 unsigned kv_mixer_voices(const KvMixer *m) { unsigned n=0; if(m) for(int i=0;i<VOICES;i++) if(m->voices[i].active) n++; return n; }
-void kv_mixer_stop(KvMixer *m) { if(!m) return; m->loop=false; m->count=m->next=0; for(int i=0;i<VOICES;i++) cut(&m->voices[i],441); }
+void kv_mixer_stop(KvMixer *m) { if(!m) return; m->loop=false; m->has_queued=false; m->count=m->next=0; for(int i=0;i<VOICES;i++) cut(&m->voices[i],441); }
 static bool open_head(const KvPianoBank *bank,int midi,int layer,struct Head *h) {
     KvSampleView s; if(!kv_piano_layer(bank,midi,layer,&s)) return false;
     *h=(struct Head){.s=s,.ratio=pow(2,(midi-s.midi)/12.0-s.cents/1200.0)}; return true;
@@ -316,7 +318,7 @@ bool kv_mixer_play(KvMixer *m,const int *notes,size_t count,size_t voices,double
         if(!m->count) m->sequence_start=m->clock;
         return true;
     }
-    m->custom=false; m->loop=false; m->cycle=0;
+    m->custom=false; m->loop=false; m->cycle=0; m->has_queued=false;
     {
         m->next=0; m->count=count; m->stride=voices; m->interval=(uint64_t)llround(duration*RATE); m->instrument=instrument;
         memcpy(m->sequence,notes,count*sizeof(int));
@@ -359,18 +361,36 @@ bool kv_mixer_preview(KvMixer *m,int midi,double duration,int instrument) {
 }
 bool kv_mixer_performance(KvMixer *m,const KvPerformance *p,double seconds,int instrument) {
     if(!m || !kv_performance_valid(p) || !isfinite(seconds) || seconds<.25 || seconds>5 || instrument<0 || instrument>=KV_INSTRUMENTS || !m->banks[instrument]) return false;
-    m->performance=*p; m->custom=true; m->loop=false; m->cycle=0; m->next=0; m->count=p->count; m->stride=1;
+    m->performance=*p; m->custom=true; m->loop=false; m->cycle=0; m->next=0; m->count=p->count; m->stride=1; m->has_queued=false; m->part=0;
     m->interval=(uint64_t)llround(seconds*RATE); m->instrument=instrument;
     // A count-in puts the start a few beats ahead: the rhythm starts now and counts up to it.
     uint64_t lead=(uint64_t)llround(m->lead_beats*m->interval); m->lead_beats=0; m->sequence_start=m->clock+lead;
     if(m->rhythm) { rhythm_retime(m,(double)m->interval); rhythm_align(m,(double)m->clock); }
     schedule(m); for(int i=0;i<VOICES;i++) release(&m->voices[i],1323); return true;
 }
+bool kv_mixer_queue(KvMixer *m,const KvPerformance *p,int rhythm,const KvHit *hits,size_t count) {
+    if(!m || !m->custom || !m->count || !kv_performance_valid(p) || rhythm<-1 || rhythm>1 || count>KV_BEAT_HITS || (count && !hits)) return false;
+    m->queued=*p; m->queued_rhythm=rhythm; m->queued_hit_count=count; if(count) memcpy(m->queued_hits,hits,count*sizeof *hits);
+    m->has_queued=true; return true;
+}
+unsigned kv_mixer_part(const KvMixer *m) { return m?m->part:0; }
+/* The queued part takes over on the frame the current one ends; the current voices ring on under it. */
+static void start_queued(KvMixer *m) {
+    m->sequence_start+=m->cycle_end; m->performance=m->queued; m->count=m->queued.count; m->next=0; m->cycle=0; m->has_queued=false; m->part++;
+    schedule(m);
+    if(m->queued_rhythm==0) m->rhythm=false;
+    else if(m->queued_rhythm==1) {
+        if(m->queued_hit_count) memcpy(m->beat,m->queued_hits,m->queued_hit_count*sizeof *m->beat);
+        m->beat_count=m->queued_hit_count; m->beat_frames=(double)m->interval; m->rhythm=true;
+    }
+    if(m->rhythm) rhythm_align(m,(double)m->sequence_start);   // every part starts on a downbeat
+}
 void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
     memset(stereo,0,frames*2*sizeof(float)); memset(m->dry,0,(frames<KV_DRY_FRAMES?frames:KV_DRY_FRAMES)*2*sizeof(float));
     for(size_t f=0;f<frames;f++,m->clock++) {
         bool started=m->clock>=m->sequence_start;   // false during a count-in
-        if(started && m->loop && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
+        if(started && m->has_queued && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) start_queued(m);
+        else if(started && m->loop && m->next==m->count && m->clock-m->sequence_start>=m->cycle_end) {
             m->sequence_start+=m->cycle_end; m->cycle++; m->next=0; schedule(m); if(m->rhythm) rhythm_align(m,(double)m->sequence_start);
         }
         bool counting=m->count && m->clock<m->sequence_start;
@@ -432,10 +452,10 @@ void kv_mixer_render(KvMixer *m,float *stereo,size_t frames) {
 }
 bool kv_mixer_running(const KvMixer *m) {
     if(!m) return false;
-    if(m->count && (m->loop || m->clock<m->sequence_start || m->clock-m->sequence_start<m->cycle_end)) return true;
+    if(m->count && (m->loop || m->has_queued || m->clock<m->sequence_start || m->clock-m->sequence_start<m->cycle_end)) return true;
     int notes[KV_ACTIVE_NOTES]; return kv_mixer_active(m,notes)>0;
 }
-bool kv_mixer_busy(const KvMixer *m) { if(!m) return false; if(m->loop || m->next<m->count) return true; for(int i=0;i<VOICES;i++) if(m->voices[i].active) return true; return false; }
+bool kv_mixer_busy(const KvMixer *m) { if(!m) return false; if(m->loop || m->has_queued || m->next<m->count) return true; for(int i=0;i<VOICES;i++) if(m->voices[i].active) return true; return false; }
 uint64_t kv_mixer_clock(const KvMixer *m) { return m?m->clock:0; }
 uint64_t kv_mixer_start(const KvMixer *m) { return m?m->sequence_start:0; }
 unsigned kv_mixer_active(const KvMixer *m,int notes[KV_ACTIVE_NOTES]) {

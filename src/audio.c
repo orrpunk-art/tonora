@@ -10,13 +10,13 @@
 #include <string.h>
 #define FRAMES 256
 #define COMMANDS 64
-struct Command { unsigned epoch; int type,instrument; size_t count,voices; double seconds; float values[2]; KvEffects effects; int notes[256]; KvPerformance performance; KvHit hits[KV_BEAT_HITS]; };
+struct Command { unsigned epoch; int type,instrument,rhythm; size_t count,voices; double seconds; float values[2]; KvEffects effects; int notes[256]; KvPerformance performance; KvHit hits[KV_BEAT_HITS]; };
 struct KvAudio {
     AudioQueueRef queue; AudioQueueBufferRef buffers[3];
     KvMixer *mixer; KvLiveEffects *fx; KvPianoBank *banks[KV_INSTRUMENTS],*drums;
     struct Command commands[COMMANDS]; atomic_uint read,write,stop_epoch; unsigned applied_stop;
     atomic_bool closing,playing,stop_requested; atomic_uint pending_plays; bool muted; float output_gain; atomic_int error,event;
-    atomic_uint_fast64_t clock,start,active_low,active_high; _Atomic double rhythm_beat;
+    atomic_uint_fast64_t clock,start,active_low,active_high,part_start; atomic_uint part; _Atomic double rhythm_beat;
     KvEffects effects; int instrument; bool started; uint64_t tail;
 };
 static bool send(KvAudio *audio,struct Command command) {
@@ -38,7 +38,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
     while(read!=write) {
         struct Command *c=&a->commands[read];
         apply_stop(a);
-        bool stale=c->epoch!=a->applied_stop && (c->type==1 || c->type==2 || c->type==5 || c->type==6 || c->type==7 || c->type==8 || c->type==9 || c->type==15);   // a count-in belongs to its performance
+        bool stale=c->epoch!=a->applied_stop && (c->type==1 || c->type==2 || c->type==5 || c->type==6 || c->type==7 || c->type==8 || c->type==9 || c->type==15 || c->type==17);   // a count-in belongs to its performance
         if(stale) { /* A stop invalidates queued playback and loop commands. */ }
         else if(c->type==0) { kv_mixer_stop(a->mixer); a->muted=true; atomic_store(&a->playing,false); }
         else if(c->type==3) a->effects=c->effects;
@@ -65,6 +65,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
         else if(c->type==14) kv_mixer_rhythm(a->mixer,c->count!=0,(KvGrid)c->voices,(KvMeter)c->instrument,c->seconds,c->values[0]);
         else if(c->type==15) kv_mixer_count_in(a->mixer,c->seconds);
         else if(c->type==16) kv_mixer_beat(a->mixer,c->hits,c->count,c->voices!=0);
+        else if(c->type==17) { if(!kv_mixer_queue(a->mixer,&c->performance,c->rhythm,c->hits,c->count)) atomic_store(&a->error,1); }
         else if(kv_mixer_play(a->mixer,c->notes,c->count,c->voices,c->seconds,c->instrument,c->type==2)) {
             a->muted=false; atomic_store(&a->start,kv_mixer_start(a->mixer)); atomic_store(&a->playing,true);
         } else atomic_store(&a->error,1);
@@ -89,6 +90,7 @@ static void fill(void *context,AudioQueueRef queue,AudioQueueBufferRef buffer) {
             pcm[i*2+c]=fmaxf(-1,fminf(1,out));
         }
     }
+    atomic_store(&a->part,kv_mixer_part(a->mixer)); atomic_store(&a->part_start,kv_mixer_start(a->mixer));
     atomic_store(&a->clock,kv_mixer_clock(a->mixer)); atomic_store(&a->event,kv_mixer_event(a->mixer)); atomic_store(&a->rhythm_beat,kv_mixer_rhythm_beat(a->mixer));
     int notes[KV_ACTIVE_NOTES]; unsigned count=kv_mixer_active(a->mixer,notes); uint64_t low=0,high=0;
     for(unsigned i=0;i<count;i++) { if(notes[i]<64) low|=UINT64_C(1)<<notes[i]; else high|=UINT64_C(1)<<(notes[i]-64); }
@@ -180,6 +182,17 @@ bool kv_audio_performance(KvAudio *a,const KvPerformance *p,double seconds) {
     struct Command command={.type=7,.instrument=a->instrument,.seconds=seconds,.performance=*p};
     atomic_store(&a->start,atomic_load(&a->clock)); atomic_store(&a->stop_requested,false); atomic_fetch_add(&a->pending_plays,1);
     if(!send(a,command)) { atomic_fetch_sub(&a->pending_plays,1); return false; } return true;
+}
+bool kv_audio_queue(KvAudio *a,const KvPerformance *p,int rhythm,const KvHit *hits,size_t count) {
+    if(!a || !kv_performance_valid(p) || rhythm<-1 || rhythm>1 || count>KV_BEAT_HITS || (count && !hits)) return false;
+    struct Command command={.type=17,.rhythm=rhythm,.count=count,.performance=*p}; if(count) memcpy(command.hits,hits,count*sizeof *hits);
+    return send(a,command);
+}
+unsigned kv_audio_part(KvAudio *a,double *seconds) {
+    if(!a) return 0;
+    unsigned part=atomic_load(&a->part); uint64_t now=atomic_load(&a->clock),from=atomic_load(&a->part_start);
+    if(seconds) *seconds=now>=from?(double)(now-from)/44100:0;
+    return part;
 }
 bool kv_audio_set_articulation(KvAudio *a,KvArticulation articulation) { return a && articulation>=0 && articulation<KV_ARTICULATION_COUNT && send(a,(struct Command){.type=11,.count=(size_t)articulation}); }
 bool kv_audio_set_rhythm(KvAudio *a,bool on,KvGrid grid,KvMeter meter,double seconds_per_beat,double volume) {
