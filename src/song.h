@@ -19,6 +19,10 @@ typedef struct { bool mute; float level; double shift; } KvRegion;
 /* How a transition leads from its left neighbour into its right one (spec 1.4 §4.3). */
 typedef enum { KV_TRANSITION_RISE, KV_TRANSITION_DOMINANT, KV_TRANSITION_FILL, KV_TRANSITION_BREAK, KV_TRANSITION_KINDS } KvTransitionKind;
 /* The rhythm layer under a section: the song's choice, none, a quiet hi-hat and shaker, the beat that suits the texture, or `beat_fixed`. */
+/* How a section grows out of another one's material (spec 1.6): its chords and notes are the source's, changed by the role —
+   the chorus louder and up, the breakdown sparse, the intro thinned and growing, the outro closing, the bridge shifted round the
+   progression, a transition from the end of the section before it. */
+typedef enum { KV_DERIVE_NONE, KV_DERIVE_LIFT, KV_DERIVE_SPARSE, KV_DERIVE_INTRO, KV_DERIVE_OUTRO, KV_DERIVE_PLAIN, KV_DERIVE_TRANSITION, KV_DERIVE_KINDS } KvDerive;
 typedef enum { KV_SECTION_BEAT_SONG, KV_SECTION_BEAT_OFF, KV_SECTION_BEAT_QUIET, KV_SECTION_BEAT_STYLE, KV_SECTION_BEAT_FIXED, KV_SECTION_BEAT_KINDS } KvSectionBeat;
 typedef struct {
     uint32_t id;               /* unique in the song, never 0 */
@@ -35,6 +39,10 @@ typedef struct {
     double length;             /* beats; 0: one pass × repeats. Set by a cut or by dragging the length */
     double start;              /* beats into the pass where the section begins (a cut or a trim), 0 … pass */
     KvRegion regions[KV_TRACKS];
+    uint32_t source;           /* the section whose material this one grows from (by id), 0 none: its own chords and pattern */
+    KvDerive derive;           /* how; NONE with a source of 0 */
+    int map[8];                /* for each chord: the source's chord whose notes it plays (moved onto its own chord when they differ) */
+    uint32_t vary;             /* which variant of the role (another octave, doubling, rotation…) — ⌘R picks another */
 } KvSection;
 /* Automation (spec 1.5 §6а): points in song beats, in order; linear between them, flat before the first and after the last. */
 enum { KV_CURVE_POINTS=64 };
@@ -106,22 +114,33 @@ double kv_song_snap_cut(const KvSong *song,size_t index,double beat,double grid)
 /* Cuts section `index` at `beat` beats into it, anywhere: the left part ends there, the right one starts there in the pass and
    keeps the rest. Both keep the whole progression (and an edited pass: the app copies the track to the new id, returned). */
 uint32_t kv_song_cut(KvSong *song,size_t index,double beat);
+/* A derived section's pass from its source's pass (the source's edited notes, or its pattern): every chord takes the notes of its
+   mapped source chord — moved onto its own chord's tones when the chords differ — fitted to its own chord length, then changed
+   by the role and the variant. False when it cannot (the caller plays the section's own pattern). */
+bool kv_section_derive(const KvSong *song,size_t index,const KvSection *source,const KvPerformance *source_pass,KvPerformance *out);
+/* After the source sections changed their chords: the derived sections not edited by hand take their chords again, keeping
+   their share of passes. Row edits call it themselves; the app calls it when a section's working state is stored. */
+void kv_song_rederive(KvSong *song);
 /* Transpose an edited track by semitones, moving a note that would leave the keyboard an octave back. */
 void kv_track_transpose(KvPerformance *track,int semitones);
+/* An edited track in a new meter or chord length: every note keeps its place inside its chord, scaled to the new chord length. */
+bool kv_track_remeter(KvPerformance *track,double beats_per_chord,double beats_per_bar);
 /* A section made from what the circle holds: its progression and texture. */
 KvSection kv_section_from_draft(KvSectionKind kind,const int *codes,size_t count,KvArrangement arrangement);
 
-/* Generators (spec 1.4 §4). Each returns a section (id 0: insert it) that follows `verse` — its texture, its chords. The chorus:
-   a chorus turn of the key's kind other than the verse's, starting on I, IV or vi (i or VI in minor) and not on the verse's
-   last chord, twice, the second time closing on the tonic; denser fills, the right hand up, louder, with a beat. `seed` picks
-   among the turns that fit. The breakdown: two chords away from the tonic, two bars each, sparse and quiet. */
+/* Generators (spec 1.6). Each returns a section (id 0: insert it) grown from `verse`'s material — its chords, its texture, its
+   notes (edited or from the pattern) — through kv_section_derive: the chorus plays the verse's chords louder and up (×2 when
+   short; `seed` picks the variant), the breakdown the first half of them sparse and quiet, the intro the first two thinned and
+   growing, the outro (from `before`) the last two closing on the tonic, the bridge the progression from another chord. */
 KvSection kv_section_chorus(const KvSong *song,const KvSection *verse,uint32_t seed);
+/* The chorus on a new turn of chords (the 1.4 generator: «Припев на новых аккордах», ⌥-click on the chorus suggestion). */
+KvSection kv_section_chorus_turn(const KvSong *song,const KvSection *verse,uint32_t seed);
 KvSection kv_section_pit(const KvSong *song,const KvSection *verse);
 KvSection kv_section_intro(const KvSong *song,const KvSection *verse);
 KvSection kv_section_outro(const KvSong *song,const KvSection *before);
-/* The bridge: four chords of the same energy away from the tonic (IV or vi; minor VI or iv), back to the dominant; four bars,
-   the verse's texture, the right hand up as in a chorus. */
 KvSection kv_section_bridge(const KvSong *song,const KvSection *verse,uint32_t seed);
+/* The bridge on new chords (1.5): four chords away from the tonic, back to the dominant. */
+KvSection kv_section_bridge_turn(const KvSong *song,const KvSection *verse,uint32_t seed);
 /* A one-bar transition from `left` into `right` (either may be NULL): rise (the dominant of right's first chord in a rising
    arpeggio over a snare roll), dominant (that dominant in left's texture with a fill), fill (an interlude on left's last chord),
    break (left's last chord struck once, silence, a two-note pickup into right). kv_transition_for: the one that suits the seam. */

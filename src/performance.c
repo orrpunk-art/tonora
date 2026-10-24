@@ -832,23 +832,33 @@ static bool strings_arrangement(Plan *x) {
     int previous[4]={0},np=0;
     if(a->strings==KV_STRINGS_CHORALE) {
         // Four-part writing: cellos on the bass, violins on up to four voice-led parts; common tones are held (legato).
-        // Variations: the register of the violins, a top voice that moves to the next chord tone halfway through the chord,
-        // a bass that walks to the fifth in two-bar chords.
-        static const int registers[3]={57,62,67};
-        int low=a->generated?registers[pick(x,3)]:62; bool walk=a->generated && pick(x,2),motion=a->generated && pick(x,2);
+        // Variations (seeded): the violins' register and spacing; a top voice that moves to the next chord tone halfway through
+        // the chord; a 4–3 suspension where the old top note hangs over the change; the chord struck once, once a bar, or in
+        // halves; a bass that walks to the fifth in long chords, or doubled an octave up.
+        static const int registers[3]={57,62,67},spans[2]={14,19};
+        bool g=a->generated; int low=g?registers[pick(x,3)]:62,span=g?spans[pick(x,2)]:14,restrike=g?(int)pick(x,3):0;
+        bool walk=g && pick(x,2),motion=g && pick(x,2),suspend=g && pick(x,2),deep=g && pick(x,3)==0;
         for(size_t c=0;c<count;c++) {
-            int parts[4],n=upper_parts(&x->chords[c],low,14,previous,np,parts); if(!n) return false;
-            for(int v=0;v<n;v++) {
-                if(v==n-1 && motion && L>=2-1e-9) {
-                    int next=chord_tone_near(x,c,parts[v]+3,parts[v]+1,parts[v]+5); if(next<0 || next>88) next=chord_tone_near(x,c,parts[v]-3,parts[v]-5,parts[v]-1);
-                    if(next>parts[v-1] && next<=88) { if(!put(x,1,parts[v],c*L,L/2,.68f,false) || !put(x,1,next,c*L+L/2,L/2,.7f,false)) return false; continue; }
+            int parts[4],n=upper_parts(&x->chords[c],low,span,previous,np,parts); if(!n) return false;
+            int hang=-1; double held=0;   // the old top note over the change, resolving down a step onto the new one
+            if(suspend && c && np && previous[np-1]-parts[n-1]>=1 && previous[np-1]-parts[n-1]<=2) { hang=previous[np-1]; held=fmin(1,L/2); }
+            double seg=restrike==1?x->bar:restrike==2 && L>=2-1e-9?L/2:L; if(seg>L) seg=L;
+            for(double t0=c*L;t0<(c+1)*L-1e-9;t0+=seg) {
+                double d=fmin(seg,(c+1)*L-t0); bool first=t0<c*L+1e-9; float v=first?.68f:.6f;
+                for(int i=0;i<n;i++) {
+                    if(i==n-1 && first && hang>=0) { if(!put(x,1,hang,t0,held,.7f,false) || !put(x,1,parts[i],t0+held,d-held,.66f,false)) return false; continue; }
+                    if(i==n-1 && motion && d>=2-1e-9) {
+                        int next=chord_tone_near(x,c,parts[i]+3,parts[i]+1,parts[i]+5); if(next<0 || next>88) next=chord_tone_near(x,c,parts[i]-3,parts[i]-5,parts[i]-1);
+                        if(n>1 && next>parts[i-1] && next<=88) { if(!put(x,1,parts[i],t0,d/2,v,false) || !put(x,1,next,t0+d/2,d/2,v+.02f,false)) return false; continue; }
+                    }
+                    if(!put(x,1,parts[i],t0,d,v,false)) return false;
                 }
-                if(!put(x,1,parts[v],c*L,L,.68f,false)) return false;
             }
             memcpy(previous,parts,sizeof(parts)); np=n;
             int bass=string_bass(x,c);
             if(walk && L>=x->bar*2-1e-9) { if(!put(x,0,bass,c*L,L/2,.72f,false) || !put(x,0,x->fifth[c]<36?x->fifth[c]+12:x->fifth[c],c*L+L/2,L/2,.66f,false)) return false; }
             else if(!put(x,0,bass,c*L,L,.72f,false)) return false;
+            if(deep && bass+12<=59 && !put(x,0,bass+12,c*L,L,.6f,false)) return false;   // the bass line doubled an octave up (the violas)
         }
     } else if(a->strings==KV_STRINGS_CANTILENA) {
         // A held chord below (cellos), a slow, singing violin line above: chord tones on the chord's beats, a passing
@@ -870,32 +880,59 @@ static bool strings_arrangement(Plan *x) {
             last=notes[k-1]; if(last>82) direction=-1; else if(last<70) direction=1; else if(a->generated && pick(x,3)==0) direction=-direction;
         }
     } else if(a->strings==KV_STRINGS_OSTINATO) {
-        // Film-style ostinato: the cellos hold the bass, the violins repeat a spiccato figure; beats a little louder.
-        static const int figures[4][4]={{0,2,1,2},{0,1,2,1},{0,2,3,2},{0,3,1,2}};
-        int figure=a->generated?(int)(pick(x,4)):0; double step=kv_division_beats(a->division);
+        // Film-style ostinato: the cellos hold the bass, the violins repeat a spiccato figure.
+        // Variations (seeded): two figures and two rhythms (rests in the figure) alternating chord by chord, the violins'
+        // register, the cellos held, pulsing on the beats or with an octave on the chord, and the accents — on the beats, every
+        // other beat, or in groups of 3+3+2.
+        static const int figures[8][4]={{0,2,1,2},{0,1,2,1},{0,2,3,2},{0,3,1,2},{0,1,2,3},{3,2,1,0},{0,2,0,3},{0,1,0,2}};
+        static const char *rhythms[4]={"xxxx","xx.x","x.xx","xxx."};
+        static const int lows[3]={60,55,64};
+        bool g=a->generated; int fa=g?(int)pick(x,8):0,fb=g?(int)pick(x,8):fa,ra=g?(int)pick(x,4):0,rb=g?(int)pick(x,4):0;
+        int low=g?lows[pick(x,3)]:60,cellos=g?(int)pick(x,3):0,accent=g?(int)pick(x,3):0; double step=kv_division_beats(a->division);
         for(size_t c=0;c<count;c++) {
-            if(!put(x,0,string_bass(x,c),c*L,L,.7f,false)) return false;
-            int parts[4],n=upper_parts(&x->chords[c],60,14,previous,np,parts); if(!n) return false; memcpy(previous,parts,sizeof(parts)); np=n;
+            int bass=string_bass(x,c);
+            if(cellos==1) { for(double t=c*L;t<(c+1)*L-1e-9;t+=1) if(!sput(x,0,bass,t,.9,.68f,KV_STROKE_SPICCATO,true)) return false; }
+            else { if(!put(x,0,bass,c*L,L,.7f,false)) return false; if(cellos==2 && !put(x,0,bass+12,c*L,fmin(1,L),.6f,false)) return false; }
+            int parts[4],n=upper_parts(&x->chords[c],low,14,previous,np,parts); if(!n) return false; memcpy(previous,parts,sizeof(parts)); np=n;
             int tones[4]; for(int v=0;v<4;v++) tones[v]=parts[v<n?v:n-1]; if(n==3) tones[3]=parts[0]+12;
+            const int *figure=figures[c%2?fb:fa]; const char *rhythm=rhythms[c%2?rb:ra];
             unsigned k=0; for(double t=c*L;t<(c+1)*L-1e-9;t+=step,k++) {
-                double in_beat=fmod(t+1e-9,1); float v=in_beat<.01?.8f:.55f;
-                if(!sput(x,1,tones[figures[figure][k%4]],t,step*.9,v,KV_STROKE_SPICCATO,true)) return false;
+                if(rhythm[k%4]=='.') continue;
+                double in_beat=fmod(t+1e-9,1); unsigned g8=k%8; bool loud=accent==0?in_beat<.01:accent==1?fmod(t+1e-9,2)<.01:(g8==0 || g8==3 || g8==6);
+                if(!sput(x,1,tones[figure[k%4]],t,step*.9,loud?.8f:.55f,KV_STROKE_SPICCATO,true)) return false;
             }
         }
     } else {
-        // Pizzicato: a plucked bass on the strong beats, the chord broken above in eighths.
-        static const int orders[3][4]={{0,1,2,1},{0,2,1,2},{1,0,2,0}};
-        int order=a->generated?(int)(pick(x,3)):0; bool busy=a->generated && pick(x,2);   // busy: plucks on the beats too
+        // Pizzicato: plucks on the eighths of a bar, the chord broken above, a plucked bass below.
+        // Variations (seeded): two rhythm cells alternating chord by chord, the order the chord's tones go in, the violins'
+        // register, the bass — on the strong beats, on the downbeat only, walking root and fifth, or root and octave — and a
+        // double stop opening each chord.
+        static const char *cells[KV_METER_COUNT][6]={
+            {".x.x.x.x","xxxxxxxx",".xx..xx.",".x.xx.x.","..x...x.",".xxx.xxx"},
+            {".x.x.x","xxxxxx",".xx.xx","..x.x.",".x..x.","xx.xx."},
+            {".xx.xx","..x..x",".x..x.","xxxxxx",".xxx.x","x.x.x."}};
+        static const int orders[6][4]={{0,1,2,1},{0,2,1,2},{1,0,2,0},{0,1,2,3},{2,1,0,1},{0,2,1,3}};
+        static const int lows[3]={55,60,64};   // the violins' register, inside their range
+        bool g=a->generated; int ca=g?(int)pick(x,6):0,cb=g?(int)pick(x,6):ca,order=g?(int)pick(x,6):0,low=g?lows[pick(x,3)]:55,bassMode=g?(int)pick(x,4):0; bool stop=g && pick(x,2);
+        size_t eighths=(size_t)llround(x->bar*2);
         for(size_t c=0;c<count;c++) {
-            int parts[4],n=upper_parts(&x->chords[c],55,14,previous,np,parts); if(!n) return false; memcpy(previous,parts,sizeof(parts)); np=n;
-            for(double bar=floor(c*L/x->bar+1e-9)*x->bar;bar<(c+1)*L-1e-9;bar+=x->bar) for(int s=0;s<2;s++) {
-                if(strong[a->meter][s]<0) continue; double t=bar+strong[a->meter][s];
-                if(t<c*L-1e-9 || t>=(c+1)*L-1e-9) continue;
-                if(!sput(x,0,string_bass(x,c)+(s?((x->fifth[c]-x->bass[c]+12)%12):0),t,.9,.78f,KV_STROKE_PIZZICATO,true)) return false;
+            int parts[4],n=upper_parts(&x->chords[c],low,14,previous,np,parts); if(!n) return false; memcpy(previous,parts,sizeof(parts)); np=n;
+            int root=string_bass(x,c),fifth=root+((x->fifth[c]-x->bass[c]+12)%12); const char *cell=cells[a->meter][c%2?cb:ca]; unsigned k=0;
+            for(double bar=floor(c*L/x->bar+1e-9)*x->bar;bar<(c+1)*L-1e-9;bar+=x->bar) for(size_t e=0;e<eighths;e++) {
+                double t=bar+e*.5,in_bar=e*.5; if(t<c*L-1e-9 || t>=(c+1)*L-1e-9) continue;
+                bool beat=fmod(in_bar+1e-9,1)<.01; int b=-1;
+                switch(bassMode) {
+                    case 0: b=fabs(in_bar-strong[a->meter][0])<1e-9?root:strong[a->meter][1]>=0 && fabs(in_bar-strong[a->meter][1])<1e-9?fifth:-1; break;
+                    case 1: b=e==0?root:-1; break;
+                    case 2: b=beat?((e/2)%2?fifth:root):-1; break;
+                    default: b=e==0?root:strong[a->meter][1]>=0 && fabs(in_bar-strong[a->meter][1])<1e-9?root+12:-1; break;
+                }
+                if(b>=0 && !sput(x,0,b,t,.9,e==0?.8f:.72f,KV_STROKE_PIZZICATO,true)) return false;
+                if(e>=strlen(cell) || cell[e]=='.') continue;
+                int note=parts[orders[order][k%4]%n]; k++;
+                if(!sput(x,1,note,t,.45,beat?.64f:.58f,KV_STROKE_PIZZICATO,true)) return false;
+                if(stop && fabs(t-c*L)<1e-9 && n>1 && parts[n-1]!=note && !sput(x,1,parts[n-1],t,.45,.6f,KV_STROKE_PIZZICATO,true)) return false;   // the double stop
             }
-            unsigned k=0; for(double t=c*L+(busy?0:.5);t<(c+1)*L-1e-9;t+=busy?.5:1,k++)
-                if((!busy || fmod(t+1e-9,1)>.01) && !sput(x,1,parts[orders[order][k%4]%n],t,.45,.6f,KV_STROKE_PIZZICATO,true)) return false;
-                else if(busy && fmod(t+1e-9,1)<=.01 && t>c*L+1e-9 && !sput(x,1,parts[n-1],t,.45,.52f,KV_STROKE_PIZZICATO,true)) return false;
         }
     }
     out->controlled=false;

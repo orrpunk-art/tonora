@@ -23,6 +23,8 @@ bool kv_section_valid(const KvSection *s) {
     if(!isfinite(s->length) || (s->length!=0 && (s->length<.125-1e-9 || s->length>512)) || !isfinite(s->start) || s->start<0 || s->start>=64) return false;
     for(int t=0;t<KV_TRACKS;t++) { const KvRegion *r=&s->regions[t];
         if(!isfinite(r->level) || r->level<.5f-1e-6f || r->level>1.2f+1e-6f || !isfinite(r->shift) || fabs(r->shift)>32) return false; }
+    if(s->derive<0 || s->derive>=KV_DERIVE_KINDS) return false;
+    for(size_t i=0;i<8;i++) if(s->map[i]<0 || s->map[i]>7) return false;
     const KvArrangement *a=&s->arrangement;
     return a->style>=0 && a->style<KV_PATTERN_COUNT && a->length>=0 && a->length<KV_LENGTH_COUNT && a->fills>=0 && a->fills<KV_FILL_COUNT
         && a->arpeggio_pattern>=0 && a->arpeggio_pattern<KV_ARP_COUNT && a->division>=0 && a->division<KV_DIV_COUNT && a->strings>=0 && a->strings<KV_STRINGS_COUNT;
@@ -99,9 +101,18 @@ double kv_section_start(const KvSong *song,size_t index) {
     double t=0; for(size_t i=0;song && i<index && i<song->count;i++) t+=kv_section_beats(song,i); return t;
 }
 void kv_section_keep_passes(const KvSong *song,KvSection *s,double old_pass) {
-    if(!song || !s || !(s->length>0) || !(old_pass>0)) return;
-    double now=kv_section_pass_beats(song,s); if(fabs(now-old_pass)<1e-9) return;
-    s->length*=now/old_pass; s->start*=now/old_pass;
+    if(!song || !s || !(old_pass>0)) return;
+    double now=kv_section_pass_beats(song,s); if(!(now>0) || fabs(now-old_pass)<1e-9) return;
+    // On a 1/64-beat grid and inside the section's limits, so scaling back and forth never drifts or grows.
+    if(s->length>0) s->length=fmin(512,fmax(.125,round(s->length*now/old_pass*64)/64));
+    s->start=round(s->start*now/old_pass*64)/64; s->start=fmod(s->start,now); if(s->start<0 || s->start>=64) s->start=0;
+}
+bool kv_track_remeter(KvPerformance *t,double beats_per_chord,double beats_per_bar) {
+    if(!t || !(beats_per_chord>0) || !(beats_per_bar>0) || !(t->beats_per_chord>0)) return false;
+    double old=t->beats_per_chord,r=beats_per_chord/old;
+    for(size_t i=0;i<t->count;i++) { KvPianoEvent *e=&t->events[i]; double within=e->beat-e->chord*old; e->beat=e->chord*beats_per_chord+within*r; e->duration*=r; }
+    t->beats_per_chord=beats_per_chord; t->beats_per_bar=beats_per_bar; t->total_beats=t->chord_count*beats_per_chord;
+    return kv_performance_valid(t);
 }
 double kv_song_beats(const KvSong *song) { return song?kv_section_start(song,song->count):0; }
 size_t kv_song_section_at(const KvSong *song,double beat,double *offset) {
@@ -171,8 +182,8 @@ static int by_beat(const void *x,const void *y) {
 bool kv_section_part(const KvSong *song,size_t index,const KvPerformance *edited,double from,double length,KvPerformance *out) {
     if(!out || !song || index>=song->count || !isfinite(from) || !isfinite(length) || length<=0) return false;
     const KvSection *s=&song->sections[index]; KvPerformance *pass=malloc(sizeof(KvPerformance)); if(!pass) return false;
-    bool ok=s->edited && edited?kv_performance_valid(edited) && edited->chord_count==s->count:kv_section_notes(song,index,pass);
-    if(ok && s->edited && edited) *pass=*edited;
+    bool ok=edited?kv_performance_valid(edited) && edited->chord_count==s->count:kv_section_notes(song,index,pass);   // a pass given (edited or derived) plays as it is
+    if(ok && edited) *pass=*edited;
     double total=kv_section_beats(song,index),cycle=pass->total_beats,end=fmin(from+length,total);
     if(!ok || cycle<=0 || from<0 || from>=total-1e-9 || end<=from) { free(pass); return false; }
     memset(out,0,sizeof(*out)); out->chord_count=pass->chord_count; out->beats_per_chord=pass->beats_per_chord;
@@ -210,7 +221,11 @@ uint32_t kv_song_insert(KvSong *song,size_t index,const KvSection *section) {
 }
 bool kv_song_remove(KvSong *song,size_t index) {
     if(!song || index>=song->count) return false;
-    memmove(&song->sections[index],&song->sections[index+1],(song->count-index-1)*sizeof(KvSection)); song->count--; kv_song_refresh_transitions(song); return true;
+    uint32_t gone=song->sections[index].id;
+    memmove(&song->sections[index],&song->sections[index+1],(song->count-index-1)*sizeof(KvSection)); song->count--;
+    uint32_t verse=0; for(size_t i=0;i<song->count && !verse;i++) if(song->sections[i].kind==KV_SECTION_VERSE && !song->sections[i].source) verse=song->sections[i].id;
+    for(size_t i=0;i<song->count;i++) if(song->sections[i].source==gone) { song->sections[i].source=verse; if(!verse) song->sections[i].derive=KV_DERIVE_NONE; }   // what grew from it grows from the verse
+    kv_song_refresh_transitions(song); return true;
 }
 bool kv_song_move(KvSong *song,size_t from,size_t to) {
     if(!song || from>=song->count || to>=song->count) return false;
@@ -286,7 +301,7 @@ static KvFillRate denser(KvPianoPattern style,KvFillRate fills) {
     switch(kv_fill_rate(style,fills)) { case KV_FILL_NONE: return KV_FILL_EVERY_4; case KV_FILL_EVERY_4: return KV_FILL_EVERY_2; default: return KV_FILL_EVERY_BAR; }
 }
 static bool hands(const KvArrangement *a) { return !a->blocks && !a->arpeggio && !a->strings; }
-KvSection kv_section_chorus(const KvSong *song,const KvSection *verse,uint32_t seed) {
+KvSection kv_section_chorus_turn(const KvSong *song,const KvSection *verse,uint32_t seed) {
     static const int major[6][4]={{0,4,5,3},{5,3,0,4},{3,0,4,5},{0,3,5,4},{3,4,0,0},{0,5,3,4}};
     static const int minor[5][4]={{0,5,2,6},{0,6,5,KV_CODE_SECONDARY},{5,6,0,0},{0,3,6,2},{0,2,6,5}};
     bool m=minor_kind(song->key); const int (*turns)[4]=m?minor:major; size_t count=m?5:6,fit[6],n=0;
@@ -305,28 +320,131 @@ KvSection kv_section_chorus(const KvSong *song,const KvSection *verse,uint32_t s
     KvSection s=derived(KV_SECTION_CHORUS,codes,4,a,1.15f,verse->beat==KV_SECTION_BEAT_FIXED?KV_SECTION_BEAT_FIXED:KV_SECTION_BEAT_STYLE,song->keyboard_base<=60?12:0);
     s.beat_fixed=verse->beat_fixed; s.repeats=a.length==KV_LENGTH_BEAT?4:2; return s;
 }
+// ---- sections grown from the verse's material (spec 1.6) ----
+/* The chords a role takes from its source: the chorus all of them, the bridge all from another chord, the breakdown the first
+   half, the intro the first two, the outro the last two and the tonic when they do not end on it. */
+static void derive_codes(KvSection *s,const KvSection *src) {
+    size_t n=src->count,k=0; if(!n) return;
+    switch(s->derive) {
+        case KV_DERIVE_PLAIN: { size_t r=n>1?1+s->vary%(n-1):0; for(size_t i=0;i<n;i++,k++) { s->map[k]=(int)((i+r)%n); s->codes[k]=src->codes[(i+r)%n]; } break; }
+        case KV_DERIVE_SPARSE: { size_t m=n<=2?n:(n+1)/2; for(;k<m;k++) { s->map[k]=(int)k; s->codes[k]=src->codes[k]; } break; }
+        case KV_DERIVE_INTRO: { size_t m=n<2?n:2; for(;k<m;k++) { s->map[k]=(int)k; s->codes[k]=src->codes[k]; } break; }
+        case KV_DERIVE_OUTRO: {
+            for(size_t i=n>=2?n-2:0;i<n;i++,k++) { s->map[k]=(int)i; s->codes[k]=src->codes[i]; }
+            if(kv_code_base(src->codes[n-1])!=0) { int t=-1; for(size_t i=0;i<n && t<0;i++) if(kv_code_base(src->codes[i])==0) t=(int)i; s->map[k]=t>=0?t:(int)n-1; s->codes[k]=t>=0?src->codes[t]:0; k++; }
+            break; }
+        default: for(;k<n;k++) { s->map[k]=(int)k; s->codes[k]=src->codes[k]; } break;   // the chorus, plain
+    }
+    s->count=k; for(size_t i=k;i<8;i++) s->map[i]=0;
+}
+static KvSection derived_from(const KvSection *src,KvSectionKind kind,KvDerive how,uint32_t vary,float level,KvSectionBeat beat) {
+    KvSection s=kv_section_from_draft(kind,src->codes,src->count,src->arrangement);
+    s.arrangement.generated=true; s.arrangement.seed=src->arrangement.seed*31u+vary+1u;   // its own variation if it ever plays its pattern
+    s.level=level; s.beat=beat; s.beat_fixed=src->beat_fixed; s.source=src->id; s.derive=how; s.vary=vary; derive_codes(&s,src); return s;
+}
+KvSection kv_section_chorus(const KvSong *song,const KvSection *verse,uint32_t seed) {
+    (void)song; KvSection s=derived_from(verse,KV_SECTION_CHORUS,KV_DERIVE_LIFT,seed*2654435761u+seed/3u,1.15f,verse->beat==KV_SECTION_BEAT_FIXED?KV_SECTION_BEAT_FIXED:KV_SECTION_BEAT_STYLE);
+    s.repeats=s.count<=4?2:1; return s;
+}
 KvSection kv_section_pit(const KvSong *song,const KvSection *verse) {
-    int codes[2]={5,3};                                                  // vi and IV (VI and iv in minor): away from the tonic
-    if(kv_code_base(verse->codes[0])!=0) { codes[0]=verse->codes[0]; codes[1]=verse->count>1?verse->codes[1]:3; }
-    KvArrangement a=verse->arrangement; a.length=KV_LENGTH_TWO_BARS; a.fills=KV_FILL_NONE; a.blocks=false; a.generated=true; a.seed=verse->arrangement.seed*31+3;
-    bool still=true;
-    if(a.strings) { if(a.strings==KV_STRINGS_OSTINATO) a.strings=KV_STRINGS_CHORALE; }   // the song's own strings texture, the restless ostinato alone gives way to a pad
-    else if(song->bpm<110) { a.arpeggio=false; a.style=KV_AMBIENT; }
-    else { a.arpeggio=true; a.arpeggio_pattern=KV_ARP_UP; a.division=KV_DIV_EIGHTH; still=false; }
-    return derived(KV_SECTION_PIT,codes,2,a,.7f,still?KV_SECTION_BEAT_OFF:KV_SECTION_BEAT_QUIET,0);
+    return derived_from(verse,KV_SECTION_PIT,KV_DERIVE_SPARSE,verse->arrangement.seed+3u,.7f,song->bpm<110?KV_SECTION_BEAT_OFF:KV_SECTION_BEAT_QUIET);
 }
 KvSection kv_section_intro(const KvSong *song,const KvSection *verse) {
-    (void)song; int codes[2]={verse->codes[0],verse->count>1?verse->codes[1]:3};
-    if(kv_code_base(verse->codes[0])==0) for(size_t i=1;i<verse->count;i++) if(kv_code_base(verse->codes[i])!=0) { codes[1]=verse->codes[i]; break; }
-    KvArrangement a=verse->arrangement; a.length=KV_LENGTH_TWO_BARS; a.fills=KV_FILL_NONE; a.blocks=a.arpeggio=false; a.generated=true; a.seed=verse->arrangement.seed*31+1;
-    if(a.strings) { if(a.strings==KV_STRINGS_OSTINATO) a.strings=KV_STRINGS_CHORALE; } else a.style=KV_AMBIENT;
-    return derived(KV_SECTION_INTRO,codes,2,a,.8f,KV_SECTION_BEAT_OFF,0);
+    (void)song; return derived_from(verse,KV_SECTION_INTRO,KV_DERIVE_INTRO,verse->arrangement.seed+1u,.8f,KV_SECTION_BEAT_OFF);
 }
 KvSection kv_section_outro(const KvSong *song,const KvSection *before) {
-    int codes[3]={before?before->codes[before->count-1]:3,KV_CODE_SECONDARY,0};
-    KvArrangement a=before?before->arrangement:(KvArrangement){0}; a.length=KV_LENGTH_BAR; a.fills=KV_FILL_NONE; a.generated=true; a.seed=a.seed*31+5;
-    if(!a.strings) { a.blocks=true; a.arpeggio=false; }   // the strings keep the song's texture, the piano closes in blocks
-    return derived(KV_SECTION_OUTRO,codes,3,a,.9f,KV_SECTION_BEAT_OFF,song->keyboard_base<=60?12:0);
+    if(!before) { int tonic=0; KvArrangement a={0}; a.blocks=true; a.length=KV_LENGTH_BAR; KvSection s=kv_section_from_draft(KV_SECTION_OUTRO,&tonic,1,a); s.level=.9f; s.beat=KV_SECTION_BEAT_OFF; return s; }
+    (void)song; return derived_from(before,KV_SECTION_OUTRO,KV_DERIVE_OUTRO,before->arrangement.seed+5u,.9f,KV_SECTION_BEAT_OFF);
+}
+KvSection kv_section_bridge(const KvSong *song,const KvSection *verse,uint32_t seed) {
+    KvSection s=derived_from(verse,KV_SECTION_BRIDGE,KV_DERIVE_PLAIN,seed,1.05f,verse->beat==KV_SECTION_BEAT_FIXED?KV_SECTION_BEAT_FIXED:KV_SECTION_BEAT_STYLE);
+    double four=4*kv_meter_bar(song->meter); if(kv_section_pass_beats(song,&s)>four+1e-9) s.length=four;   // four bars at most
+    return s;
+}
+/* A note of one chord on another: a chord tone takes the same tone of the new chord (root to root, third to third…); another note
+   moves with the root and stays in the scale; the octave is the one nearest where it was. */
+static int nearest_with(int midi,int pc) { int d=((pc-midi)%12+12)%12; if(d>6) d-=12; return midi+d; }
+static int move_note(int midi,const KvChord *from,const KvChord *to,KvKey key) {
+    int pc=midi%12,m=-1;
+    for(size_t v=0;v<from->count && m<0;v++) if(from->midi[v]%12==pc) m=nearest_with(midi,to->midi[v<to->count?v:to->count-1]%12);
+    if(m<0) { int shift=((to->midi[0]-from->midi[0])%12+12)%12; if(shift>6) shift-=12; m=midi+shift; if(!kv_in_scale(key,((m%12)+12)%12)) m+=kv_in_scale(key,((m+1)%12+12)%12)?1:-1; }
+    while(m<21) m+=12; while(m>108) m-=12; return m;
+}
+static bool add_event(KvPerformance *p,KvPianoEvent e) { if(p->count>=KV_PERFORMANCE_CAPACITY) return false; p->events[p->count++]=e; return true; }
+bool kv_section_derive(const KvSong *song,size_t index,const KvSection *src,const KvPerformance *in,KvPerformance *out) {
+    if(!song || index>=song->count || !src || !in || !out || !src->count || !in->chord_count || !(in->beats_per_chord>0)) return false;
+    const KvSection *s=&song->sections[index]; double from=in->beats_per_chord,to=kv_section_chord_beats(song,s); if(!(to>0) || !s->count) return false;
+    double w0=s->derive==KV_DERIVE_TRANSITION?fmax(0,from-to):0;   // a transition plays the end of the chord before it
+    KvPerformance *raw=malloc(sizeof(KvPerformance)); if(!raw) return false;
+    memset(raw,0,sizeof(*raw)); raw->chord_count=s->count; raw->beats_per_chord=to; raw->beats_per_bar=kv_meter_bar(song->meter); raw->total_beats=s->count*to;
+    size_t sources=in->chord_count<src->count?in->chord_count:src->count;
+    for(size_t c=0;c<s->count;c++) {
+        size_t m=(size_t)s->map[c]; if(m>=sources) m=sources-1;
+        bool same=src->codes[m]==s->codes[c]; KvChord a,b;
+        if(!same && (!kv_code_chord(song->key,src->codes[m],song->extension,&a) || !kv_code_chord(song->key,s->codes[c],song->extension,&b))) { free(raw); return false; }
+        for(size_t i=0;i<in->count;i++) { const KvPianoEvent *e=&in->events[i]; if(e->chord!=m) continue;
+            double within=e->beat-m*from;
+            for(int r=0;r<64;r++) { double t=within-w0+r*from; if(t>=to-1e-9) break; if(t<-1e-9) continue;   // fitted to its own chord length: cut, or played again
+                KvPianoEvent n=*e; n.chord=(unsigned)c; n.beat=c*to+t; n.duration=fmin(e->duration,to-t); if(!same) n.midi=move_note(e->midi,&a,&b,song->key);
+                if(!add_event(raw,n)) break; }
+        }
+    }
+    // The role and its variant.
+    memset(out,0,sizeof(*out)); out->chord_count=raw->chord_count; out->beats_per_chord=to; out->beats_per_bar=raw->beats_per_bar; out->total_beats=raw->total_beats;
+    unsigned v=s->vary; double total=raw->total_beats;
+    for(size_t c=0;c<s->count;c++) {
+        double c0=c*to,c1=c0+to,firstLeft=1e9,firstRight=1e9; int top=-1;
+        for(size_t i=0;i<raw->count;i++) { const KvPianoEvent *e=&raw->events[i]; if(e->chord!=c) continue;
+            if(e->hand) { if(e->beat<firstRight-1e-9) { firstRight=e->beat; top=e->midi; } else if(fabs(e->beat-firstRight)<1e-9 && e->midi>top) top=e->midi; }
+            else if(e->beat<firstLeft) firstLeft=e->beat; }
+        int rightOnset=0;
+        for(size_t i=0;i<raw->count;i++) { KvPianoEvent e=raw->events[i]; if(e.chord!=c) continue;
+            bool firstR=e.hand && fabs(e.beat-firstRight)<1e-9;
+            switch(s->derive) {
+                case KV_DERIVE_LIFT:
+                    e.velocity=fminf(1,e.velocity*1.1f);
+                    if(v%3==0 && e.hand && e.midi+12<=103) e.midi+=12;
+                    add_event(out,e);
+                    if(v%3==1 && e.hand && e.midi+12<=103) { KvPianoEvent d=e; d.midi+=12; d.velocity*=.75f; add_event(out,d); }
+                    if(v%3==2 && !e.hand && fabs(e.beat-firstLeft)<1e-9 && e.midi-12>=28) { KvPianoEvent d=e; d.midi-=12; d.velocity=fminf(1,e.velocity*.9f); add_event(out,d); }
+                    break;
+                case KV_DERIVE_SPARSE:   // the bass held, above it the top note held (or every other note of the right hand)
+                    if(!e.hand) { if(fabs(e.beat-firstLeft)<1e-9) { e.duration=c1-e.beat; e.velocity*=.75f; add_event(out,e); } }
+                    else if(v%2==0) { if(firstR && e.midi==top) { e.duration=c1-e.beat; e.velocity*=.7f; add_event(out,e); } }
+                    else { if(!(fabs(e.beat-firstRight)<1e-9) || e.midi==top) { if((rightOnset++)%2==0) { e.velocity*=.7f; add_event(out,e); } } }
+                    break;
+                case KV_DERIVE_INTRO: {   // thinned and growing: the bass held, the top note at the chord (or the left hand alone)
+                    float grow=(float)(.55+.35*e.beat/total);
+                    if(!e.hand && fabs(e.beat-firstLeft)<1e-9) { e.duration=c1-e.beat; e.velocity=fminf(1,e.velocity*grow); add_event(out,e); }
+                    else if(!e.hand && v%2==1) { e.velocity=fminf(1,e.velocity*grow); add_event(out,e); }
+                    else if(e.hand && v%2==0 && firstR && e.midi==top) { e.duration=c1-e.beat; e.velocity=fminf(1,e.velocity*grow); add_event(out,e); }
+                    break; }
+                case KV_DERIVE_OUTRO:   // the last chord struck once and held to the end
+                    if(c+1==s->count) { double first=fmin(firstLeft,firstRight); if(fabs(e.beat-first)<.05) { e.duration=c1-e.beat; e.velocity*=.92f; add_event(out,e); } }
+                    else { e.velocity*=.92f; add_event(out,e); }
+                    break;
+                case KV_DERIVE_TRANSITION:
+                    if(s->transition==KV_TRANSITION_RISE) e.velocity=fminf(1,fmaxf(.4f,e.velocity*(float)(.45+.6*e.beat/total)));   // a crescendo into the next section
+                    add_event(out,e); break;
+                default: add_event(out,e); break;
+            }
+        }
+    }
+    free(raw);
+    if(!out->count) return false;   // nothing left of the material (a texture that rests here): the section plays its own pattern
+    for(size_t i=0;i<out->count;i++) out->events[i].velocity=fmaxf(.4f,fminf(1,out->events[i].velocity));   // softer, never below what a key sounds at
+    qsort(out->events,out->count,sizeof(KvPianoEvent),by_beat); kv_performance_resolve_overlaps(out);
+    return kv_performance_valid(out);
+}
+static const KvSection *section_by_id(const KvSong *song,uint32_t id) { for(size_t i=0;id && i<song->count;i++) if(song->sections[i].id==id) return &song->sections[i]; return NULL; }
+void kv_song_rederive(KvSong *song) {
+    for(size_t i=0;song && i<song->count;i++) {
+        KvSection *s=&song->sections[i]; if(!s->source || s->edited || s->derive==KV_DERIVE_NONE || s->derive==KV_DERIVE_TRANSITION) continue;
+        const KvSection *src=section_by_id(song,s->source); if(!src || src==s) continue;
+        KvSection t=*s; derive_codes(&t,src);   // the chords; the texture stays the section's own (a texture chosen for it alone stays)
+        if(t.count==s->count && !memcmp(t.codes,s->codes,sizeof(t.codes)) && !memcmp(t.map,s->map,sizeof(t.map))) continue;
+        double was=kv_section_pass_beats(song,s); *s=t; kv_section_keep_passes(song,s,was);
+    }
 }
 static int dominant_of(const KvSection *s) { int b=s?kv_code_base(s->codes[0]):0; return KV_CODE_SECONDARY+(b<=6?b:0); }
 KvSection kv_section_transition(const KvSong *song,const KvSection *left,const KvSection *right,KvTransitionKind kind) {
@@ -339,7 +457,9 @@ KvSection kv_section_transition(const KvSong *song,const KvSection *left,const K
         case KV_TRANSITION_FILL: if(!a.strings) { a.blocks=a.arpeggio=false; a.style=KV_INTERLUDE; a.fills=KV_FILL_EVERY_BAR; } break;
         default: if(!a.strings) { a.blocks=true; a.arpeggio=false; } break;   // a break strikes the chord once whatever the texture (break_notes)
     }
-    KvSection s=derived(KV_SECTION_TRANSITION,&code,1,a,1,KV_SECTION_BEAT_SONG,0); s.transition=kind; return s;
+    KvSection s=derived(KV_SECTION_TRANSITION,&code,1,a,1,KV_SECTION_BEAT_SONG,0); s.transition=kind;
+    if(left && left->id && kind!=KV_TRANSITION_BREAK) { s.source=left->id; s.derive=KV_DERIVE_TRANSITION; s.map[0]=(int)(left->count?left->count-1:0); }
+    return s;
 }
 KvTransitionKind kv_transition_for(const KvSection *left,const KvSection *right) {
     KvSectionKind l=left?left->kind:KV_SECTION_INTRO,r=right?right->kind:KV_SECTION_OUTRO;
@@ -349,10 +469,13 @@ KvTransitionKind kv_transition_for(const KvSection *left,const KvSection *right)
     return KV_TRANSITION_FILL;
 }
 void kv_song_refresh_transitions(KvSong *song) {
+    kv_song_rederive(song);
     for(size_t i=0;song && i<song->count;i++) {
         KvSection *s=&song->sections[i]; if(s->kind!=KV_SECTION_TRANSITION || s->edited) continue;
-        KvSection fresh=kv_section_transition(song,i?&song->sections[i-1]:NULL,i+1<song->count?&song->sections[i+1]:NULL,s->transition);
-        memcpy(s->codes,fresh.codes,sizeof(s->codes)); s->count=fresh.count; s->arrangement=fresh.arrangement;   // its length stays (a build is two bars)
+        KvSection fresh=kv_section_transition(song,i?&song->sections[i-1]:NULL,i+1<song->count?&song->sections[i+1]:NULL,s->transition); double was=kv_section_pass_beats(song,s);
+        memcpy(s->codes,fresh.codes,sizeof(s->codes)); s->count=fresh.count; s->arrangement=fresh.arrangement;   // its share of passes stays (a build is two bars)
+        s->source=fresh.source; s->derive=fresh.derive; memcpy(s->map,fresh.map,sizeof(s->map));
+        kv_section_keep_passes(song,s,was);
     }
 }
 size_t kv_transition_hits(KvTransitionKind kind,KvMeter meter,KvHit hits[KV_BEAT_HITS]) {
@@ -407,7 +530,7 @@ size_t kv_song_suggest(const KvSong *song,size_t after,uint32_t seed,KvSuggestio
 }
 
 // ---- the bridge and song forms (spec 1.5 §6) ----
-KvSection kv_section_bridge(const KvSong *song,const KvSection *verse,uint32_t seed) {
+KvSection kv_section_bridge_turn(const KvSong *song,const KvSection *verse,uint32_t seed) {
     static const int major[4][4]={{3,4,5,4},{5,3,4,4},{3,5,4,4},{5,4,3,4}};
     static const int minor[4][4]={{5,6,3,KV_CODE_SECONDARY},{3,5,6,KV_CODE_SECONDARY},{5,3,6,KV_CODE_SECONDARY},{3,6,5,KV_CODE_SECONDARY}};
     bool m=minor_kind(song->key); const int (*turns)[4]=m?minor:major; size_t fit[4],n=0;
@@ -431,6 +554,7 @@ const char *kv_form_label(int slot) { return slot==KV_FORM_BUILD?"Билд":slot
 bool kv_form_slot_valid(int slot) {
     return (slot>=0 && slot<KV_SECTION_KINDS) || (slot>=KV_FORM_TRANSITION && slot<KV_FORM_TRANSITION+KV_TRANSITION_KINDS) || slot==KV_FORM_BUILD || slot==KV_FORM_DROP;
 }
+static uint32_t mix(uint32_t h) { h^=h>>16; h*=0x7feb352du; h^=h>>15; h*=0x846ca68bu; h^=h>>16; return h; }   /* a seed's bits all stirred: variant n%2, n%3 are not a fixed sequence */
 bool kv_song_apply_form(KvSong *song,const int *slots,size_t count,size_t verse,uint32_t seed,uint32_t *copy_of) {
     if(!song || !slots || !count || count>KV_FORM_SLOTS || verse>=song->count || !copy_of) return false;
     for(size_t k=0;k<count;k++) if(!kv_form_slot_valid(slots[k])) return false;
@@ -453,9 +577,9 @@ bool kv_song_apply_form(KvSong *song,const int *slots,size_t count,size_t verse,
             if(!keep) switch(kind) {
                 case KV_SECTION_VERSE: x=*v; from=v->id; break;
                 case KV_SECTION_CHORUS: x=refrain; from=chorus?chorus->id:0; break;
-                case KV_SECTION_PIT: x=kv_section_pit(old,v); break;
-                case KV_SECTION_INTRO: x=kv_section_intro(old,v); break;
-                case KV_SECTION_OUTRO: x=kv_section_outro(old,prev?prev:v); break;
+                case KV_SECTION_PIT: x=kv_section_pit(old,v); x.vary=mix(seed+(uint32_t)k); break;   // each its own variant of the role
+                case KV_SECTION_INTRO: x=kv_section_intro(old,v); x.vary=mix(seed+(uint32_t)k); break;
+                case KV_SECTION_OUTRO: x=kv_section_outro(old,v); x.vary=mix(seed+(uint32_t)k); break;   // the verse's last chords closing on the tonic
                 case KV_SECTION_BRIDGE: x=kv_section_bridge(old,v,seed); break;
                 default: x=kv_section_transition(old,prev,NULL,KV_TRANSITION_FILL); transition=true; break;
             }
@@ -475,6 +599,9 @@ bool kv_song_apply_form(KvSong *song,const int *slots,size_t count,size_t verse,
         if(!kept[k]) { made[k].id=++result->next_id; if(!made[k].id) made[k].id=++result->next_id; }
         result->sections[result->count++]=made[k]; copy_of[k]=source[k];
     }
+    for(size_t k=0;k<n;k++) if(source[k] && !section_by_id(result,source[k])) { uint32_t was=source[k],now=result->sections[k].id; bool first=true;   // a section kept stands for itself; else its first copy
+        for(size_t j=0;j<k && first;j++) if(source[j]==was) first=false;
+        if(first) for(size_t j=0;j<n;j++) if(result->sections[j].source==was && j!=k) result->sections[j].source=now; }
     for(size_t k=n;k<KV_SONG_SECTIONS;k++) copy_of[k]=0;
     kv_song_refresh_transitions(result);
     bool ok=kv_song_valid(result); if(ok) *song=*result;

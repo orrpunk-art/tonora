@@ -143,12 +143,12 @@ int main(void) {
         for(size_t i=0;i<up.count;i++) CHECK(up.events[i].midi>=21 && up.events[i].midi<=108);
         KvPerformance high=t; kv_track_transpose(&high,60); CHECK(kv_performance_valid(&high));
     }
-    { // Chorus: another turn than the verse's, opening on I, IV or vi (i or VI), closing on the tonic, in every key; louder and up.
+    { // Chorus on new chords (kv_section_chorus_turn): another turn than the verse's, opening on I, IV or vi (i or VI), closing on the tonic, in every key; louder and up.
         const int verses[3][4]={{0,5,3,4},{0,4,5,3},{5,3,0,4}};
         for(int index=0;index<12;index++) for(int minor=0;minor<2;minor++) for(int v=0;v<3;v++) for(uint32_t seed=0;seed<4;seed++) {
             KvKey key={index,minor!=0,0,0,false}; KvSong song=song_in(key,KV_METER_4_4);
             KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,verses[v],4,hands(KV_AMBIENT,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
-            KvSection chorus=kv_section_chorus(&song,&song.sections[0],seed);
+            KvSection chorus=kv_section_chorus_turn(&song,&song.sections[0],seed);
             bool same=true; for(int k=0;k<4;k++) if(kv_code_base(chorus.codes[k])!=verses[v][k]) same=false;
             int first=kv_code_base(chorus.codes[0]);
             CHECK(!same && chorus.count==4 && chorus.repeats==2 && chorus.kind==KV_SECTION_CHORUS);   // one turn, ×2
@@ -159,18 +159,36 @@ int main(void) {
         }
         // Seeds pick different turns.
         KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
-        KvSection a=kv_section_chorus(&song,&song.sections[0],0),b=kv_section_chorus(&song,&song.sections[0],1);
+        KvSection a=kv_section_chorus_turn(&song,&song.sections[0],0),b=kv_section_chorus_turn(&song,&song.sections[0],1);
         CHECK(memcmp(a.codes,b.codes,sizeof(a.codes))!=0);
     }
-    { // Breakdown, intro, outro.
-        KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
-        KvSection pit=kv_section_pit(&song,&song.sections[0]);
-        CHECK(pit.count==2 && kv_code_base(pit.codes[0])!=0 && pit.arrangement.length==KV_LENGTH_TWO_BARS && pit.level<.8f && pit.beat==KV_SECTION_BEAT_OFF && pit.arrangement.style==KV_AMBIENT);
-        song.bpm=120; pit=kv_section_pit(&song,&song.sections[0]); CHECK(pit.arrangement.arpeggio && pit.beat==KV_SECTION_BEAT_QUIET);
-        KvSection intro=kv_section_intro(&song,&song.sections[0]),outro=kv_section_outro(&song,&song.sections[0]);
-        CHECK(intro.kind==KV_SECTION_INTRO && intro.beat==KV_SECTION_BEAT_OFF && kv_code_base(intro.codes[1])!=0);
-        CHECK(outro.count==3 && kv_code_base(outro.codes[2])==0 && outro.codes[1]==KV_CODE_SECONDARY && outro.arrangement.blocks);
-        for(KvSection *x=&pit;x;x=x==&pit?&intro:x==&intro?&outro:NULL) { KvSong t=song; CHECK(kv_song_insert(&t,1,x)); KvPerformance p; CHECK(kv_section_notes(&t,1,&p)); }
+    { // Spec 1.6: every section grows from the verse's material — its chords, its notes (edited or from the pattern).
+        const int pop5[4]={0,5,3,4};   // C Am F G
+        KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop5,4,hands(KV_POP,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
+        const KvSection *v=&song.sections[0]; KvPerformance vp; CHECK(kv_section_notes(&song,0,&vp));
+        vp.events[vp.count++]=(KvPianoEvent){.midi=96,.beat=.5,.duration=.5,.velocity=.8f,.chord=0,.hand=1};   // a note «edited in the roll» on C
+        KvSection chorus=kv_section_chorus(&song,v,0),pit=kv_section_pit(&song,v),intro=kv_section_intro(&song,v),outro=kv_section_outro(&song,v),bridge=kv_section_bridge(&song,v,0);
+        CHECK(chorus.source==v->id && chorus.derive==KV_DERIVE_LIFT && chorus.count==4 && !memcmp(chorus.codes,pop5,sizeof(pop5)) && chorus.repeats==2 && chorus.level>1.1f);   // the verse's chords, ×2
+        CHECK(pit.count==2 && pit.codes[0]==0 && pit.codes[1]==5 && pit.derive==KV_DERIVE_SPARSE && pit.level<.8f);   // the first half
+        CHECK(intro.count==2 && intro.codes[0]==0 && intro.codes[1]==5 && intro.beat==KV_SECTION_BEAT_OFF);              // the first two
+        CHECK(outro.count==3 && outro.codes[0]==3 && outro.codes[1]==4 && outro.codes[2]==0 && outro.map[2]==0);         // F G, then C
+        CHECK(bridge.count==4 && bridge.codes[0]!=0 && bridge.derive==KV_DERIVE_PLAIN);                                     // from another chord
+        KvSection *all[5]={&chorus,&pit,&intro,&outro,&bridge};
+        for(int k=0;k<5;k++) { KvSong t=song; CHECK(kv_song_insert(&t,1,all[k])); KvPerformance d; CHECK(kv_section_derive(&t,1,&t.sections[0],&vp,&d) && d.count>0 && d.chord_count==t.sections[1].count);
+            bool high=false; for(size_t i=0;i<d.count;i++) if(d.events[i].midi==96 || d.events[i].midi==108) high=true;
+            if(k==0) { CHECK(high); for(size_t i=0;i<d.count;i++) CHECK(d.events[i].velocity>0); }   // the chorus plays the edited note (an octave up, or doubled)
+            KvPerformance part; CHECK(kv_section_part(&t,1,&d,0,kv_section_pass_beats(&t,&t.sections[1]),&part)); }
+        // A chord the source does not have: its notes move onto the new chord's tones (G on C → its tones are G B D).
+        { KvSong t=song; KvSection b=bridge; CHECK(kv_song_insert(&t,1,&b)); KvPerformance d; CHECK(kv_section_derive(&t,1,&t.sections[0],&vp,&d));
+          KvChord g; CHECK(kv_code_chord(c_major,t.sections[1].codes[0],0,&g)); unsigned pcs=0; for(size_t i=0;i<g.count;i++) pcs|=1u<<(g.midi[i]%12);
+          size_t in=0,all0=0; for(size_t i=0;i<d.count;i++) if(d.events[i].chord==0) { all0++; if(pcs&(1u<<(d.events[i].midi%12))) in++; } CHECK(all0>0 && in*2>=all0); }
+        // The verse's chords change: the chorus follows them; changed by hand, it keeps its own.
+        { KvSong t=song; CHECK(kv_song_insert(&t,1,&chorus)); t.sections[0].codes[1]=6; kv_song_rederive(&t); CHECK(t.sections[1].codes[1]==6);
+          t.sections[1].edited=true; t.sections[0].codes[1]=5; kv_song_rederive(&t); CHECK(t.sections[1].codes[1]==6); }
+        // Removing the verse: what grew from it grows from the other verse.
+        { KvSong t=song; KvSection v2=*v; CHECK(kv_song_insert(&t,1,&v2)); CHECK(kv_song_insert(&t,2,&chorus)); uint32_t second=t.sections[1].id; CHECK(kv_song_remove(&t,0)); CHECK(t.sections[1].source==second); }
+        song.bpm=120; pit=kv_section_pit(&song,v); CHECK(pit.beat==KV_SECTION_BEAT_QUIET);
+        KvSection none=kv_section_outro(&song,NULL); CHECK(none.count==1 && none.codes[0]==0 && !none.source);
     }
     { // Transitions: one bar in every meter; the break strikes, rests and picks up; the rise grows; neighbours give the chord.
         for(int m=0;m<KV_METER_COUNT;m++) for(int k=0;k<KV_TRANSITION_KINDS;k++) {
@@ -246,7 +264,7 @@ int main(void) {
         for(int index=0;index<12;index++) for(int minor=0;minor<2;minor++) for(int l=0;l<KV_LENGTH_COUNT;l++) {
             KvKey key={index,minor!=0,0,0,false}; KvSong song=song_in(key,KV_METER_4_4);
             KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,(KvChordLength)l)); kv_song_insert(&song,0,&verse);
-            KvSection bridge=kv_section_bridge(&song,&song.sections[0],(uint32_t)index);
+            KvSection bridge=kv_section_bridge_turn(&song,&song.sections[0],(uint32_t)index);
             int first=kv_code_base(bridge.codes[0]),last=bridge.codes[3];
             CHECK(bridge.kind==KV_SECTION_BRIDGE && bridge.count==4 && (first==3 || first==5) && (last==4 || last==KV_CODE_SECONDARY) && bridge.lift==12);
             CHECK(kv_song_insert(&song,1,&bridge) && fabs(kv_section_beats(&song,1)-16)<1e-9);

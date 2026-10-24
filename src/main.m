@@ -1879,7 +1879,8 @@ static NSString *Describe(NSView *view) {
         KvChord chords[8]; NSMutableArray *codes=[NSMutableArray array]; KvPerformance plan;
         if(self.trackEdited && !kv_performance_valid(self.track)) { self.status.stringValue=T(@"⚠ Дорожка повреждена · «Из рисунка» пересоберёт её"); return; }
         KvSong *song=[self songWithWorking]; double pass=kv_section_pass_beats(song,&song->sections[self.editingSection]);
-        if(!kv_section_part(song,(size_t)self.editingSection,self.trackEdited?self.track:NULL,0,pass,&plan)) { self.status.stringValue=T(@"⚠ Не удалось построить исполнение"); return; }
+        KvPerformance *own=malloc(sizeof(KvPerformance)); BOOL built=own && [self passOfSection:self.editingSection into:own depth:0] && kv_section_part(song,(size_t)self.editingSection,own,0,pass,&plan); free(own);   // its notes: edited, grown from its source, or its pattern
+        if(!built) { self.status.stringValue=T(@"⚠ Не удалось построить исполнение"); return; }
         size_t n=[self chordsOfSection:self.editingSection into:chords codes:codes];
         [self startPerformance:&plan chords:chords count:n degrees:codes offset:0]; return;
     }
@@ -1910,7 +1911,7 @@ static NSString *Describe(NSView *view) {
     if(!count) { memset(self.track,0,sizeof(KvPerformance)); [self.roll reload]; return NO; }
     for(NSUInteger i=0;i<count;i++) { if(!kv_code_chord(self.key,self.progression[i].intValue,(int)self.chordExtension,&chords[i])) return NO; for(size_t v=0;v<chords[i].count;v++) chords[i].midi[v]+=self.keyboardBase-60; }
     KvPerformance plan;
-    if(self.editingSection>=0 && self.editingSection<(NSInteger)self.song->count) { if(!kv_section_notes([self songWithWorking],(size_t)self.editingSection,&plan)) return NO; }   // with the section's register
+    if(self.editingSection>=0 && self.editingSection<(NSInteger)self.song->count) { if(![self passOfSection:self.editingSection into:&plan depth:0]) return NO; }   // the section's notes: its register, or grown from its source
     else if(!kv_arrange_with(chords,count,self.keyboardBase,self.key,[self arrangementForPreview:NO],&plan)) return NO;
     *self.track=plan; self.roll.edited=NO; self.roll.splitNote=[self keyboardStart]+12; [self.roll reload]; return YES;
 }
@@ -2309,7 +2310,24 @@ static NSString *Seconds(double value) { return [[NSString stringWithFormat:@"%.
 }
 - (void)performanceChanged:(NSPopUpButton *)sender { NSInteger mode=sender.selectedTag; if(mode<0) return; [self changeTexture:^{ self.performanceMode=mode; self.needsLayout=YES; }]; }
 - (void)harmonyChanged:(NSPopUpButton *)sender { NSInteger extension=sender.indexOfSelectedItem; [self changeTexture:^{ self.chordExtension=extension; }]; }
-- (void)meterChanged:(NSPopUpButton *)sender { KvMeter meter=(KvMeter)sender.indexOfSelectedItem; [self changeArrangement:^{ self.meter=meter; }]; }
+/* A new meter keeps everything the user made: notes edited in the roll move with their chords (each keeps its place inside its
+   chord), and every section keeps its share of passes — the song is the same song in the new meter. */
+- (void)meterChanged:(NSPopUpButton *)sender {
+    KvMeter meter=(KvMeter)sender.indexOfSelectedItem; if(meter==self.meter) return;
+    KvSong *song=[self liveSong]; NSMutableArray<NSNumber *> *passes=[NSMutableArray array]; for(size_t i=0;i<song->count;i++) [passes addObject:@(kv_section_pass_beats(song,&song->sections[i]))];
+    BOOL edited=self.trackEdited;
+    [self changeArrangement:^{
+        self.meter=meter; KvSong *now=[self liveSong];
+        if(edited && kv_track_remeter(self.track,kv_chord_beats(meter,[self chordLength]),kv_meter_bar(meter))) { self.trackEdited=YES; self.roll.edited=YES; [self.roll reload]; }
+        for(size_t i=0;i<now->count;i++) {
+            KvSection *s=&now->sections[i]; NSData *data=self.sectionTracks[@(s->id)];
+            if(data.length==sizeof(KvPerformance)) { KvPerformance p; memcpy(&p,data.bytes,sizeof(p)); if(kv_track_remeter(&p,kv_section_chord_beats(now,s),kv_meter_bar(meter))) self.sectionTracks[@(s->id)]=[NSData dataWithBytes:&p length:sizeof(p)]; }
+            if(i<passes.count) kv_section_keep_passes(now,s,passes[i].doubleValue);
+        }
+        now->cycle_from=now->cycle_to=0; self.songPlans=nil; [self.arranger reload];   // the cycle was drawn in the old meter's bars
+    }];
+    if(edited) self.status.stringValue=[NSString stringWithFormat:T(@"Размер %@ · правки нот сохранены"),S(kv_meter_name(meter))];
+}
 - (void)lengthChanged:(NSPopUpButton *)sender {
     KvChordLength length=(KvChordLength)sender.indexOfSelectedItem;
     [self changeTexture:^{ if(self.performanceMode>=3) self.chordLengthStrings=length; else if(self.performanceMode==1) self.chordLengthHands=length; else if(self.performanceMode==2) self.chordLengthArp=length; else self.chordLengthBlocks=length; }];
@@ -3086,12 +3104,12 @@ static int ComputerKeyOffset(unsigned short code) {
 /* The working state written back into the section being edited (an empty progression is not a section: it keeps its chords). */
 - (void)storeWorking {
     if(self.editingSection<0 || self.editingSection>=(NSInteger)self.song->count || !self.progression.count) return;
-    KvSection *s=&self.song->sections[self.editingSection]; double was=kv_section_pass_beats(self.song,s);
+    KvSection *s=&self.song->sections[self.editingSection]; double was=kv_section_pass_beats(self.song,s); [self detachIfChanged:s];
     s->count=self.progression.count; for(NSUInteger i=0;i<self.progression.count;i++) s->codes[i]=self.progression[i].intValue;
     KvArrangement a=[self arrangementForPreview:NO]; if(!a.strings && s->arrangement.strings && ![self stringsChosen] && self.performanceMode==1) a.strings=s->arrangement.strings;   // the piano shows two hands for a strings texture: keep it for the strings
     s->arrangement=a; s->edited=self.trackEdited; kv_section_keep_passes(self.song,s,was);
     if(self.trackEdited) self.sectionTracks[@(s->id)]=[self trackData]; else [self.sectionTracks removeObjectForKey:@(s->id)];
-    self.songPlans=nil;   // parts are cheap to build again
+    kv_song_rederive(self.song); self.songPlans=nil;   // the sections grown from this one follow; parts are cheap to build again
     [self.arranger reload];
 }
 - (void)editSection:(NSInteger)index {
@@ -3120,11 +3138,19 @@ static int ComputerKeyOffset(unsigned short code) {
 - (KvSong *)songWithWorking {
     KvSong *s=[self liveSong]; NSInteger i=self.editingSection;
     if(i>=0 && i<(NSInteger)s->count && self.progression.count) {
-        KvSection *x=&s->sections[i]; double was=kv_section_pass_beats(s,x); x->count=self.progression.count; for(NSUInteger k=0;k<self.progression.count;k++) x->codes[k]=self.progression[k].intValue;
+        KvSection *x=&s->sections[i]; double was=kv_section_pass_beats(s,x); [self detachIfChanged:x];
+        x->count=self.progression.count; for(NSUInteger k=0;k<self.progression.count;k++) x->codes[k]=self.progression[k].intValue;
         KvArrangement a=[self arrangementForPreview:NO]; if(!a.strings && x->arrangement.strings && ![self stringsChosen] && self.performanceMode==1) a.strings=x->arrangement.strings;
         x->arrangement=a; x->edited=self.trackEdited; kv_section_keep_passes(s,x,was);
+        kv_song_rederive(s);   // the sections grown from this one follow its chords
     }
     return s;
+}
+/* A section that grows from another one becomes its own when its chords are changed by hand. */
+- (void)detachIfChanged:(KvSection *)x {
+    if(!x->source || x->derive==KV_DERIVE_NONE || x->derive==KV_DERIVE_TRANSITION) return;
+    BOOL same=x->count==self.progression.count; for(NSUInteger k=0;same && k<self.progression.count;k++) if(x->codes[k]!=self.progression[k].intValue) same=NO;
+    if(!same) { x->source=0; x->derive=KV_DERIVE_NONE; }
 }
 static BOOL SameTexture(KvArrangement a,KvArrangement b) {
     return a.style==b.style && a.length==b.length && a.fills==b.fills && a.seed==b.seed && a.generated==b.generated && a.blocks==b.blocks && a.arpeggio==b.arpeggio && a.arpeggio_pattern==b.arpeggio_pattern && a.division==b.division && a.strings==b.strings;
@@ -3151,6 +3177,7 @@ static BOOL SameTexture(KvArrangement a,KvArrangement b) {
             @"style":@(a->style),@"length":@(a->length),@"fills":@(a->fills),@"seed":@(a->seed),@"generated":@(a->generated),@"blocks":@(a->blocks),@"arpeggio":@(a->arpeggio),
             @"arpeggioPattern":@(a->arpeggio_pattern),@"division":@(a->division),@"strings":@(a->strings),@"level":@(s->level),@"beat":@(s->beat),@"beatFixed":@(s->beat_fixed),
             @"lift":@(s->lift),@"transition":@(s->transition),@"edited":@(s->edited),@"beats":@(s->length),@"start":@(s->start),
+            @"source":@(s->source),@"derive":@(s->derive),@"vary":@(s->vary),@"map":@[@(s->map[0]),@(s->map[1]),@(s->map[2]),@(s->map[3]),@(s->map[4]),@(s->map[5]),@(s->map[6]),@(s->map[7])],
             @"regions":@[RegionPlist(&s->regions[0]),RegionPlist(&s->regions[1]),RegionPlist(&s->regions[2])]}];
         NSData *track=self.sectionTracks[@(s->id)]; if(s->edited && track) tracks[[NSString stringWithFormat:@"%u",s->id]]=track;
     }
@@ -3192,8 +3219,11 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
             .generated=Number(d,@"generated")!=0,.blocks=Number(d,@"blocks")!=0,.arpeggio=Number(d,@"arpeggio")!=0,.arpeggio_pattern=(KvArpeggioPattern)Number(d,@"arpeggioPattern"),
             .division=(KvDivision)Number(d,@"division"),.strings=(KvStringTexture)Number(d,@"strings")};
         s.level=[d[@"level"] isKindOfClass:NSNumber.class]?[d[@"level"] floatValue]:1; s.beat=(KvSectionBeat)Number(d,@"beat"); s.beat_fixed=(KvBeat)Number(d,@"beatFixed");
+        s.source=(uint32_t)Number(d,@"source"); s.derive=(KvDerive)Number(d,@"derive"); s.vary=(uint32_t)Number(d,@"vary");
+        { NSArray *map=[d[@"map"] isKindOfClass:NSArray.class]?d[@"map"]:@[]; for(int k=0;k<8;k++) s.map[k]=k<(int)map.count && [map[k] isKindOfClass:NSNumber.class]?MAX(0,MIN(7,[map[k] intValue])):0; }
+        if(s.derive<0 || s.derive>=KV_DERIVE_KINDS) { s.derive=KV_DERIVE_NONE; s.source=0; }
         s.lift=(int)Number(d,@"lift"); s.transition=(KvTransitionKind)Number(d,@"transition"); s.edited=Number(d,@"edited")!=0;
-        s.length=Real(d,@"beats",0); s.start=Real(d,@"start",0); NSArray *regions=[d[@"regions"] isKindOfClass:NSArray.class]?d[@"regions"]:@[];
+        s.length=Real(d,@"beats",0); s.start=Real(d,@"start",0); if(!(s.length==0 || (s.length>=.125 && s.length<=512))) s.length=0; if(!(s.start>=0 && s.start<64)) s.start=0; NSArray *regions=[d[@"regions"] isKindOfClass:NSArray.class]?d[@"regions"]:@[];   // a section damaged by builds 31–35 (a transition's length could run away) plays whole again
         for(int t=0;t<KV_TRACKS;t++) { NSDictionary *r=t<(int)regions.count && [regions[t] isKindOfClass:NSDictionary.class]?regions[t]:@{};
             s.regions[t]=(KvRegion){.mute=Number(r,@"mute")!=0,.level=(float)Real(r,@"level",1),.shift=Real(r,@"shift",0)}; }
         NSData *track=saved[[NSString stringWithFormat:@"%u",s.id]];
@@ -3477,7 +3507,7 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     *work=*song; uint32_t verseId=song->sections[verse].id;
     if(again) { work->count=0; for(size_t i=0;i<song->count;i++) if(song->sections[i].id==verseId || song->sections[i].edited) work->sections[work->count++]=song->sections[i]; }
     size_t at=0; for(size_t i=0;i<work->count;i++) if(work->sections[i].id==verseId) at=i;
-    uint32_t copy_of[KV_SONG_SECTIONS]; self.formSeed=self.formSeed*1103515245u+12345u;
+    uint32_t copy_of[KV_SONG_SECTIONS]; self.formSeed=arc4random();   // a fresh variant each time, never the same sequence from launch to launch
     if(!kv_song_apply_form(work,slots,count,at,self.formSeed,copy_of)) { free(work); [self.songUndo removeLastObject]; self.status.stringValue=T(@"⚠ Форма не собралась"); return; }
     *song=*work; free(work); song->cycle_from=song->cycle_to=0;   // the cycle was drawn on the old row
     NSMutableDictionary *tracks=[NSMutableDictionary dictionary];   // edited notes: the kept sections keep theirs, the repeats take their source's
@@ -3488,6 +3518,21 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
     self.status.stringValue=[NSString stringWithFormat:T(@"Форма «%@»: секций %lu · ⌘R — другой вариант · ⌘Z — вернуть"),form[@"name"],(unsigned long)song->count];
 }
 - (void)arrangerApplyForm:(NSDictionary *)form { [self applyForm:form again:NO]; }
+/* «Припев на новых аккордах»: every chorus not edited by hand takes one new turn of chords (the 1.4 generator) and its own
+   pattern; again, another turn. ⌘Z brings the verse's chords back. */
+- (void)arrangerNewChorusChords:(id)sender {
+    (void)sender; KvSong *song=[self liveSong]; const KvSection *verse=NULL;
+    for(size_t i=0;i<song->count && !verse;i++) if(song->sections[i].kind==KV_SECTION_VERSE && !song->sections[i].source) verse=&song->sections[i];
+    if(!verse) { self.status.stringValue=T(@"В песне нет куплета, от которого строить припев"); return; }
+    [self pushSongUndo]; self.formSeed=arc4random(); KvSection fresh=kv_section_chorus_turn(song,verse,self.formSeed); NSUInteger changed=0;
+    for(size_t i=0;i<song->count;i++) { KvSection *s=&song->sections[i]; if(s->kind!=KV_SECTION_CHORUS || s->edited) continue;
+        s->count=fresh.count; memcpy(s->codes,fresh.codes,sizeof(s->codes)); s->arrangement=fresh.arrangement; s->repeats=fresh.repeats; s->length=0; s->start=0;
+        s->source=0; s->derive=KV_DERIVE_NONE; memset(s->map,0,sizeof(s->map)); changed++; }
+    if(!changed) { [self.songUndo removeLastObject]; self.status.stringValue=T(@"Нет припевов, которые можно поменять: их ноты правлены вручную"); return; }
+    kv_song_refresh_transitions(song); [self followSections]; self.songPlans=nil; NSInteger editing=self.editingSection;
+    if(editing>=0) self.editingSection=-2; [self reloadEditing:MAX(0,editing)]; [self saveState];
+    self.status.stringValue=[NSString stringWithFormat:T(@"Припевы на новых аккордах: %@ · ещё раз — другие · ⌘Z — вернуть аккорды куплета"),[self chordLine:&fresh song:song limit:8]];
+}
 - (void)arrangerAnotherForm:(id)sender { (void)sender; if(self.lastForm) [self applyForm:self.lastForm again:YES]; else self.status.stringValue=T(@"Сначала выберите форму в меню «Структура»"); }
 /* The current song's kinds as a form of the user's, under a name (the same name replaces it); NO when the song is empty. */
 - (BOOL)saveFormNamed:(NSString *)name {
@@ -3672,10 +3717,10 @@ static NSString *FormLetters(NSArray<NSNumber *> *slots) {
 }
 - (NSArray<NSString *> *)arrangerChorusVariants:(NSInteger)index {
     const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return @[];
-    const KvSection *verse=[self verseFor:index song:song]; KvSection shown=kv_section_chorus(song,verse,self.suggestSeed);
+    const KvSection *verse=[self verseFor:index song:song]; KvSection shown=kv_section_chorus_turn(song,verse,self.suggestSeed);
     NSMutableArray<NSData *> *made=[NSMutableArray array]; NSMutableArray<NSString *> *names=[NSMutableArray array];
     for(uint32_t k=1;k<=24 && made.count<3;k++) {
-        KvSection c=kv_section_chorus(song,verse,self.suggestSeed+k); BOOL seen=!memcmp(c.codes,shown.codes,sizeof(c.codes));
+        KvSection c=kv_section_chorus_turn(song,verse,self.suggestSeed+k); BOOL seen=!memcmp(c.codes,shown.codes,sizeof(c.codes));
         for(NSData *d in made) if(!memcmp(((const KvSection *)d.bytes)->codes,c.codes,sizeof(c.codes))) seen=YES;
         if(seen) continue;
         [made addObject:[NSData dataWithBytes:&c length:sizeof(c)]]; [names addObject:[self chordLine:&c song:song limit:4]];
@@ -3800,16 +3845,32 @@ static NSArray<NSString *> *KvDocumentKeys(void) {
 - (BOOL)songPart:(NSInteger)section from:(double)from length:(double)length into:(KvPerformance *)out { return [self songPart:section from:from length:length live:NO into:out]; }
 /* live: for playback — the tracks' mute, solo and level are left out of the part and applied live (applyTrackGains), so M, S and the
    faders act at once; the thumbnails and the MIDI export take the part as it sounds. */
+/* The pass a section plays (spec 1.6): its notes edited by hand; else, when it grows from another section, that section's pass
+   changed by its role; else its own pattern (a strings texture on the piano as two hands). A chain of sources goes four deep. */
+- (BOOL)passOfSection:(NSInteger)i into:(KvPerformance *)out depth:(int)depth {
+    KvSong *song=[self songWithWorking]; if(i<0 || i>=(NSInteger)song->count) return NO;
+    if(i==self.editingSection && self.trackEdited) { *out=*self.track; return kv_performance_valid(out) && out->chord_count==song->sections[i].count; }
+    NSData *own=i==self.editingSection?nil:[self trackOfSection:i]; if(own) { memcpy(out,own.bytes,sizeof(*out)); return YES; }
+    const KvSection *s=&song->sections[i];
+    if(s->source && s->derive!=KV_DERIVE_NONE && !s->edited && depth<4) {
+        NSInteger j=-1; for(size_t k=0;k<song->count;k++) if(song->sections[k].id==s->source) j=(NSInteger)k;
+        KvPerformance *src=j>=0 && j!=i?malloc(sizeof(KvPerformance)):NULL;
+        BOOL derived=src && [self passOfSection:j into:src depth:depth+1] && kv_section_derive(song,(size_t)i,&song->sections[j],src,out); free(src);
+        if(derived) return YES;
+    }
+    KvArrangement kept=song->sections[i].arrangement; song->sections[i].arrangement=[self playable:kept];
+    BOOL ok=kv_section_notes(song,(size_t)i,out); song->sections[i].arrangement=kept; return ok;
+}
 - (BOOL)songPart:(NSInteger)section from:(double)from length:(double)length live:(BOOL)live into:(KvPerformance *)out {
     NSString *key=[NSString stringWithFormat:@"%@%ld:%.6f:%.6f",live?@"live ":@"",(long)section,from,length];
     NSData *cached=self.songPlans[key]; if(cached.length==sizeof(KvPerformance)) { memcpy(out,cached.bytes,sizeof(*out)); return YES; }
     KvSong *song=[self songWithWorking]; if(section<0 || section>=(NSInteger)song->count) return NO;
-    NSData *track=section==self.editingSection?(self.trackEdited?[self trackData]:nil):[self trackOfSection:section];
+    KvPerformance *pass=malloc(sizeof(KvPerformance)); if(!pass) return NO;
+    if(![self passOfSection:section into:pass depth:0]) { free(pass); return NO; }
     bool mute[KV_TRACKS],solo[KV_TRACKS]; float level[KV_TRACKS]; memcpy(mute,song->track_mute,sizeof(mute)); memcpy(solo,song->track_solo,sizeof(solo)); memcpy(level,song->track_level,sizeof(level));
     if(live) for(int t=0;t<KV_TRACKS;t++) { song->track_mute[t]=song->track_solo[t]=false; if(t<KV_TRACK_DRUMS) song->track_level[t]=1; }
-    KvArrangement kept=song->sections[section].arrangement; song->sections[section].arrangement=[self playable:kept];   // a strings texture on the piano: two hands
-    BOOL ok=kv_section_part(song,(size_t)section,track?track.bytes:NULL,from,length,out);
-    song->sections[section].arrangement=kept; memcpy(song->track_mute,mute,sizeof(mute)); memcpy(song->track_solo,solo,sizeof(solo)); memcpy(song->track_level,level,sizeof(level));
+    BOOL ok=kv_section_part(song,(size_t)section,pass,from,length,out); free(pass);
+    memcpy(song->track_mute,mute,sizeof(mute)); memcpy(song->track_solo,solo,sizeof(solo)); memcpy(song->track_level,level,sizeof(level));
     if(!ok) return NO;
     if(!self.songPlans) self.songPlans=[NSMutableDictionary dictionary];
     self.songPlans[key]=[NSData dataWithBytes:out length:sizeof(*out)]; return YES;
@@ -5537,9 +5598,8 @@ int main(int argc, const char *argv[]) {
                 for(size_t i=0;i<root.song->count && !sameChorus;i++) if(root.song->sections[i].kind==KV_SECTION_CHORUS && root.song->sections[i].count==chorusCount) { sameChorus=YES; for(size_t k=0;k<chorusCount;k++) if(root.song->sections[i].codes[k]!=chorusCodes[k]) sameChorus=NO; }
                 KV_CHECK([kinds() isEqualToArray:expected] && root.song->sections[root.editingSection].kind==KV_SECTION_VERSE && sameChorus,@"Forms: Pop rebuilds the song in its order around the verse, keeping its chorus");
                 KV_CHECK(last->id==pitId && last->edited && root.sectionTracks[@(pitId)] && kv_song_valid(root.song),@"Forms: a section edited by hand stays, at the end when the form has no place for it");
-                BOOL other=NO; int pushes=1;
-                for(int tries=0;tries<4 && !other;tries++) { [root regenerateArrangement:nil]; pushes++;
-                    for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind==KV_SECTION_CHORUS) { for(size_t k=0;k<chorusCount && k<root.song->sections[i].count;k++) if(root.song->sections[i].codes[k]!=chorusCodes[k]) other=YES; break; } }
+                BOOL other=NO; int pushes=1; uint32_t (^chorusVary)(void)=^uint32_t{ for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].kind==KV_SECTION_CHORUS) return root.song->sections[i].vary; return 0; }; uint32_t vary=chorusVary();
+                for(int tries=0;tries<4 && !other;tries++) { [root regenerateArrangement:nil]; pushes++; if(chorusVary()%3!=vary%3) other=YES; }   // spec 1.6: the same material, another way of playing it
                 KV_CHECK(other && [kinds() isEqualToArray:expected] && root.song->sections[root.song->count-1].id==pitId,@"Forms: ⌘R makes another variant of the form, the edited section still there");
                 KV_CHECK([root saveFormNamed:@"Тестовая"],@"Forms: the song's form is saved");
                 NSDictionary *mine=[root arrangerForms].lastObject; NSArray *saved=mine[@"slots"];
@@ -5581,6 +5641,26 @@ int main(int argc, const char *argv[]) {
                 memcpy(root.song,kept,sizeof(KvSong)); free(kept); root.sectionTracks=tracks; root.songPlans=nil; [root reloadEditing:0]; }
               if(root.metronomeOn) [root toggleMetronome:nil]; if(!root.drumsOn) [root toggleDrums:nil]; root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
               [root showView:0]; }
+            // Spec 1.6: the song grows from what was made on the circle and in the roll; a new meter keeps the edits; a selected transition keeps its length.
+            { [root stopPlayback:nil]; [root showView:0]; kv_song_reset(root.song); [root.sectionTracks removeAllObjects]; [root.songUndo removeAllObjects]; [root reloadEditing:0];
+              [root.meterChoice selectItemAtIndex:KV_METER_4_4]; [root meterChanged:root.meterChoice];
+              [root clearProgression:nil]; for(NSNumber *degree in @[@0,@5,@3,@4]) [root addChord:root.addButtons[degree.integerValue]];
+              [root showView:1]; KV_CHECK([root.roll addNoteAtBeat:.5 midi:96 duration:.5] && root.trackEdited,@"Song 1.6: a note added in the roll");
+              [root showView:2]; [root arrangerGenerateSong:nil];
+              BOOL (^heard)(NSInteger)=^BOOL(NSInteger i) { NSData *d=[root arrangerNotes:i]; const KvPianoEvent *e=d.bytes; for(size_t k=0;k<d.length/sizeof(*e);k++) if(e[k].midi==96 || e[k].midi==108) return YES; return NO; };
+              size_t own=0,grown=0,choruses=0,carried=0;
+              for(size_t i=0;i<root.song->count;i++) { const KvSection *x=&root.song->sections[i];
+                  if(x->source) grown++; else own++;
+                  if(x->kind==KV_SECTION_CHORUS) { choruses++; if(heard((NSInteger)i)) carried++; } }
+              KV_CHECK(root.song->count>=8 && own<=3 && grown>=root.song->count-3 && choruses>=2 && carried==choruses,([NSString stringWithFormat:@"Song 1.6: the sections grow from the verse (%zu of %zu), the note edited in the roll is in every chorus (%zu of %zu)",grown,root.song->count,carried,choruses]));
+              size_t before=0; for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].edited && heard((NSInteger)i)) before++;
+              [root.meterChoice selectItemAtIndex:KV_METER_6_8]; [root meterChanged:root.meterChoice];
+              size_t after=0; for(size_t i=0;i<root.song->count;i++) if(root.song->sections[i].edited && heard((NSInteger)i)) after++;
+              KV_CHECK(before>0 && after==before && kv_song_valid(root.song),@"Meter: the notes edited in the roll survive a new meter in every section");
+              NSInteger transition=-1; for(size_t i=0;i<root.song->count && transition<0;i++) if(root.song->sections[i].kind==KV_SECTION_TRANSITION) transition=(NSInteger)i;
+              if(transition>=0) { [root arrangerSelect:transition]; double beats=kv_song_beats(root.song); for(int k=0;k<200;k++) { [root songWithWorking]; kv_song_refresh_transitions(root.song); }
+                  KV_CHECK(kv_song_valid(root.song) && fabs(kv_song_beats(root.song)-beats)<1e-6,@"A selected transition keeps its length (it once grew without end)"); }
+              [root.meterChoice selectItemAtIndex:KV_METER_4_4]; [root meterChanged:root.meterChoice]; }
             // A strings texture stays with its section through a piano detour: the piano plays it as two hands, the strings get it back.
             if(root.stringsAvailable) { [root stopPlayback:nil]; [root showView:0]; kv_song_reset(root.song); [root.sectionTracks removeAllObjects]; [root.songUndo removeAllObjects];
               [root showSoundSettings:nil]; [root.instrumentChoice selectItemAtIndex:KV_INSTRUMENT_STRINGS]; [root instrumentChanged:root.instrumentChoice]; [root closeSound:nil];

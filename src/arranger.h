@@ -58,6 +58,7 @@ typedef enum { KvSnapSmart, KvSnapBar, KvSnapBeat, KvSnapEighth, KvSnapOff } KvA
 - (void)arrangerAnotherForm:(id)sender;             /* ⌘R after a form: another variant of it */
 - (void)arrangerSaveForm:(id)sender;                /* asks for a name */
 - (void)arrangerDeleteForm:(NSString *)name;
+- (void)arrangerNewChorusChords:(id)sender;        /* the choruses on a new turn of chords instead of the verse's (again: another turn) */
 @end
 /* Tracks of the song (spec 1.5 §2): a ruler, the arrangement track of section markers, the melody, bass and drum tracks with
    their headers and regions, and an overview of the whole song. */

@@ -371,6 +371,9 @@ int main(void) {
                 for(size_t i=0;i<out.count;i++) { const KvPianoEvent *e=&out.events[i];
                     CHECK(e->hand ? e->midi>=55 && e->midi<=88 : e->midi>=36 && e->midi<=59);   /* cellos below, violins above */
                     bool tone=false; for(size_t v=0;v<chords[e->chord].count;v++) if(chords[e->chord].midi[v]%12==e->midi%12) tone=true;
+                    if(!tone && texture==KV_STRINGS_CHORALE) {   /* the chorale's 4–3 suspension: the old top note over the change, resolving a step down */
+                        bool resolves=false; for(size_t j=0;j<out.count;j++) { const KvPianoEvent *r=&out.events[j]; if(r->hand==1 && fabs(r->beat-(e->beat+e->duration))<1e-6 && e->midi-r->midi>=1 && e->midi-r->midi<=2) resolves=true; }
+                        CHECK(e->hand==1 && fabs(e->beat-e->chord*out.beats_per_chord)<1e-6 && e->duration<=1+1e-9 && resolves); continue; }
                     if(!tone) { /* only the cantilena may pass, and only by step on both sides */
                         CHECK(texture==KV_STRINGS_CANTILENA && e->hand==1); int at=0; while(line[at]!=(int)i) at++;
                         CHECK(at>0 && at+1<nl && abs(out.events[line[at-1]].midi-e->midi)<=2 && abs(out.events[line[at+1]].midi-e->midi)<=2); }

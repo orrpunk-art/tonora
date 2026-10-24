@@ -1165,12 +1165,14 @@ static NSCursor *LoopCursor(void) { static NSCursor *cursor; if(!cursor) cursor=
     [popup addItemWithTitle:T(@"Сохранить форму этой песни…")]; popup.lastItem.tag=2000;
     if(remove.numberOfItems) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:T(@"Удалить свою форму") action:NULL keyEquivalent:@""]; item.submenu=remove; [popup.menu addItem:item]; }
     [popup addItemWithTitle:T(@"Другой вариант той же формы · ⌘R")]; popup.lastItem.tag=2001;
+    [popup addItemWithTitle:T(@"Припев на новых аккордах")]; popup.lastItem.tag=2002;
 }
 - (void)structureChosen:(NSPopUpButton *)sender {
     NSMenuItem *item=sender.selectedItem;
     if(item.tag>=1000 && item.tag<2000) [self.owner arrangerApplyForm:item.representedObject];
     else if(item.tag==2000) [self.owner arrangerSaveForm:sender];
     else if(item.tag==2001) [self.owner arrangerAnotherForm:sender];
+    else if(item.tag==2002) [self.owner arrangerNewChorusChords:sender];
 }
 - (void)deleteForm:(NSMenuItem *)item { [self.owner arrangerDeleteForm:item.representedObject]; }
 // ---- MIDI export: the song or one track ----
