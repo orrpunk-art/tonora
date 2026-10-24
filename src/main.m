@@ -110,6 +110,9 @@ static CGFloat KvDockHeight(void) { return 10+28+6+KvKeyboardHeight+6+24+8+1+8+K
 @property(nonatomic) NSMutableArray<NSNumber *> *songOrder,*songOrderBeats;
 @property(nonatomic) NSMutableDictionary<NSNumber *,NSData *> *songPlans;
 @property(nonatomic) NSInteger songPart,songQueued;
+@property(nonatomic) uint32_t suggestSeed;                  /* picks among the choruses that fit; new after each accepted suggestion */
+@property(nonatomic) NSArray<NSData *> *chorusVariants;     /* ⌥-click on a chorus ghost: the other choruses offered */
+@property(nonatomic) BOOL auditioningGhost;
 @property(nonatomic) double speed;           /* practice speed factor, 1 = tempo as set */
 @property(nonatomic) BOOL restoring;         /* saveState is a no-op while the saved state is being replayed */
 /* Musical time is piecewise linear: after each tempo or speed change it continues from (rateBeat, rateSeconds). */
@@ -806,7 +809,7 @@ static CGFloat DrawShortcuts(NSString *title,const KvShortcut *rows,CGFloat x,CG
             if(_audio) _drumsAvailable=kv_audio_load_drums(_audio,[[resources stringByAppendingPathComponent:@"Percussion"] fileSystemRepresentation]);
         }
         _effects=(KvEffects){.10,.10,.3}; _tempo=100;
-        _song=calloc(1,sizeof(KvSong)); _sectionTracks=[NSMutableDictionary dictionary]; _editingSection=-1; _songUndo=[NSMutableArray array]; _songRedo=[NSMutableArray array];
+        _song=calloc(1,sizeof(KvSong)); _sectionTracks=[NSMutableDictionary dictionary]; _editingSection=-1; _songUndo=[NSMutableArray array]; _songRedo=[NSMutableArray array]; _suggestSeed=arc4random();
         for(int i=0;i<128;i++) { _computerKey[i]=-1; _soundingEvent[i]=-1; } _computerBase=60; _computerVelocity=100;
         _registerControl=[TNSegmented segmentedControlWithLabels:@[@"C2",@"C3",@"C4",@"C5",@"C6"] trackingMode:NSSegmentSwitchTrackingSelectOne target:self action:@selector(registerChanged:)];
         _registerControl.toolTip=T(@"Регистр клавиатуры и воспроизведения · ⌘↓ / ⌘↑"); [_registerControl setAccessibilityLabel:T(@"Регистр")]; [self addSubview:_registerControl];
@@ -3083,6 +3086,120 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
     double cut=kv_song_snap_cut(song,(size_t)i,at); if(cut<0) { self.status.stringValue=T(@"Секцию не разрезать: в ней одна граница такта со сменой аккорда"); return; }
     [self arrangerCut:i atBeat:cut];
 }
+// ---- suggestions: what usually comes next (spec 1.4 §3.2) ----
+- (size_t)suggestionsAfter:(NSInteger)index into:(KvSuggestion *)out {
+    const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return 0;
+    return kv_song_suggest(song,(size_t)index,self.suggestSeed,out);
+}
+- (NSString *)chordLine:(const KvSection *)s song:(const KvSong *)song limit:(size_t)limit {
+    NSMutableArray *names=[NSMutableArray array];
+    for(size_t i=0;i<s->count && i<limit;i++) { KvChord chord; if(kv_code_chord(song->key,s->codes[i],song->extension,&chord)) [names addObject:S(chord.name)]; }
+    return [names componentsJoinedByString:@" – "];
+}
+/* «F – G – Am – C – …, 8 тактов, баллада, проигрыш раз в 2 такта, правая рука на октаву выше, громкость 115 %, бит по стилю» */
+- (NSString *)describeSection:(const KvSection *)s song:(const KvSong *)song {
+    NSMutableArray *parts=[NSMutableArray arrayWithObject:[self chordLine:s song:song limit:8]];
+    [parts addObject:TNBarCount(kv_section_pass_beats(song,s)*s->repeats/kv_meter_bar(song->meter))];
+    [parts addObject:[self textureOf:&s->arrangement]];
+    if(!s->arrangement.blocks && !s->arrangement.arpeggio && !s->arrangement.strings) {
+        NSString *fills[]={@"",T(@"без проигрышей"),T(@"проигрыш раз в 4 такта"),T(@"проигрыш раз в 2 такта"),T(@"проигрыш каждый такт")};
+        NSString *rate=fills[kv_fill_rate(s->arrangement.style,s->arrangement.fills)]; if(rate.length) [parts addObject:rate];
+    }
+    if(s->lift>0) [parts addObject:[T(@"Правая рука на октаву выше") lowercaseString]]; else if(s->lift<0) [parts addObject:[T(@"Обе руки на октаву ниже") lowercaseString]];
+    if(fabsf(s->level-1)>.01f) [parts addObject:[NSString stringWithFormat:T(@"громкость %d %%"),(int)lroundf(s->level*100)]];
+    if(s->beat==KV_SECTION_BEAT_OFF) [parts addObject:T(@"без бита")]; else if(s->beat==KV_SECTION_BEAT_QUIET) [parts addObject:T(@"бит тихо")];
+    else if(s->beat==KV_SECTION_BEAT_STYLE) [parts addObject:T(@"бит по стилю")]; else if(s->beat==KV_SECTION_BEAT_FIXED) [parts addObject:[NSString stringWithFormat:T(@"бит «%@»"),[S(kv_beat_name(s->beat_fixed)) lowercaseString]]];
+    return [parts componentsJoinedByString:@", "];
+}
+- (NSString *)describeTransition:(const KvSection *)t song:(const KvSong *)song {
+    NSString *chord=[self chordLine:t song:song limit:1];
+    switch(t->transition) {
+        case KV_TRANSITION_RISE: return [NSString stringWithFormat:T(@"такт на %@ — арпеджио вверх с нарастанием и дробь малого барабана"),chord];
+        case KV_TRANSITION_DOMINANT: return [NSString stringWithFormat:T(@"такт на %@ с проигрышем"),chord];
+        case KV_TRANSITION_FILL: return [NSString stringWithFormat:T(@"проигрыш на %@"),chord];
+        default: return [NSString stringWithFormat:T(@"удар %@, тишина и затакт в следующую секцию"),chord];
+    }
+}
+- (NSArray<NSDictionary *> *)arrangerSuggestions:(NSInteger)index {
+    KvSuggestion g[4]; size_t n=[self suggestionsAfter:index into:g]; const KvSong *song=[self songWithWorking]; NSMutableArray *ghosts=[NSMutableArray array];
+    for(size_t i=0;i<n;i++) {
+        const KvSection *s=&g[i].section; double beats=kv_section_pass_beats(song,s)*s->repeats,bar=kv_meter_bar(song->meter);
+        NSString *kind=s->kind==KV_SECTION_TRANSITION?[NSString stringWithFormat:T(@"Переход: %@"),[S(kv_transition_name(s->transition)) lowercaseString]]:S(kv_section_kind_name(s->kind));
+        NSString *title=[NSString stringWithFormat:g[i].before?T(@"+ %@ в начало · %@"):g[i].copy_of?T(@"+ %@ ещё раз · %@"):T(@"+ %@ · %@"),kind,TNBarCount(beats/bar)];
+        NSMutableString *tip=[NSMutableString string];
+        if(g[i].lead_in) [tip appendFormat:T(@"%@ → %@\nПереход: %@.\n"),S(kv_transition_name(g[i].transition.transition)),kind,[self describeTransition:&g[i].transition song:song]];
+        else [tip appendFormat:@"%@\n",kind];
+        [tip appendFormat:@"%@.\n",[self describeSection:s song:song]];
+        BOOL chorus=s->kind==KV_SECTION_CHORUS && !g[i].copy_of;
+        [tip appendString:chorus?T(@"Щелчок — вставить · Пробел — послушать · ⌥-щелчок — другой припев"):T(@"Щелчок — вставить · Пробел — послушать")];
+        [ghosts addObject:@{@"title":title,@"tip":tip,@"beats":@(beats),@"leadBeats":@(g[i].lead_in?kv_section_pass_beats(song,&g[i].transition):0),@"kind":@(s->kind),@"chorus":@(chorus),@"leadKind":@(g[i].transition.transition)}];
+    }
+    return ghosts;
+}
+- (void)insertSuggestion:(const KvSuggestion *)g after:(NSInteger)index {
+    if(self.song->count+(g->lead_in?2:1)>KV_SONG_SECTIONS) { self.status.stringValue=T(@"В песне уже 32 секции"); return; }
+    [self pushSongUndo]; KvSong *song=[self liveSong]; size_t at=g->before?0:(size_t)index+1;
+    if(g->lead_in && !kv_song_insert(song,at++,&g->transition)) { [self.songUndo removeLastObject]; return; }
+    uint32_t made=kv_song_insert(song,at,&g->section);
+    if(!made) { [self applySongSnapshot:self.songUndo.lastObject]; [self.songUndo removeLastObject]; self.status.stringValue=T(@"⚠ Последовательность не стала секцией"); return; }
+    NSData *track=g->copy_of?self.sectionTracks[@(g->copy_of)]:nil;
+    if(track && song->sections[at].edited) self.sectionTracks[@(made)]=track; else song->sections[at].edited=NO;
+    self.songPlans=nil; self.suggestSeed=arc4random(); [self reloadEditing:(NSInteger)at]; [self saveState];
+    self.status.stringValue=[NSString stringWithFormat:T(@"«%@» в песне · ⌘Z — отменить"),[self arrangerName:(NSInteger)at]];
+}
+- (void)arrangerAccept:(NSInteger)suggestion after:(NSInteger)index {
+    KvSuggestion g[4]; size_t n=[self suggestionsAfter:index into:g]; if(suggestion<0 || suggestion>=(NSInteger)n) return;
+    [self insertSuggestion:&g[suggestion] after:index];
+}
+- (const KvSection *)verseFor:(NSInteger)index song:(const KvSong *)song {
+    if(song->sections[index].kind==KV_SECTION_VERSE) return &song->sections[index];
+    for(size_t i=0;i<song->count;i++) if(song->sections[i].kind==KV_SECTION_VERSE) return &song->sections[i];
+    return &song->sections[index];
+}
+- (NSArray<NSString *> *)arrangerChorusVariants:(NSInteger)index {
+    const KvSong *song=[self songWithWorking]; if(index<0 || index>=(NSInteger)song->count) return @[];
+    const KvSection *verse=[self verseFor:index song:song]; KvSection shown=kv_section_chorus(song,verse,self.suggestSeed);
+    NSMutableArray<NSData *> *made=[NSMutableArray array]; NSMutableArray<NSString *> *names=[NSMutableArray array];
+    for(uint32_t k=1;k<=24 && made.count<3;k++) {
+        KvSection c=kv_section_chorus(song,verse,self.suggestSeed+k); BOOL seen=!memcmp(c.codes,shown.codes,sizeof(c.codes));
+        for(NSData *d in made) if(!memcmp(((const KvSection *)d.bytes)->codes,c.codes,sizeof(c.codes))) seen=YES;
+        if(seen) continue;
+        [made addObject:[NSData dataWithBytes:&c length:sizeof(c)]]; [names addObject:[self chordLine:&c song:song limit:4]];
+    }
+    self.chorusVariants=made; return names;
+}
+- (void)arrangerAcceptVariant:(NSInteger)variant after:(NSInteger)index {
+    if(variant<0 || variant>=(NSInteger)self.chorusVariants.count || index<0 || index>=(NSInteger)self.song->count) return;
+    const KvSong *song=[self songWithWorking]; KvSuggestion g; memset(&g,0,sizeof(g)); memcpy(&g.section,self.chorusVariants[variant].bytes,sizeof(KvSection));
+    g.lead_in=song->sections[index].kind!=KV_SECTION_TRANSITION; if(g.lead_in) g.transition=kv_section_transition(song,&song->sections[index],&g.section,KV_TRANSITION_RISE);
+    [self insertSuggestion:&g after:index];
+}
+- (void)arrangerTransitionAfter:(NSInteger)index kind:(NSInteger)kind {
+    KvSong *song=[self songWithWorking]; if(index<0 || index+1>=(NSInteger)song->count) return;
+    if(song->count>=KV_SONG_SECTIONS) { self.status.stringValue=T(@"В песне уже 32 секции"); return; }
+    KvTransitionKind way=kind>=0 && kind<KV_TRANSITION_KINDS?(KvTransitionKind)kind:kv_transition_for(&song->sections[index],&song->sections[index+1]);
+    [self pushSongUndo]; song=[self liveSong];
+    KvSection t=kv_section_transition(song,&song->sections[index],&song->sections[index+1],way);
+    if(!kv_song_insert(song,(size_t)index+1,&t)) { [self.songUndo removeLastObject]; return; }
+    self.songPlans=nil; [self reloadEditing:index+1]; [self saveState];
+    self.status.stringValue=[NSString stringWithFormat:T(@"Переход «%@» вставлен · ⌘Z — отменить"),[S(kv_transition_name(way)) lowercaseString]];
+}
+- (void)arrangerAudition:(NSInteger)suggestion after:(NSInteger)index {
+    if(suggestion<0) { if(self.auditioningGhost) { self.auditioningGhost=NO; [self stopPlayback:nil]; } return; }
+    KvSuggestion g[4]; size_t n=[self suggestionsAfter:index into:g]; if(suggestion>=(NSInteger)n) return;
+    KvSong *trial=malloc(sizeof(KvSong)); if(!trial) return; *trial=*[self songWithWorking];
+    size_t at=g[suggestion].before?0:(size_t)index+1; BOOL ok=YES;
+    if(g[suggestion].lead_in) ok=kv_song_insert(trial,at++,&g[suggestion].transition)!=0;
+    ok=ok && kv_song_insert(trial,at,&g[suggestion].section)!=0;
+    NSData *track=g[suggestion].copy_of?self.sectionTracks[@(g[suggestion].copy_of)]:nil; KvPerformance plan;
+    ok=ok && kv_section_plan(trial,at,track && trial->sections[at].edited?track.bytes:NULL,&plan);
+    KvChord chords[8]; NSMutableArray *codes=[NSMutableArray array]; size_t count=0;
+    for(size_t i=0;ok && i<trial->sections[at].count;i++) if(kv_code_chord(trial->key,trial->sections[at].codes[i],trial->extension,&chords[count])) {
+        for(size_t v=0;v<chords[count].count;v++) chords[count].midi[v]+=trial->keyboard_base-60; [codes addObject:@(trial->sections[at].codes[i])]; count++; }
+    free(trial); if(!ok) return;
+    [self startPerformance:&plan chords:chords count:count degrees:codes offset:0]; kv_audio_set_loop(self.audio,true);
+    self.auditioningGhost=YES; self.status.stringValue=T(@"Слушаем подсказку · Пробел или уход курсора — стоп");
+}
 // ---- song playback: one plan per part, the next one queued while the current one plays ----
 - (BOOL)songPlan:(NSInteger)section into:(KvPerformance *)out {
     NSData *cached=self.songPlans[@(section)]; if(cached.length==sizeof(KvPerformance)) { memcpy(out,cached.bytes,sizeof(*out)); return YES; }
@@ -4300,6 +4417,40 @@ int main(int argc, const char *argv[]) {
               KV_CHECK(again.song->count==3 && again.song->sections[1].edited && again.viewMode==2 && again.song->sections[0].lift==12,@"Arranger: the song survives a restart");
               [again stopPlayback:nil];
               [root showView:0]; KV_CHECK(root.editingSection==-1 && [root.progression isEqualToArray:second],@"Arranger: the circle has the draft back"); }
+            // Arranger suggestions: ghosts under the hovered section, kept while the mouse moves onto them, with an explanation;
+            // a click inserts the chorus led in by a rise; a seam takes a transition; other choruses differ; a ghost can be heard.
+            { [root stopPlayback:nil]; [root showView:0];
+              NSWindow *hoverWindow=root.window?nil:[[NSWindow alloc] initWithContentRect:root.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:YES]; if(hoverWindow) hoverWindow.contentView=root;
+              memset(root.song,0,sizeof(KvSong)); [root.sectionTracks removeAllObjects]; [root.songUndo removeAllObjects];
+              [root clearProgression:nil]; for(NSNumber *degree in @[@0,@5,@3,@4]) [root addChord:root.addButtons[degree.integerValue]];
+              [root sendToArranger:nil]; root.frame=NSMakeRect(0,0,1240,760); [root layout]; [root.arranger layout]; [root.arranger reload];
+              NSRect verse=[root.arranger rectOfSection:0]; [root.arranger hoverAtPoint:NSMakePoint(NSMidX(verse),NSMidY(verse))];
+              NSArray<NSValue *> *ghosts=[root.arranger ghostRectsAfter:0]; NSArray *offers=[root arrangerSuggestions:0];
+              KV_CHECK(root.arranger.hoverSection==0 && ghosts.count==offers.count && offers.count>=3,@"Suggestions: hovering a section shows what may follow");
+              KV_CHECK([offers[0][@"kind"] intValue]==KV_SECTION_CHORUS && [offers[0][@"leadBeats"] doubleValue]>0 && [offers[0][@"chorus"] boolValue],@"Suggestions: a chorus led in by a rise comes first");
+              NSRect first=ghosts[0].rectValue,second=ghosts[1].rectValue;
+              KV_CHECK(NSMinY(first)>NSMaxY(verse) && NSMinX(second)>NSMaxX(first) && NSWidth(first)>NSWidth(second),@"Suggestions: ghosts sit under the section, in a row, as long as what they insert");
+              [root.arranger hoverAtPoint:NSMakePoint(NSMidX(first),NSMidY(first))];
+              KV_CHECK(root.arranger.hoverSection==0 && root.arranger.hoverGhost==0,@"Suggestions: moving down onto a ghost keeps the row");
+              NSString *tip=offers[0][@"tip"];   // the bubble's text (the self-test window is off screen, so no bubble shows)
+              KV_CHECK([tip hasPrefix:@"Подъём → Припев"] && [tip containsString:@"арпеджио вверх"] && [tip containsString:@"Щелчок — вставить"] && [tip containsString:@"⌥-щелчок"],@"Suggestions: the explanation names the rise, what it does and the chorus");
+              [root.arranger hoverAtPoint:NSMakePoint(NSMidX(first),NSHeight(root.arranger.bounds)-4)]; KV_CHECK(root.arranger.hoverSection<0 && root.arranger.hoverGhost<0,@"Suggestions: they go when the mouse leaves");
+              NSArray *variants=[root arrangerChorusVariants:0]; KV_CHECK(variants.count==3 && ![variants[0] isEqualToString:variants[1]] && ![variants[1] isEqualToString:variants[2]],@"Suggestions: ⌥-click offers three other choruses");
+              [root arrangerAudition:0 after:0]; KV_CHECK([root isPlayingProgression] && root.auditioningGhost,@"Suggestions: Space over a ghost plays it");
+              [root arrangerAudition:-1 after:0]; KV_CHECK(!kv_audio_is_playing(root.audio),@"Suggestions: and stops");
+              [root arrangerAccept:0 after:0];
+              KV_CHECK(root.song->count==3 && root.song->sections[1].kind==KV_SECTION_TRANSITION && root.song->sections[1].transition==KV_TRANSITION_RISE && root.song->sections[2].kind==KV_SECTION_CHORUS && root.editingSection==2,@"Suggestions: a click inserts the rise and the chorus, the chorus selected");
+              KV_CHECK(root.song->sections[1].codes[0]==KV_CODE_SECONDARY+kv_code_base(root.song->sections[2].codes[0]) || kv_code_base(root.song->sections[2].codes[0])==0,@"Suggestions: the rise is the dominant of the chorus's first chord");
+              KV_CHECK([[root arrangerName:1] isEqualToString:@"Подъём"] && [[root arrangerName:2] isEqualToString:@"Припев"],@"Suggestions: names of the new sections");
+              offers=[root arrangerSuggestions:2]; KV_CHECK([offers[0][@"kind"] intValue]==KV_SECTION_PIT,@"Suggestions: after a chorus, a breakdown first");
+              [root arrangerAccept:0 after:2]; KV_CHECK(root.song->count==4 && root.song->sections[3].kind==KV_SECTION_PIT,@"Suggestions: the breakdown follows the chorus");
+              [root.arranger layout]; NSRect pit=[root.arranger rectOfSection:3];
+              [root.arranger hoverAtPoint:NSMakePoint(NSMinX(pit)-1.5,NSMidY(pit))]; KV_CHECK(root.arranger.hoverSeam==2,@"Suggestions: the seam between chorus and breakdown takes a transition");
+              [root arrangerTransitionAfter:2 kind:-1]; KV_CHECK(root.song->count==5 && root.song->sections[3].kind==KV_SECTION_TRANSITION && root.song->sections[3].transition==KV_TRANSITION_BREAK,@"Suggestions: chorus → breakdown gets a break");
+              [root undoSequence:nil]; KV_CHECK(root.song->count==4,@"Suggestions: ⌘Z takes the transition back");
+              KvPerformance plan; for(NSInteger i=0;i<(NSInteger)root.song->count;i++) KV_CHECK([root songPlan:i into:&plan],([NSString stringWithFormat:@"Suggestions: section %ld plays",(long)i]));
+              root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
+              [root showView:0]; }
             // English: the same saved state in an English interface; no Cyrillic anywhere in it; the replaced view is freed.
             { [root.performanceChoice selectItemWithTag:1]; [root performanceChanged:root.performanceChoice]; [root applyTempo:97]; [root stopPlayback:nil]; [root saveState];
               NSArray *progression=[root.progression copy]; KvKey key=root.key;

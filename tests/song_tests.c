@@ -105,6 +105,72 @@ int main(void) {
         for(size_t i=0;i<up.count;i++) CHECK(up.events[i].midi>=21 && up.events[i].midi<=108);
         KvPerformance high=t; kv_track_transpose(&high,60); CHECK(kv_performance_valid(&high));
     }
-    puts("Song: time, row edits, notes in every texture, level and lift, cuts and tracks passed.");
+    { // Chorus: another turn than the verse's, opening on I, IV or vi (i or VI), closing on the tonic, in every key; louder and up.
+        const int verses[3][4]={{0,5,3,4},{0,4,5,3},{5,3,0,4}};
+        for(int index=0;index<12;index++) for(int minor=0;minor<2;minor++) for(int v=0;v<3;v++) for(uint32_t seed=0;seed<4;seed++) {
+            KvKey key={index,minor!=0,0,0,false}; KvSong song=song_in(key,KV_METER_4_4);
+            KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,verses[v],4,hands(KV_AMBIENT,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
+            KvSection chorus=kv_section_chorus(&song,&song.sections[0],seed);
+            bool same=true; for(int k=0;k<4;k++) if(kv_code_base(chorus.codes[k])!=verses[v][k]) same=false;
+            int first=kv_code_base(chorus.codes[0]);
+            CHECK(!same && chorus.count==8 && kv_code_base(chorus.codes[7])==0 && chorus.kind==KV_SECTION_CHORUS);
+            CHECK(minor?(first==0 || first==5):(first==0 || first==3 || first==5));
+            CHECK(first!=kv_code_base(verses[v][3]));
+            CHECK(chorus.level>1.1f && chorus.lift==12 && chorus.arrangement.style==KV_BALLAD && chorus.beat==KV_SECTION_BEAT_STYLE);
+            CHECK(kv_song_insert(&song,1,&chorus)); KvPerformance p; CHECK(kv_section_notes(&song,1,&p));
+        }
+        // Seeds pick different turns.
+        KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
+        KvSection a=kv_section_chorus(&song,&song.sections[0],0),b=kv_section_chorus(&song,&song.sections[0],1);
+        CHECK(memcmp(a.codes,b.codes,sizeof(a.codes))!=0);
+    }
+    { // Breakdown, intro, outro.
+        KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
+        KvSection pit=kv_section_pit(&song,&song.sections[0]);
+        CHECK(pit.count==2 && kv_code_base(pit.codes[0])!=0 && pit.arrangement.length==KV_LENGTH_TWO_BARS && pit.level<.8f && pit.beat==KV_SECTION_BEAT_OFF && pit.arrangement.style==KV_AMBIENT);
+        song.bpm=120; pit=kv_section_pit(&song,&song.sections[0]); CHECK(pit.arrangement.arpeggio && pit.beat==KV_SECTION_BEAT_QUIET);
+        KvSection intro=kv_section_intro(&song,&song.sections[0]),outro=kv_section_outro(&song,&song.sections[0]);
+        CHECK(intro.kind==KV_SECTION_INTRO && intro.beat==KV_SECTION_BEAT_OFF && kv_code_base(intro.codes[1])!=0);
+        CHECK(outro.count==3 && kv_code_base(outro.codes[2])==0 && outro.codes[1]==KV_CODE_SECONDARY && outro.arrangement.blocks);
+        for(KvSection *x=&pit;x;x=x==&pit?&intro:x==&intro?&outro:NULL) { KvSong t=song; CHECK(kv_song_insert(&t,1,x)); KvPerformance p; CHECK(kv_section_notes(&t,1,&p)); }
+    }
+    { // Transitions: one bar in every meter; the break strikes, rests and picks up; the rise grows; neighbours give the chord.
+        for(int m=0;m<KV_METER_COUNT;m++) for(int k=0;k<KV_TRANSITION_KINDS;k++) {
+            KvSong song=song_in(c_major,(KvMeter)m);
+            KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)),chorus=kv_section_from_draft(KV_SECTION_CHORUS,(const int[]){3,4,5,0},4,hands(KV_POP,KV_LENGTH_BAR));
+            kv_song_insert(&song,0,&verse); kv_song_insert(&song,1,&chorus);
+            KvSection t=kv_section_transition(&song,&song.sections[0],&song.sections[1],(KvTransitionKind)k); CHECK(kv_song_insert(&song,1,&t));
+            KvPerformance p; CHECK(kv_section_notes(&song,1,&p)); double bar=kv_meter_bar((KvMeter)m);
+            CHECK(fabs(p.total_beats-bar)<1e-9 && fabs(kv_section_beats(&song,1)-bar)<1e-9);
+            if(k==KV_TRANSITION_RISE || k==KV_TRANSITION_DOMINANT) CHECK(song.sections[1].codes[0]==KV_CODE_SECONDARY+3);   // V7/IV leads to F
+            if(k==KV_TRANSITION_BREAK) { CHECK(p.events[0].beat==0 && fabs(p.events[p.count-1].beat-(bar-.25))<1e-9);
+                for(size_t i=0;i<p.count;i++) CHECK(p.events[i].beat==0 || p.events[i].beat>=bar-.5-1e-9); }
+            if(k==KV_TRANSITION_RISE) CHECK(p.events[0].velocity<p.events[p.count-1].velocity);
+            KvHit hits[KV_BEAT_HITS]; size_t n=kv_transition_hits((KvTransitionKind)k,(KvMeter)m,hits);
+            if(k==KV_TRANSITION_RISE) { CHECK(n==1+(size_t)llround(bar/.25) && hits[n-1].velocity>hits[1].velocity); for(size_t i=1;i<n;i++) CHECK(hits[i].beat>=hits[i-1].beat); }
+            else if(k==KV_TRANSITION_BREAK) CHECK(n==1 && hits[0].drum==KV_DRUM_KICK); else CHECK(n==0);
+        }
+        // Moving the neighbours retunes the transition: at the end it leads to the tonic.
+        KvSong song=song_in(c_major,KV_METER_4_4);
+        KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)),chorus=kv_section_from_draft(KV_SECTION_CHORUS,(const int[]){3,4,5,0},4,hands(KV_POP,KV_LENGTH_BAR));
+        kv_song_insert(&song,0,&verse); kv_song_insert(&song,1,&chorus);
+        KvSection rise=kv_section_transition(&song,&song.sections[0],&song.sections[1],KV_TRANSITION_RISE); kv_song_insert(&song,1,&rise);
+        CHECK(song.sections[1].codes[0]==KV_CODE_SECONDARY+3);
+        CHECK(kv_song_move(&song,2,0) && song.sections[2].kind==KV_SECTION_TRANSITION && song.sections[2].codes[0]==KV_CODE_SECONDARY);
+        CHECK(kv_transition_for(&verse,&chorus)==KV_TRANSITION_RISE && kv_transition_for(&chorus,&verse)==KV_TRANSITION_DOMINANT);
+    }
+    { // Suggestions: after a lone verse a chorus led in by a rise comes first, an outro and an intro are offered too.
+        KvSong song=song_in(c_major,KV_METER_4_4); KvSection verse=kv_section_from_draft(KV_SECTION_VERSE,pop,4,hands(KV_POP,KV_LENGTH_BAR)); kv_song_insert(&song,0,&verse);
+        KvSuggestion g[4]; size_t n=kv_song_suggest(&song,0,7,g);
+        CHECK(n==4 && g[0].section.kind==KV_SECTION_CHORUS && g[0].lead_in && g[0].transition.transition==KV_TRANSITION_RISE && !g[0].copy_of);
+        CHECK(g[1].section.kind==KV_SECTION_PIT && g[2].section.kind==KV_SECTION_VERSE && g[2].copy_of==song.sections[0].id);
+        CHECK(g[3].section.kind==KV_SECTION_OUTRO || (g[3].section.kind==KV_SECTION_INTRO && g[3].before));
+        for(size_t i=0;i<n;i++) { KvSong t=song; size_t at=g[i].before?0:1; if(g[i].lead_in) CHECK(kv_song_insert(&t,at++,&g[i].transition)); CHECK(kv_song_insert(&t,at,&g[i].section) && kv_song_valid(&t)); }
+        // With a chorus in the song, «+ chorus» repeats it.
+        KvSection chorus=g[0].section; kv_song_insert(&song,1,&chorus); n=kv_song_suggest(&song,0,7,g);
+        CHECK(g[0].section.kind==KV_SECTION_CHORUS && g[0].copy_of==song.sections[1].id);
+        n=kv_song_suggest(&song,1,7,g); CHECK(n>=3 && g[0].section.kind==KV_SECTION_PIT && g[1].section.kind==KV_SECTION_VERSE && g[1].lead_in && g[1].transition.transition==KV_TRANSITION_BREAK);
+    }
+    puts("Song: time, row edits, notes in every texture, level and lift, cuts and tracks, chorus, breakdown, intro, outro, transitions and suggestions passed.");
     return 0;
 }

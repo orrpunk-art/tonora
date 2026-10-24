@@ -1,7 +1,7 @@
 #import "arranger.h"
 #import "controls.h"
 
-static const CGFloat KvLaneTop=58,KvLaneHeight=64,KvDynamicsTop=176,KvInset=8;
+static const CGFloat KvLaneTop=58,KvLaneHeight=64,KvGhostTop=130,KvGhostHeight=34,KvDynamicsTop=186,KvInset=8;
 static NSString *Translated(const char *text) { return T([NSString stringWithUTF8String:text]); }
 /* The colour of a section's kind: verses the accent, choruses orange, breakdowns teal, transitions purple, intro and outro grey. */
 static NSColor *KindColor(KvSectionKind kind) {
@@ -34,6 +34,9 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
 @property(nonatomic) double cutBeat;               /* scissors (⌘ held over a section): the cut in song beats, −1 none */
 @property(nonatomic) NSInteger cutSection;
 @property(nonatomic) NSTextField *info;
+@property(nonatomic,readwrite) NSInteger hoverSection,hoverGhost,hoverSeam;   /* the section whose ghosts show, the ghost and the seam under the mouse */
+@property(nonatomic) NSArray<NSDictionary *> *ghosts; @property(nonatomic) NSInteger ghostsFor;
+@property(nonatomic) BOOL auditioning;
 @property(nonatomic,readwrite) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readwrite) NSButton *openButton,*revertButton,*removeButton,*takeButton;
 @end
@@ -43,7 +46,7 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
 - (BOOL)acceptsFirstResponder { return YES; }
 - (instancetype)initWithFrame:(NSRect)frame {
     if((self=[super initWithFrame:frame])) {
-        _selected=-1; _pressed=-1; _cutBeat=-1; _cutSection=-1; _dropIndex=-1;
+        _selected=-1; _pressed=-1; _cutBeat=-1; _cutSection=-1; _dropIndex=-1; _hoverSection=_hoverGhost=_hoverSeam=_ghostsFor=-1;
         [self setAccessibilityRole:NSAccessibilityGroupRole]; [self setAccessibilityLabel:T(@"Аранжировщик")];
         NSMutableArray *kinds=[NSMutableArray array]; for(int k=0;k<KV_SECTION_KINDS;k++) [kinds addObject:@[Translated(kv_section_kind_name((KvSectionKind)k))]];
         _kindChoice=Popup(kinds,self,@selector(fieldChanged:),T(@"Тип секции"));
@@ -106,7 +109,9 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     self.takeButton.frame=NSMakeRect(round(NSMidX(self.bounds)-150),round(NSMidY(self.bounds)+4),300,32);
 }
 - (void)reload {
+    self.ghosts=nil; self.ghostsFor=-1;
     const KvSong *s=[self song]; BOOL empty=!s || !s->count;
+    if(empty || self.hoverSection>=(NSInteger)s->count) { self.hoverSection=self.hoverGhost=self.hoverSeam=-1; }
     if(!empty && (self.selected<0 || self.selected>=(NSInteger)s->count)) self.selected=0;
     BOOL has=!empty && self.selected>=0;
     for(NSView *view in @[self.kindChoice,self.repeatsChoice,self.levelChoice,self.beatChoice,self.liftChoice,self.transitionChoice,self.openButton,self.revertButton,self.removeButton,self.info]) view.hidden=!has;
@@ -126,6 +131,85 @@ static TNButton *Icon(NSString *symbol,NSString *fallback,NSString *tip,id targe
     self.needsLayout=YES; self.needsDisplay=YES;
 }
 
+// ---- ghosts: what may come next, under the hovered section ----
+- (NSArray<NSDictionary *> *)ghostsAfter:(NSInteger)index {
+    if(index<0) return @[];
+    if(self.ghostsFor!=index || !self.ghosts) { self.ghosts=[self.owner arrangerSuggestions:index]?:@[]; self.ghostsFor=index; }
+    return self.ghosts;
+}
+static const CGFloat KvLeadWidth=24;
+- (NSArray<NSValue *> *)ghostRectsAfter:(NSInteger)index {
+    NSArray<NSDictionary *> *ghosts=[self ghostsAfter:index]; if(!ghosts.count) return @[];
+    NSMutableArray<NSValue *> *rects=[NSMutableArray array]; CGFloat x=NSMinX([self rectOfSection:index]),start=x;
+    // As long as what they insert, at least 112 points; a row wider than the view shrinks to fit it.
+    CGFloat leads=0,sum=0,widths[8]; NSUInteger count=MIN(ghosts.count,(NSUInteger)8);
+    for(NSUInteger i=0;i<count;i++) { leads+=([ghosts[i][@"leadBeats"] doubleValue]>0?KvLeadWidth+4:0)+6; widths[i]=MAX(112,[ghosts[i][@"beats"] doubleValue]*[self scale]-3); sum+=widths[i]; }
+    CGFloat room=NSWidth(self.bounds)-2*KvInset-leads; if(sum>room && room>0) for(NSUInteger i=0;i<count;i++) widths[i]=MAX(96,widths[i]*room/sum);
+    for(NSUInteger i=0;i<count;i++) {
+        CGFloat lead=[ghosts[i][@"leadBeats"] doubleValue]>0?KvLeadWidth+4:0;
+        [rects addObject:[NSValue valueWithRect:NSMakeRect(x+lead,KvGhostTop,widths[i],KvGhostHeight)]]; x+=lead+widths[i]+6;
+    }
+    CGFloat over=x-6-(NSWidth(self.bounds)-KvInset),shift=MAX(0,MIN(over,start-KvInset));   // keep the row inside the view
+    if(shift>0) for(NSUInteger i=0;i<rects.count;i++) rects[i]=[NSValue valueWithRect:NSOffsetRect(rects[i].rectValue,-shift,0)];
+    return rects;
+}
+- (NSRect)leadRectOf:(NSRect)ghost { return NSMakeRect(NSMinX(ghost)-KvLeadWidth-4,NSMinY(ghost),KvLeadWidth,NSHeight(ghost)); }
+/* The seam after section i: the gap to the next one, when neither side is a transition. */
+- (NSInteger)seamAtPoint:(NSPoint)p {
+    const KvSong *s=[self song]; if(!s || p.y<KvLaneTop || p.y>KvLaneTop+KvLaneHeight) return -1;
+    for(NSInteger i=0;i+1<(NSInteger)s->count;i++) {
+        CGFloat edge=NSMinX([self rectOfSection:i+1])-1.5;
+        if(fabs(p.x-edge)<=5 && s->sections[i].kind!=KV_SECTION_TRANSITION && s->sections[i+1].kind!=KV_SECTION_TRANSITION) return i;
+    }
+    return -1;
+}
+- (void)hoverAtPoint:(NSPoint)p {
+    NSInteger section=self.hoverSection,ghost=-1,seam=[self seamAtPoint:p],under=[self sectionAtPoint:p];
+    if(seam>=0) section=-1;
+    else if(under>=0 && !self.dragging && !self.stretching) section=under;
+    else if(section>=0 && p.y>=KvGhostTop-8 && p.y<=KvGhostTop+KvGhostHeight+4) {   // moving down onto the ghosts keeps them
+        NSArray<NSValue *> *rects=[self ghostRectsAfter:section]; CGFloat left=CGFLOAT_MAX,right=-CGFLOAT_MAX;
+        for(NSUInteger i=0;i<rects.count;i++) { NSRect r=rects[i].rectValue; left=MIN(left,NSMinX(r)-KvLeadWidth-4); right=MAX(right,NSMaxX(r));
+            if(NSPointInRect(p,NSUnionRect(r,[self leadRectOf:r]))) ghost=(NSInteger)i; }
+        if(p.x<left-8 || p.x>right+8) section=-1;
+    } else section=-1;
+    if(ghost!=self.hoverGhost && self.auditioning) { self.auditioning=NO; [self.owner arrangerAudition:-1 after:self.hoverSection]; }
+    BOOL changed=section!=self.hoverSection || ghost!=self.hoverGhost || seam!=self.hoverSeam;
+    self.hoverSection=section; self.hoverSeam=seam;
+    if(ghost!=self.hoverGhost) {
+        self.hoverGhost=ghost;
+        if(ghost>=0) { NSArray *ghosts=[self ghostsAfter:section]; NSRect r=[[self ghostRectsAfter:section][ghost] rectValue]; TNHintShow(self,r,ghosts[ghost][@"tip"],NO); }
+        else TNHintHide(self);
+    }
+    if(seam>=0 && changed) TNHintShow(self,NSMakeRect(NSMinX([self rectOfSection:seam+1])-10,KvLaneTop,16,KvLaneHeight),T(@"Вставить переход · ⌥-щелчок — выбрать вид"),NO);
+    else if(seam<0 && ghost<0 && changed) TNHintHide(self);
+    if(changed) self.needsDisplay=YES;
+}
+- (void)drawGhosts {
+    const KvSong *s=[self song];
+    if(self.hoverSeam>=0 && s) {
+        CGFloat x=NSMinX([self rectOfSection:self.hoverSeam+1])-10;
+        NSBezierPath *pill=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(x,KvLaneTop-4,17,KvLaneHeight+8) xRadius:5 yRadius:5];
+        CGFloat dash[]={4,3}; [pill setLineDash:dash count:2 phase:0]; pill.lineWidth=1.5; [[NSColor.systemPurpleColor colorWithAlphaComponent:.12] setFill]; [pill fill]; [NSColor.systemPurpleColor setStroke]; [pill stroke];
+        Text(@"+",NSMakeRect(x+3,KvLaneTop+KvLaneHeight/2-10,12,18),15,NSFontWeightSemibold,NSColor.systemPurpleColor,NO);
+    }
+    if(self.hoverSection<0 || self.dragging || self.stretching) return;
+    NSArray<NSDictionary *> *ghosts=[self ghostsAfter:self.hoverSection]; NSArray<NSValue *> *rects=[self ghostRectsAfter:self.hoverSection];
+    for(NSUInteger i=0;i<ghosts.count && i<rects.count;i++) {
+        NSRect r=rects[i].rectValue; NSColor *color=KindColor((KvSectionKind)[ghosts[i][@"kind"] intValue]); BOOL hot=(NSInteger)i==self.hoverGhost;
+        CGFloat dash[]={5,4};
+        if([ghosts[i][@"leadBeats"] doubleValue]>0) {
+            NSBezierPath *lead=[NSBezierPath bezierPathWithRoundedRect:[self leadRectOf:r] xRadius:6 yRadius:6]; [lead setLineDash:dash count:2 phase:0]; lead.lineWidth=1.5;
+            if(hot) { [[NSColor.systemPurpleColor colorWithAlphaComponent:.15] setFill]; [lead fill]; } [NSColor.systemPurpleColor setStroke]; [lead stroke];
+            NSArray *glyphs=@[@"⤴",@"V7",@"∿",@"‖"]; NSInteger way=MIN(3,MAX(0,[ghosts[i][@"leadKind"] integerValue]));
+            Text(glyphs[way],NSMakeRect(NSMinX(r)-KvLeadWidth-1,NSMinY(r)+9,KvLeadWidth,16),way==1?9:12,NSFontWeightSemibold,NSColor.systemPurpleColor,NO);
+        }
+        NSBezierPath *box=[NSBezierPath bezierPathWithRoundedRect:r xRadius:8 yRadius:8]; [box setLineDash:dash count:2 phase:0]; box.lineWidth=1.5;
+        if(hot) { [[color colorWithAlphaComponent:.15] setFill]; [box fill]; } [color setStroke]; [box stroke];
+        NSString *title=self.auditioning && hot?[@"▶ " stringByAppendingString:ghosts[i][@"title"]]:ghosts[i][@"title"];
+        Text(title,NSMakeRect(NSMinX(r)+8,NSMinY(r)+9,NSWidth(r)-14,16),11,NSFontWeightSemibold,color,NO);
+    }
+}
 // ---- drawing ----
 static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSColor *color,BOOL mono) {
     NSMutableParagraphStyle *style=[NSMutableParagraphStyle new]; style.lineBreakMode=NSLineBreakByTruncatingTail;
@@ -196,10 +280,11 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
         [levels lineToPoint:NSMakePoint(NSMaxX(r),y)];
     }
     [TNAccent() setStroke]; [levels stroke];
+    [self drawGhosts];
     double playhead=[self.owner arrangerPlayheadBeat];
     if(playhead>=0) { CGFloat x=[self xOfBeat:playhead]; [NSColor.systemOrangeColor setFill]; NSRectFill(NSMakeRect(x-1,48,2,KvDynamicsTop+30-48)); }
     [NSGraphicsContext restoreGraphicsState];
-    Text(T(@"Двойной щелчок — в ролл · перетаскивание — переставить, с ⌥ — копия · ⌘-щелчок — разрезать · правый край — повторы"),NSMakeRect(KvInset,KvDynamicsTop+36,w-2*KvInset,14),10,NSFontWeightRegular,NSColor.tertiaryLabelColor,NO);
+    Text(T(@"Наведите на секцию — что дальше · двойной щелчок — в ролл · перетаскивание — переставить, с ⌥ — копия · ⌘-щелчок — разрезать · правый край — повторы"),NSMakeRect(KvInset,KvDynamicsTop+36,w-2*KvInset,14),10,NSFontWeightRegular,NSColor.tertiaryLabelColor,NO);
 }
 
 // ---- mouse ----
@@ -220,15 +305,35 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
     if(before!=self.cutBeat) self.needsDisplay=YES;
 }
 - (void)mouseMoved:(NSEvent *)event {
-    NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; [self updateScissorsAt:p flags:event.modifierFlags];
+    NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; [self updateScissorsAt:p flags:event.modifierFlags]; [self hoverAtPoint:p];
     NSInteger i=[self sectionAtPoint:p];
     if(self.cutBeat>=0) [NSCursor.crosshairCursor set]; else if([self nearRightEdge:p of:i] || [self nearRightEdge:p of:[self sectionAtPoint:NSMakePoint(p.x-4,p.y)]]) [NSCursor.resizeLeftRightCursor set]; else [NSCursor.arrowCursor set];
 }
 - (void)flagsChanged:(NSEvent *)event { [self updateScissorsAt:[self convertPoint:self.window.mouseLocationOutsideOfEventStream fromView:nil] flags:event.modifierFlags]; [super flagsChanged:event]; }
-- (void)mouseExited:(NSEvent *)event { (void)event; if(self.cutBeat>=0) { self.cutBeat=-1; self.needsDisplay=YES; } [NSCursor.arrowCursor set]; }
+- (void)mouseExited:(NSEvent *)event { (void)event; if(self.cutBeat>=0) { self.cutBeat=-1; self.needsDisplay=YES; } [self hoverAtPoint:NSMakePoint(-100,-100)]; [NSCursor.arrowCursor set]; }
 - (void)mouseDown:(NSEvent *)event {
     [self.window makeFirstResponder:self];
     NSPoint p=[self convertPoint:event.locationInWindow fromView:nil]; self.downPoint=p; self.dragging=self.stretching=NO;
+    BOOL option=(event.modifierFlags&NSEventModifierFlagOption)!=0; [self hoverAtPoint:p];
+    if(self.hoverGhost>=0 && self.hoverSection>=0) {   // a ghost: insert it, or (⌥ on a new chorus) choose among other choruses
+        NSInteger after=self.hoverSection,ghost=self.hoverGhost; NSDictionary *g=[self ghostsAfter:after][ghost];
+        if(self.auditioning) { self.auditioning=NO; [self.owner arrangerAudition:-1 after:after]; }
+        if(option && [g[@"chorus"] boolValue]) {
+            NSMenu *menu=[[NSMenu alloc] initWithTitle:T(@"Другой припев")]; NSArray<NSString *> *variants=[self.owner arrangerChorusVariants:after];
+            for(NSUInteger k=0;k<variants.count;k++) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:variants[k] action:@selector(chooseVariant:) keyEquivalent:@""]; item.target=self; item.tag=(NSInteger)k; item.representedObject=@(after); [menu addItem:item]; }
+            [menu popUpMenuPositioningItem:nil atLocation:p inView:self]; return;
+        }
+        self.hoverSection=self.hoverGhost=-1; TNHintHide(self); [self.owner arrangerAccept:ghost after:after]; return;
+    }
+    if(self.hoverSeam>=0) {
+        NSInteger after=self.hoverSeam; self.hoverSeam=-1; TNHintHide(self);
+        if(option) {
+            NSMenu *menu=[[NSMenu alloc] initWithTitle:T(@"Переход")];
+            for(int k=0;k<KV_TRANSITION_KINDS;k++) { NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:T(@"Переход: %@"),[Translated(kv_transition_name((KvTransitionKind)k)) lowercaseString]] action:@selector(chooseTransition:) keyEquivalent:@""]; item.target=self; item.tag=k; item.representedObject=@(after); [menu addItem:item]; }
+            [menu popUpMenuPositioningItem:nil atLocation:p inView:self]; return;
+        }
+        [self.owner arrangerTransitionAfter:after kind:-1]; return;
+    }
     NSInteger i=[self sectionAtPoint:p];
     if(i<0) { NSInteger left=[self sectionAtPoint:NSMakePoint(p.x-4,p.y)]; if([self nearRightEdge:p of:left]) i=left; }
     self.pressed=i; if(i<0) return;
@@ -266,6 +371,8 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
         if(to!=from) [self.owner arrangerMove:from to:to copy:NO];
     }
 }
+- (void)chooseVariant:(NSMenuItem *)item { self.hoverSection=self.hoverGhost=-1; [self.owner arrangerAcceptVariant:item.tag after:[item.representedObject integerValue]]; }
+- (void)chooseTransition:(NSMenuItem *)item { [self.owner arrangerTransitionAfter:[item.representedObject integerValue] kind:item.tag]; }
 - (void)scrollWheel:(NSEvent *)event {
     CGFloat delta=fabs(event.scrollingDeltaX)>fabs(event.scrollingDeltaY)?event.scrollingDeltaX:event.scrollingDeltaY;
     if(!event.hasPreciseScrollingDeltas) delta*=8;
@@ -273,6 +380,9 @@ static void Text(NSString *text,NSRect rect,CGFloat size,NSFontWeight weight,NSC
 }
 // ---- keys ----
 - (void)keyDown:(NSEvent *)event {
+    if(event.keyCode==49 && self.hoverGhost>=0 && self.hoverSection>=0) {   // Space over a ghost: hear it (again: stop)
+        self.auditioning=!self.auditioning; [self.owner arrangerAudition:self.auditioning?self.hoverGhost:-1 after:self.hoverSection]; self.needsDisplay=YES; return;
+    }
     const KvSong *s=[self song]; NSInteger count=s?(NSInteger)s->count:0; NSEventModifierFlags flags=event.modifierFlags;
     if(count && self.selected>=0 && (event.keyCode==123 || event.keyCode==124)) {
         NSInteger to=self.selected+(event.keyCode==123?-1:1); if(to<0 || to>=count) return;

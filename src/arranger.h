@@ -20,6 +20,14 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 - (void)arrangerRevert:(id)sender;                 /* the selected section's notes back to its texture */
 - (void)arrangerTakeDraft:(id)sender;              /* the circle's progression becomes a section */
 - (void)arrangerForwardKey:(NSEvent *)event;
+/* What may come after section `index`, best first, for the ghosts under it: @"title", @"tip", @"beats", @"leadBeats" (a transition
+   first, 0 for none), @"kind" (KvSectionKind), @"chorus" (a new chorus: ⌥-click offers others), @"leadKind" (KvTransitionKind of the lead-in). */
+- (NSArray<NSDictionary *> *)arrangerSuggestions:(NSInteger)index;
+- (void)arrangerAccept:(NSInteger)suggestion after:(NSInteger)index;
+- (NSArray<NSString *> *)arrangerChorusVariants:(NSInteger)index;       /* other choruses for ⌥-click, by their chords */
+- (void)arrangerAcceptVariant:(NSInteger)variant after:(NSInteger)index;
+- (void)arrangerTransitionAfter:(NSInteger)index kind:(NSInteger)kind;    /* between index and index+1; kind −1: the one that suits */
+- (void)arrangerAudition:(NSInteger)suggestion after:(NSInteger)index;    /* plays a ghost; suggestion −1 stops */
 @end
 @interface KvArranger : NSView
 @property(nonatomic,weak) id<KvArrangerOwner> owner;
@@ -29,6 +37,9 @@ typedef enum { KvSectionFieldKind, KvSectionFieldRepeats, KvSectionFieldLevel, K
 - (NSRect)rectOfSection:(NSInteger)index;          /* in view coordinates (self-test, hit testing) */
 - (double)beatAtX:(CGFloat)x;
 - (CGFloat)xOfBeat:(double)beat;
+- (NSArray<NSValue *> *)ghostRectsAfter:(NSInteger)index;   /* where the ghosts of a section are drawn (self-test) */
+- (void)hoverAtPoint:(NSPoint)point;                        /* as a mouse move there (self-test) */
+@property(nonatomic,readonly) NSInteger hoverSection,hoverGhost,hoverSeam;
 @property(nonatomic,readonly) NSPopUpButton *kindChoice,*repeatsChoice,*levelChoice,*beatChoice,*liftChoice,*transitionChoice;
 @property(nonatomic,readonly) NSButton *openButton,*revertButton,*removeButton,*takeButton;
 @end

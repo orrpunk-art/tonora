@@ -74,4 +74,26 @@ bool kv_track_repeat(const KvPerformance *track,int times,KvPerformance *out);
 void kv_track_transpose(KvPerformance *track,int semitones);
 /* A section made from what the circle holds: its progression and texture. */
 KvSection kv_section_from_draft(KvSectionKind kind,const int *codes,size_t count,KvArrangement arrangement);
+
+/* Generators (spec 1.4 §4). Each returns a section (id 0: insert it) that follows `verse` — its texture, its chords. The chorus:
+   a chorus turn of the key's kind other than the verse's, starting on I, IV or vi (i or VI in minor) and not on the verse's
+   last chord, twice, the second time closing on the tonic; denser fills, the right hand up, louder, with a beat. `seed` picks
+   among the turns that fit. The breakdown: two chords away from the tonic, two bars each, sparse and quiet. */
+KvSection kv_section_chorus(const KvSong *song,const KvSection *verse,uint32_t seed);
+KvSection kv_section_pit(const KvSong *song,const KvSection *verse);
+KvSection kv_section_intro(const KvSong *song,const KvSection *verse);
+KvSection kv_section_outro(const KvSong *song,const KvSection *before);
+/* A one-bar transition from `left` into `right` (either may be NULL): rise (the dominant of right's first chord in a rising
+   arpeggio over a snare roll), dominant (that dominant in left's texture with a fill), fill (an interlude on left's last chord),
+   break (left's last chord struck once, silence, a two-note pickup into right). kv_transition_for: the one that suits the seam. */
+KvSection kv_section_transition(const KvSong *song,const KvSection *left,const KvSection *right,KvTransitionKind kind);
+KvTransitionKind kv_transition_for(const KvSection *left,const KvSection *right);
+/* Transitions take their chords and texture from their neighbours; the row edits above call this themselves. */
+void kv_song_refresh_transitions(KvSong *song);
+/* The drum bar under a transition: a rising snare roll over a kick (rise), one kick (break); 0 for the others (the beat goes on). */
+size_t kv_transition_hits(KvTransitionKind kind,KvMeter meter,KvHit hits[KV_BEAT_HITS]);
+/* What usually comes after section `after`, best first: a section to insert after it (before it when `before`), maybe led in
+   by a transition; `copy_of` names the section it repeats (its edited notes go with it), 0 for a new one. */
+typedef struct { KvSection section; bool lead_in,before; KvSection transition; uint32_t copy_of; } KvSuggestion;
+size_t kv_song_suggest(const KvSong *song,size_t after,uint32_t seed,KvSuggestion out[4]);
 #endif
