@@ -717,7 +717,7 @@ static const KvShortcut KvGeneral[]={
     {"Пробел","играть · стоп"},{"Esc","стоп · закрыть эту карточку"},{"← →","соседняя тональность"},{"↑ ↓","мажор · минор"},{"⌥↑ ⌥↓","лад"},
     {"1–7","послушать ступень"},{"⇧1–⇧7","добавить ступень"},{"T","тоника"},{"L","повтор"},{"⌫","удалить выбранный аккорд"},
     {"⌘← ⌘→","переставить аккорд"},{"⌘↑ ⌘↓","регистр клавиатуры"},{"⌘N · ⇧⌘N","новые аккорды · дополнить"},{"⌘Z · ⌘⇧Z","вернуть · повторить"},
-    {"⌘R","новая вариация рисунка"},{"⌘K","метроном · Esc выключает его вместе с игрой"},{"⌘C · ⌘O","скопировать MIDI-клип · импорт MIDI"},{"M","клавиатура компьютера"},{"⌘/","эта карточка"},{NULL,NULL}};
+    {"⌘R","новая вариация рисунка"},{"⌘K","метроном · Esc выключает его вместе с игрой"},{"⌘C · ⇧⌘O","скопировать MIDI-клип · импорт MIDI"},{"⌘O · ⌘S","открыть · сохранить песню .tonora"},{"⌘1 ⌘2 ⌘3 · ⇧⌘A","круг · ролл · песня · в аранжировщик"},{"M","клавиатура компьютера"},{"⌘/","эта карточка"},{NULL,NULL}};
 static const KvShortcut KvRollKeys[]={
     {"Двойной щелчок в сетке","добавить ноту"},{"Двойной щелчок по ноте","удалить ноту"},{"Перетащить ноту","время и высота"},
     {"Перетащить с ⌥","копия"},{"Правый край ноты","длина по сетке"},{"Рамка · ⇧-клик","выделение"},{"⌘A · ⌘D","выделить всё · дублировать"},
@@ -1318,6 +1318,7 @@ static NSString *Describe(NSView *view) {
     [defaults setBool:self.loopEnabled forKey:@"loopEnabled"]; [defaults setInteger:self.rhythmGrid forKey:@"rhythmGrid"]; [defaults setBool:self.countIn forKey:@"countIn"];
     [defaults setInteger:self.rhythmBeat forKey:@"rhythmBeat"]; [defaults setDouble:self.rhythmVolume forKey:@"rhythmVolume"];
     [defaults setDouble:self.tempo forKey:@"tempo"];
+    id host=NSApp.delegate; if([host respondsToSelector:@selector(stateSaved)]) [host performSelector:@selector(stateSaved)];   // the open file's «edited» dot
 }
 /* «Вне лада»: the tiles follow the key and the harmony; the selected one is lit and explained. */
 - (void)refreshChromatic {
@@ -3259,6 +3260,39 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
         self.status.stringValue=[self exportSongToPath:panel.URL.path]?[NSString stringWithFormat:T(@"Песня сохранена в MIDI: %@"),panel.URL.lastPathComponent]:T(@"⚠ Не удалось сохранить MIDI");
     }];
 }
+// ---- the .tonora file: the state that makes the work, as the settings keep it (spec 1.4 §3.8) ----
+/* Key, meter, tempo, instrument, sound, the draft with its edited track, the song and the view; not the MIDI ports, the
+   language or the window, which belong to this Mac. */
+static NSArray<NSString *> *KvDocumentKeys(void) {
+    return @[@"circleIndex",@"minor",@"scaleMode",@"pentatonic",@"spelling",@"showChord",@"selectedDegree",@"keyboardBase",@"instrument",@"humanize",@"progression",
+             @"reverb",@"delay",@"fxEngineVersion",@"freeDelaySeconds",@"delayDivision",@"delaySeconds",@"chordExtension",@"arrangementSeed",@"generatedRhythm",@"twoHandPiano",
+             @"texture",@"arpeggioPattern",@"division",@"chordLengthArp",@"pianoPattern",@"meter",@"chordLengthBlocks",@"chordLengthHands",@"chordLengthStrings",@"articulation",
+             @"stringDynamics",@"fillRate",@"trackEdited",@"trackData",@"viewMode",@"loopEnabled",@"rhythmGrid",@"countIn",@"rhythmBeat",@"rhythmVolume",@"tempo",@"song"];
+}
+- (NSDictionary *)documentStateFromDefaults {
+    NSUserDefaults *defaults=Defaults(); NSMutableDictionary *state=[NSMutableDictionary dictionary];
+    for(NSString *name in KvDocumentKeys()) { id value=[defaults objectForKey:name]; if(value) state[name]=value; }
+    return state;
+}
+- (NSData *)documentData {
+    [self saveState];
+    NSDictionary *file=@{@"format":@"tonora",@"version":@1,@"app":[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]?:@"",@"state":[self documentStateFromDefaults]};
+    return [NSPropertyListSerialization dataWithPropertyList:file format:NSPropertyListXMLFormat_v1_0 options:0 error:NULL];
+}
+/* The state inside a .tonora file, or nil when it is not one. Values are checked again when the window restores them. */
++ (NSDictionary *)documentStateFromData:(NSData *)data {
+    if(!data.length || data.length>(32u<<20)) return nil;
+    NSDictionary *file=[NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:NULL error:NULL];
+    if(![file isKindOfClass:NSDictionary.class] || ![file[@"format"] isEqual:@"tonora"] || ![file[@"version"] isEqual:@1] || ![file[@"state"] isKindOfClass:NSDictionary.class]) return nil;
+    NSMutableDictionary *state=[NSMutableDictionary dictionary]; NSArray *types=@[NSNumber.class,NSString.class,NSArray.class,NSData.class,NSDictionary.class];
+    for(NSString *name in KvDocumentKeys()) { id value=file[@"state"][name]; if(!value) continue; BOOL known=NO; for(Class type in types) if([value isKindOfClass:type]) known=YES; if(known) state[name]=value; }
+    return state;
+}
+/* Puts a file's state in the settings, ready for a new window to restore it; keys the file lacks go back to their defaults. */
++ (void)loadDocumentState:(NSDictionary *)state {
+    NSUserDefaults *defaults=Defaults();
+    for(NSString *name in KvDocumentKeys()) { if(state[name]) [defaults setObject:state[name] forKey:name]; else [defaults removeObjectForKey:name]; }
+}
 // ---- song playback: one plan per part, the next one queued while the current one plays ----
 - (BOOL)songPlan:(NSInteger)section into:(KvPerformance *)out {
     NSData *cached=self.songPlans[@(section)]; if(cached.length==sizeof(KvPerformance)) { memcpy(out,cached.bytes,sizeof(*out)); return YES; }
@@ -3385,7 +3419,7 @@ static NSInteger Number(NSDictionary *d,NSString *key) { id v=d[key]; return [v 
 /* The «Последовательность» menu: title, key equivalent, KvRoot action (a lone "-" is a separator). */
 static NSArray<NSArray<NSString *> *> *KvSequenceMenu(void) {
     return @[@[T(@"Новые аккорды"),@"n",@"generateProgression:"],@[T(@"Дополнить аккордами"),@"N",@"continueProgression:"],@[T(@"Вернуть последовательность"),@"z",@"undoSequence:"],
-             @[T(@"Повторить правку дорожки"),@"Z",@"redoTrack:"],@[T(@"Скопировать MIDI"),@"c",@"copyMidi:"],@[T(@"Импортировать MIDI…"),@"o",@"importMidi:"],@[T(@"Новая вариация рисунка"),@"r",@"regenerateArrangement:"],@[@"-"],
+             @[T(@"Повторить правку дорожки"),@"Z",@"redoTrack:"],@[T(@"Скопировать MIDI"),@"c",@"copyMidi:"],@[T(@"Импортировать MIDI…"),@"O",@"importMidi:"],@[T(@"Новая вариация рисунка"),@"r",@"regenerateArrangement:"],@[@"-"],
              @[T(@"Круг"),@"1",@"showCircle:"],@[T(@"Пиано-ролл"),@"2",@"showRoll:"],@[T(@"Аранжировщик"),@"3",@"showArranger:"],@[T(@"В аранжировщик"),@"A",@"sendToArranger:"],
              @[T(@"Дублировать секцию"),@"d",@"duplicateSection:"],@[T(@"Разрезать секцию по такту"),@"t",@"cutSection:"],@[T(@"Экспорт MIDI песни…"),@"E",@"exportSong:"],@[@"-"],
              @[T(@"Играть / стоп    Пробел"),@"",@"togglePlayback:"],@[T(@"Повтор    L"),@"",@"toggleLoop:"],@[T(@"Метроном"),@"k",@"toggleMetronome:"],@[T(@"Удалить выбранный аккорд    ⌫"),@"",@"removeSelectedChord:"]];
@@ -3393,6 +3427,9 @@ static NSArray<NSArray<NSString *> *> *KvSequenceMenu(void) {
 @interface KvDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, KvInterfaceHost>
 @property(nonatomic) NSWindow *window;
 @property(nonatomic) KvRoot *root;
+@property(nonatomic) NSURL *documentURL,*pendingURL;      /* the open .tonora file; one asked for before the window was up */
+@property(nonatomic) NSDictionary *savedDocument;         /* its state as last opened or saved, to tell unsaved changes */
+- (void)stateSaved;
 @end
 @implementation KvDelegate
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
@@ -3417,6 +3454,7 @@ static NSArray<NSArray<NSString *> *> *KvSequenceMenu(void) {
     if(!saved) [self.window center];
     [self.window makeKeyAndOrderFront:nil]; [self.window makeFirstResponder:[self.root viewFocus]];
     [NSApp activateIgnoringOtherApps:YES];
+    if(self.pendingURL) { NSURL *url=self.pendingURL; self.pendingURL=nil; [self openDocumentURL:url]; }
 }
 /* The menu bar in the interface language; its items act on the current root view. */
 - (void)buildMenus {
@@ -3430,6 +3468,16 @@ static NSArray<NSArray<NSString *> *> *KvSequenceMenu(void) {
     [appMenu addItemWithTitle:T(@"Скрыть «Tonora»") action:@selector(hide:) keyEquivalent:@"h"];
     [appMenu addItemWithTitle:T(@"Завершить «Tonora»") action:@selector(terminate:) keyEquivalent:@"q"];
     appItem.submenu=appMenu;
+    NSMenuItem *fileItem=[NSMenuItem new]; [menubar addItem:fileItem]; NSMenu *fileMenu=[[NSMenu alloc] initWithTitle:T(@"Файл")]; fileItem.submenu=fileMenu;
+    NSMenuItem *open=[[NSMenuItem alloc] initWithTitle:T(@"Открыть…") action:@selector(openDocument:) keyEquivalent:@"o"]; open.target=self; [fileMenu addItem:open];
+    NSMenuItem *recentItem=[[NSMenuItem alloc] initWithTitle:T(@"Открыть недавние") action:nil keyEquivalent:@""]; NSMenu *recent=[[NSMenu alloc] initWithTitle:T(@"Открыть недавние")];
+    for(NSString *path in [Defaults() arrayForKey:@"recentDocuments"]) if([path isKindOfClass:NSString.class] && [NSFileManager.defaultManager fileExistsAtPath:path]) {
+        NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:path.lastPathComponent.stringByDeletingPathExtension action:@selector(openRecent:) keyEquivalent:@""]; item.target=self; item.representedObject=path; item.toolTip=path; [recent addItem:item]; }
+    if(recent.numberOfItems) [recent addItem:NSMenuItem.separatorItem];
+    NSMenuItem *clear=[[NSMenuItem alloc] initWithTitle:T(@"Очистить список") action:@selector(clearRecent:) keyEquivalent:@""]; clear.target=self; [recent addItem:clear];
+    recentItem.submenu=recent; [fileMenu addItem:recentItem]; [fileMenu addItem:NSMenuItem.separatorItem];
+    NSMenuItem *save=[[NSMenuItem alloc] initWithTitle:T(@"Сохранить") action:@selector(saveDocument:) keyEquivalent:@"s"]; save.target=self; [fileMenu addItem:save];
+    NSMenuItem *saveAs=[[NSMenuItem alloc] initWithTitle:T(@"Сохранить как…") action:@selector(saveDocumentAs:) keyEquivalent:@"S"]; saveAs.target=self; [fileMenu addItem:saveAs];
     NSMenuItem *sequenceItem=[NSMenuItem new]; [menubar addItem:sequenceItem];
     NSMenu *sequenceMenu=[[NSMenu alloc] initWithTitle:T(@"Последовательность")]; sequenceItem.submenu=sequenceMenu;
     for(NSArray *entry in KvSequenceMenu()) {
@@ -3446,14 +3494,84 @@ static NSArray<NSArray<NSString *> *> *KvSequenceMenu(void) {
 }
 /* A new language builds the window's view and the menus anew from the saved state; the window stays where it is. */
 - (void)rebuildInterface {
-    KvRoot *old=self.root; [old saveState]; [old stopPlayback:nil]; [old silenceMidi];
+    [self.root saveState];
+    BOOL fx=[self replaceRoot];
+    if(fx) [self.root showSoundSettings:nil];   // the language was switched in FX: it stays open, now in the new language
+}
+/* A new window view from the saved state (a new language, an opened file); returns whether FX was open. */
+- (BOOL)replaceRoot {
+    KvRoot *old=self.root; [old stopPlayback:nil]; [old silenceMidi];
     BOOL fx=old.soundPanel && old.window.attachedSheet==old.soundPanel; [old closeSound:nil];
     if(old.window.attachedSheet) [old.window endSheet:old.window.attachedSheet];
     self.root=[[KvRoot alloc] initWithFrame:old.frame];
     self.window.contentView=self.root; [self buildMenus];
     [self.window makeFirstResponder:[self.root viewFocus]];
-    if(fx) [self.root showSoundSettings:nil];   // the language was switched in FX: it stays open, now in the new language
+    return fx;
 }
+// ---- .tonora files: open, save, recent, unsaved changes ----
+- (void)stateSaved {
+    if(!self.documentURL || !self.savedDocument) return;
+    BOOL edited=![[self.root documentStateFromDefaults] isEqualToDictionary:self.savedDocument];
+    if(self.window.documentEdited!=edited) self.window.documentEdited=edited;
+}
+- (void)showDocumentTitle {
+    self.window.title=self.documentURL?self.documentURL.lastPathComponent.stringByDeletingPathExtension:@"Tonora"; self.window.representedURL=self.documentURL;
+    self.window.documentEdited=NO;
+}
+- (void)rememberRecent:(NSURL *)url {
+    NSMutableArray *recent=[[Defaults() arrayForKey:@"recentDocuments"] mutableCopy]?:[NSMutableArray array];
+    [recent removeObject:url.path]; [recent insertObject:url.path atIndex:0]; while(recent.count>8) [recent removeLastObject];
+    [Defaults() setObject:recent forKey:@"recentDocuments"]; [self buildMenus];
+}
+/* Unsaved changes to the open file: save them, drop them, or stay. NO means stay. */
+- (BOOL)confirmDiscard {
+    if(!self.documentURL || !self.window.documentEdited) return YES;
+    NSAlert *alert=[NSAlert new]; alert.messageText=[NSString stringWithFormat:T(@"Сохранить изменения в «%@»?"),self.documentURL.lastPathComponent.stringByDeletingPathExtension];
+    alert.informativeText=T(@"Если не сохранить, изменения после последнего сохранения пропадут."); [alert addButtonWithTitle:T(@"Сохранить")]; [alert addButtonWithTitle:T(@"Не сохранять")]; [alert addButtonWithTitle:T(@"Отмена")];
+    NSModalResponse answer=[alert runModal];
+    if(answer==NSAlertFirstButtonReturn) return [self writeDocumentTo:self.documentURL];
+    return answer==NSAlertSecondButtonReturn;
+}
+- (BOOL)writeDocumentTo:(NSURL *)url {
+    NSData *data=[self.root documentData];
+    if(!data || ![data writeToURL:url atomically:YES]) { self.root.status.stringValue=[NSString stringWithFormat:T(@"⚠ Не удалось сохранить «%@»"),url.lastPathComponent]; return NO; }
+    self.documentURL=url; self.savedDocument=[self.root documentStateFromDefaults]; [self showDocumentTitle]; [self rememberRecent:url];
+    self.root.status.stringValue=[NSString stringWithFormat:T(@"Сохранено: %@"),url.lastPathComponent]; return YES;
+}
+- (BOOL)openDocumentURL:(NSURL *)url {
+    if(!self.root) { self.pendingURL=url; return YES; }   // launched by the file: open it once the window is up
+    NSDictionary *state=[KvRoot documentStateFromData:[NSData dataWithContentsOfURL:url options:0 error:NULL]];
+    if(!state) { self.root.status.stringValue=[NSString stringWithFormat:T(@"⚠ «%@» не открывается как песня Tonora"),url.lastPathComponent]; return NO; }
+    if(![self confirmDiscard]) return NO;
+    [self.root saveState]; [KvRoot loadDocumentState:state]; [self replaceRoot];
+    self.documentURL=url; self.savedDocument=[self.root documentStateFromDefaults]; [self showDocumentTitle]; [self rememberRecent:url];
+    self.root.status.stringValue=[NSString stringWithFormat:T(@"Открыто: %@"),url.lastPathComponent]; return YES;
+}
+- (void)openDocument:(id)sender {
+    (void)sender; NSOpenPanel *panel=[NSOpenPanel openPanel]; panel.title=T(@"Открыть песню Tonora");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    panel.allowedFileTypes=@[@"tonora"];
+#pragma clang diagnostic pop
+    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) { if(response==NSModalResponseOK && panel.URL) dispatch_async(dispatch_get_main_queue(),^{ [self openDocumentURL:panel.URL]; }); }];
+}
+- (void)openRecent:(NSMenuItem *)item { NSString *path=item.representedObject; if(path) [self openDocumentURL:[NSURL fileURLWithPath:path]]; }
+- (void)clearRecent:(id)sender { (void)sender; [Defaults() removeObjectForKey:@"recentDocuments"]; [self buildMenus]; }
+- (void)saveDocument:(id)sender { if(self.documentURL) [self writeDocumentTo:self.documentURL]; else [self saveDocumentAs:sender]; }
+- (void)saveDocumentAs:(id)sender {
+    (void)sender; NSSavePanel *panel=[NSSavePanel savePanel]; panel.title=T(@"Сохранить песню Tonora"); panel.prompt=T(@"Сохранить");
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    panel.allowedFileTypes=@[@"tonora"];
+#pragma clang diagnostic pop
+    panel.nameFieldStringValue=self.documentURL.lastPathComponent?:[NSString stringWithFormat:@"Tonora · %@.tonora",[self.root keyTitle]];
+    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse response) { if(response==NSModalResponseOK && panel.URL) [self writeDocumentTo:panel.URL]; }];
+}
+- (BOOL)validateMenuItem:(NSMenuItem *)item { (void)item; return YES; }
+- (BOOL)application:(NSApplication *)sender openFile:(NSString *)filename { (void)sender; return [self openDocumentURL:[NSURL fileURLWithPath:filename]]; }
+- (BOOL)windowShouldClose:(NSWindow *)window { (void)window; return [self confirmDiscard]; }
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender { (void)sender; return [self confirmDiscard]?NSTerminateNow:NSTerminateCancel; }
+
 - (void)showCredits:(id)sender { [self.root showCredits:sender]; }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender { (void)sender; return YES; }
 - (void)applicationWillTerminate:(NSNotification *)notification { (void)notification; [self.root silenceMidi]; [Defaults() setObject:NSStringFromPoint(self.window.frame.origin) forKey:@"windowOrigin"]; }
@@ -4532,6 +4650,18 @@ int main(int argc, const char *argv[]) {
                 [NSFileManager.defaultManager removeItemAtPath:path error:NULL]; }
               root.songPlans=nil; if(hoverWindow) hoverWindow.contentView=nil;
               [root showView:0]; }
+            // .tonora: the work, and only the work, goes into the file; opening it in a new window brings it back; other files are refused.
+            { [root stopPlayback:nil]; [root showView:0];
+              NSData *file=[root documentData]; NSDictionary *state=[KvRoot documentStateFromData:file];
+              KV_CHECK(file.length>0 && state[@"song"] && state[@"progression"] && state[@"tempo"] && !state[@"language"] && !state[@"midiIn"] && !state[@"windowOrigin"],@"File: the work and only the work goes in");
+              NSArray *progression=[root.progression copy]; double tempo=root.tempo; size_t sections=root.song->count;
+              [root applyTempo:150]; [root clearProgression:nil]; [root saveState];   // changed since it was saved
+              [KvRoot loadDocumentState:state]; KvRoot *opened=[[KvRoot alloc] initWithFrame:root.frame];
+              KV_CHECK([opened.progression isEqualToArray:progression] && fabs(opened.tempo-tempo)<1e-9 && opened.song->count==sections && sections>0,@"File: opening brings back the progression, the tempo and the song");
+              KV_CHECK([[opened documentStateFromDefaults] isEqualToDictionary:[root documentStateFromDefaults]],@"File: the opened window keeps the file's state as it was read");
+              [opened stopPlayback:nil];
+              KV_CHECK(![KvRoot documentStateFromData:[@"<plist version=\"1.0\"><dict/></plist>" dataUsingEncoding:NSUTF8StringEncoding]] && ![KvRoot documentStateFromData:[NSData data]] && ![KvRoot documentStateFromData:[@"tonora" dataUsingEncoding:NSUTF8StringEncoding]],@"File: anything but a .tonora file is refused");
+              [root applyTempo:tempo]; for(NSNumber *code in progression) [root addChordCode:code.intValue]; [root saveState]; }
             // English: the same saved state in an English interface; no Cyrillic anywhere in it; the replaced view is freed.
             { [root.performanceChoice selectItemWithTag:1]; [root performanceChanged:root.performanceChoice]; [root applyTempo:97]; [root stopPlayback:nil]; [root saveState];
               NSArray *progression=[root.progression copy]; KvKey key=root.key;

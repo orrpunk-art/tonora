@@ -12,4 +12,18 @@
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>LSMinimumSystemVersion</key><string>12.0</string>
+<key>CFBundleDocumentTypes</key><array><dict>
+<key>CFBundleTypeName</key><string>Tonora Song</string>
+<key>CFBundleTypeRole</key><string>Editor</string>
+<key>LSHandlerRank</key><string>Owner</string>
+<key>CFBundleTypeIconFile</key><string>Tonora.icns</string>
+<key>LSItemContentTypes</key><array><string>ru.kvarta.tonora.song</string></array>
+</dict></array>
+<key>UTExportedTypeDeclarations</key><array><dict>
+<key>UTTypeIdentifier</key><string>ru.kvarta.tonora.song</string>
+<key>UTTypeDescription</key><string>Tonora Song</string>
+<key>UTTypeConformsTo</key><array><string>public.data</string><string>public.content</string></array>
+<key>UTTypeIconFile</key><string>Tonora.icns</string>
+<key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>tonora</string></array></dict>
+</dict></array>
 </dict></plist>

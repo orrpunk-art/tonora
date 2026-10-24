@@ -57,7 +57,11 @@ The project also opens in CLion as a plain CMake project (target `Tonora`).
 | `⌘↑` `⌘↓` | keyboard register |
 | `⌘N` · `⇧⌘N` | new chords · extend the sequence |
 | `⌘Z` · `⌘R` | bring back the previous sequence · new pattern variation |
-| `⌘C` · `⌘O` | copy the MIDI clip · import a MIDI file (or drop a `.mid` on the window) |
+| `⌘C` · `⇧⌘O` | copy the MIDI clip · import a MIDI file (or drop a `.mid` on the window) |
+| `⌘O` · `⌘S` · `⇧⌘S` | open · save · save as a `.tonora` song file |
+| `⌘1` `⌘2` `⌘3` · `⇧⌘A` | circle · piano roll · arranger · send the progression to the arranger |
+| `⌘-click` · `⌘T` · `⌘D` | arranger: cut a section on a bar line · cut at the mouse · duplicate |
+| `⇧⌘E` | export the song as MIDI |
 | `⌘K` | metronome on / off (Esc stops it with the music) |
 | `⌘,` · `⌘/` | sound and language · all shortcuts and help |
 | `M` | play from the computer keyboard: `A`…`'` white keys, `W E T Y U O P` black keys, `Z X` octave, `C V` velocity |
